@@ -15,7 +15,7 @@ async function startServer() {
   try {
     app.use("/", routes);
     app.listen(port, () => {
-      console.log("Backend server is running at http://localhost:5002");
+      console.log("Backend server is running");
     });
   } catch (error) {
     console.log(`${error} has occured.`);

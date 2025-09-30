@@ -5,8 +5,6 @@ export async function file_parse_controller(req, res) {
     const { link } = req.query;
     const parsed = await parse(link);
 
-    console.log("Parsed PDF:", parsed);
-
     res.json({ message: "successfully parsed" });
   } catch (error) {
     console.log(error);
