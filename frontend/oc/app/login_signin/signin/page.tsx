@@ -6,7 +6,7 @@ export default function Signin() {
 
   return (
     <section className="flex justify-center items-center h-screen w-screen">
-      <div className="bg-[#1E1515] xs:w-[100vw] sm:w-[100vw] md:w-[600px] rounded-[20px] py-10 px-4 max-sm:h-screen">
+      <div className="bg-[#1E1515] xs:w-[100vw] sm:w-[100vw] md:w-[600px] sm:rounded-0 md:rounded-[20px] py-10 px-4 max-sm:h-screen">
         <div>
           <section className="grid grid-cols-1  gap-[20px]">
             <div className="font-(family-name:--font-do_hyeon) text-[30px] flex justify-center items-center w-full">
