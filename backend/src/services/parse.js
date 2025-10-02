@@ -51,18 +51,20 @@ async function createInvertedSearch(pagesContent) {
   return inverted;
 }
 
-async function searchContent(inverted, search = "three short pages") {
-  //yet to handle duplicates in query. grammatical mistakes and extract page numbers
+async function searchContent(inverted, search = "the") {
+  //yet to handle duplicates in query. grammatical mistakes and extract page numbers, remove commas and dots from search
+
   const wordCounts = new Map();
 
-  wordCounts.set(1, 433);
-  wordCounts.set(2, 537);
-  wordCounts.set(3, 396);
+  search = search.toLowerCase();
+
+  wordCounts.set(1, 179);
+  wordCounts.set(2, 11);
 
   const TF = [];
   const appearance = {};
 
-  const N = 3;
+  const N = 2;
 
   for (let doc = 1; doc <= N; doc++) {
     for (let term of search.split(" ")) {
