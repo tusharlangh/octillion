@@ -9,6 +9,10 @@ export function SetAuth() {
   useEffect(() => {
     const { data: authAccess } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!session?.access_token) {
+          router.replace("/login_signin/login");
+        }
+
         if (event === "SIGNED_IN" && session) {
           localStorage.setItem("token", session.access_token);
         }
