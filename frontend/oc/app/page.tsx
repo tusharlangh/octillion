@@ -1,12 +1,17 @@
-"use client";
-
-import { SetAuth } from "@/components/auth/setAuth";
 import Logo from "@/components/logo";
+import { createClient } from "@/utils/supabase/server";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home() {
   const font: string = "font-(family-name:--font-dm-sans)";
-  SetAuth();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    redirect("/login_signin/login");
+  }
+
   return (
     <main className="h-screen w-screen bg-[#211717] flex flex-col justify-center items-center relative">
       <section
