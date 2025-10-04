@@ -1,13 +1,12 @@
 "use client";
 
-import { verifyAuth } from "@/components/auth/verifyAuth";
-import GoogleAuth from "@/components/auth/googleAuth";
 import Link from "next/link";
 import Logo from "@/components/logo";
+import Image from "next/image";
+import { signInWithGoogle } from "@/utils/auth/signInWithGoogle";
 
 export default function Login() {
   const font: string = "font-(family-name:--font-dm-sans)";
-  verifyAuth();
 
   return (
     <section className="flex justify-center items-center h-screen w-screen">
@@ -22,7 +21,22 @@ export default function Login() {
               </p>
             </section>
 
-            {<GoogleAuth title="Continue with Google" />}
+            <section className="flex justify-center items-center">
+              <div
+                className="flex justify-center items-center gap-4 outline-[#464646] outline-1 rounded-[20px] p-2 px-6 cursor-pointer hover:outline-white transition-colors"
+                onClick={signInWithGoogle}
+              >
+                <Image
+                  src={"/google_icon.png"}
+                  alt="google-icon"
+                  width={20}
+                  height={20}
+                />
+                <p className="font-(family-name:--font-dm-sans) font-bold text-white text-[16px]">
+                  Continue with Google
+                </p>
+              </div>
+            </section>
 
             <div className="h-[1px] bg-[#3C3131] mx-4 my-2"></div>
 
