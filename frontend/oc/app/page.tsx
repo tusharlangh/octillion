@@ -18,12 +18,12 @@ export default async function Home() {
         about="header"
         className="absolute top-2 left-2 right-2 flex justify-between items-center"
       >
-        <div className="rounded-full h-[40px] w-[40px] bg-[#463A3A] flex justify-center items-center hover:bg-[#625252] transition-colors cursor-pointer">
+        <div className="rounded-full h-[50px] w-[50px] bg-[rgba(41, 31, 29, 1)] flex justify-center items-center border-1 border-[rgb(46,38,37)] hover:bg-[#463A3A] hover:border-[#504343] transition-all cursor-pointer">
           <Image
             src={"/icons/menu.svg"}
             alt="menu-icon"
-            height={26}
-            width={26}
+            height={24}
+            width={24}
           />
         </div>
 
