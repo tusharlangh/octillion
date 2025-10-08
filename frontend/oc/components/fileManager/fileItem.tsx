@@ -1,12 +1,16 @@
 import Image from "next/image";
 interface FileViewProps {
-  fileName?: string;
-  fileType?: string;
+  i: number;
+  fileName: string;
+  fileType: string;
+  removeFile: (i: number) => void;
 }
 
-export default function FileView({
-  fileName = "Resume.pdf",
-  fileType = "PDF",
+export default function FileItem({
+  i,
+  fileName,
+  fileType,
+  removeFile,
 }: FileViewProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
   return (
@@ -20,10 +24,15 @@ export default function FileView({
         />
       </div>
       <div>
-        <p className={`${font} font-bold text-[16px]`}>{fileName}</p>
+        <p className={`${font} font-bold text-[16px] truncate w-[120px]`}>
+          {fileName}
+        </p>
         <p className={`${font} font-bold text-[12px] opacity-50`}>{fileType}</p>
       </div>
-      <div className="bg-[rgba(0,0,0,0.2)] absolute top-2 right-2 cursor-pointer opacity-80 hover:opacity-100 rounded-full w-[24px] h-[24px] flex items-center justify-center">
+      <div
+        className="bg-[rgba(0,0,0,0.2)] absolute top-2 right-2 cursor-pointer opacity-80 hover:opacity-100 rounded-full w-[24px] h-[24px] flex items-center justify-center"
+        onClick={() => removeFile(i)}
+      >
         <Image
           src={"/icons/close.svg"}
           alt="close-icon"

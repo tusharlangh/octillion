@@ -1,10 +1,15 @@
-"use client";
-
-import Image from "next/image";
 import React from "react";
-import FileView from "./fileView";
+import FileItem from "./fileItem";
 
-export default function AddFileEx() {
+interface FilePreviewListProps {
+  selectedFiles: File[];
+  removeFile: (i: number) => void;
+}
+
+export default function FilePreviewList({
+  selectedFiles,
+  removeFile,
+}: FilePreviewListProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
 
   return (
@@ -14,18 +19,16 @@ export default function AddFileEx() {
         className="bg-[rgb(46,38,38)] w-[90vw] md:w-[60vw] rounded-[20px] flex flex-col p-3 gap-2" //flex justify-center items-center
       >
         <ul className="flex gap-4 md:gap-6 overflow-x-auto h-full pb-2">
-          <li>
-            <FileView />
-          </li>
-          <li>
-            <FileView />
-          </li>
-          <li>
-            <FileView />
-          </li>
-          <li>
-            <FileView />
-          </li>
+          {selectedFiles.map((file, index) => (
+            <li key={index}>
+              <FileItem
+                i={index}
+                removeFile={removeFile}
+                fileName={file.name}
+                fileType={file.type.endsWith("pdf") ? "PDF" : "PDF"}
+              />
+            </li>
+          ))}
         </ul>
 
         <div className="w-full justify-end flex mt-auto">
