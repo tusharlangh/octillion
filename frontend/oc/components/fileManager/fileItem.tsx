@@ -13,6 +13,7 @@ export default function FileItem({
   removeFile,
 }: FileViewProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
+
   return (
     <section className="bg-[rgb(55,46,46)] w-[242px] h-[62px] rounded-[20px] flex items-center gap-[10px] p-[12px] shadow-sm relative">
       <div className="bg-[#EB5858] rounded-[4px] px-3 py-3 ">
