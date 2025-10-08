@@ -1,6 +1,6 @@
 "use client";
 
-import Portal from "./portal";
+import Portal from "../portal";
 import Image from "next/image";
 
 interface ModalProps {
@@ -10,7 +10,7 @@ interface ModalProps {
   fileName: string;
 }
 
-export default function ModalExample({
+export default function FileOpener({
   isOpen,
   setIsOpen,
   url,
