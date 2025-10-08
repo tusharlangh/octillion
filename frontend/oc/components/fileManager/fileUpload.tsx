@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import React, { useRef } from "react";
+import React from "react";
 
 interface FileUploadProps {
   handleButtonClick: React.MouseEventHandler<HTMLDivElement>;

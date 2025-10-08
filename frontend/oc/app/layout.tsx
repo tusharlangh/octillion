@@ -25,7 +25,8 @@ export default function RootLayout({
   return (
     <html>
       <body className={`${dmSans.variable} ${doHyeon.variable} antialiased`}>
-        {children}
+        <div>{children}</div>
+        <div id="modal-root"></div>
       </body>
     </html>
   );
