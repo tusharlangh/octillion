@@ -3,21 +3,18 @@
 import Image from "next/image";
 import React, { useRef } from "react";
 
-export default function AddFile() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+interface FileUploadProps {
+  handleButtonClick: React.MouseEventHandler<HTMLDivElement>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  handleFileChange: React.ChangeEventHandler<HTMLInputElement>;
+}
+
+export default function FileUpload({
+  handleButtonClick,
+  fileInputRef,
+  handleFileChange,
+}: FileUploadProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
-
-  const handleButtonClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      console.log("Selected file 1:", files[0]);
-      console.log("Selected file 2:", files[1]);
-    }
-  };
 
   return (
     <section className="relative mt-2 shrink-0">

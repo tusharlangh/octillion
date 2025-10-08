@@ -1,5 +1,4 @@
-import AddFile from "@/components/addFile";
-import AddFileEx from "@/components/addFileEx";
+import FileManager from "@/components/fileManager/fileManager";
 import Logo from "@/components/logo";
 import { createClient } from "@/utils/supabase/server";
 import Image from "next/image";
@@ -34,7 +33,7 @@ export default async function Home() {
       <section about="central">
         <div>{<Logo dynamicSize={"text-6xl md:text-7xl"} />}</div>
 
-        <AddFile />
+        <FileManager />
       </section>
     </main>
   );
