@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import FileItem from "./fileItem";
-import ModalExample from "../portalExample";
+import FileOpener from "./fileOpener";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -45,7 +45,7 @@ export default function FilePreviewList({
           ))}
         </ul>
 
-        <ModalExample
+        <FileOpener
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           url={previewUrl}
