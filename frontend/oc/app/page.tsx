@@ -1,3 +1,5 @@
+import AddFile from "@/components/addFile";
+import AddFileEx from "@/components/addFileEx";
 import Logo from "@/components/logo";
 import { createClient } from "@/utils/supabase/server";
 import Image from "next/image";
@@ -31,38 +33,8 @@ export default async function Home() {
       </section>
       <section about="central">
         <div>{<Logo dynamicSize={"text-6xl md:text-7xl"} />}</div>
-        <section className="relative mt-2 shrink-0">
-          <div
-            style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
-            className="h-[100px] md:h-[150px] bg-[rgb(46,38,38)] w-[90vw] md:w-[60vw] rounded-[20px] flex justify-center items-center"
-          >
-            <section className="flex gap-1 opacity-40 select-none">
-              <p
-                className={`${font} text-[16px] md:text-[18px] text-white font-bold text-shadow-md`}
-              >
-                Drag or Upload files
-              </p>
-              <Image
-                src={"/icons/upload.svg"}
-                alt="upload-icon"
-                height={24}
-                width={24}
-              />
-            </section>
 
-            <div className="absolute right-3 bottom-3">
-              <button
-                className={`bg-[#465C88] rounded-[8px] px-4 py-1 cursor-pointer hover:bg-[#5F76A2] transition-colors`}
-              >
-                <p
-                  className={`${font} text-[16px] text-white font-bold select-none text-shadow-sm`}
-                >
-                  parse
-                </p>
-              </button>
-            </div>
-          </div>
-        </section>
+        <AddFile />
       </section>
     </main>
   );
