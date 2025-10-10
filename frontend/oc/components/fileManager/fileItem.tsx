@@ -25,14 +25,21 @@ export default function FileItem({
         />
       </div>
       <div>
-        <p className={`${font} font-bold text-[16px] truncate w-[120px]`}>
+        <p
+          className={`${font} font-bold text-[16px] truncate w-[120px] text-white`}
+        >
           {fileName}
         </p>
-        <p className={`${font} font-bold text-[12px] opacity-50`}>{fileType}</p>
+        <p className={`${font} font-bold text-[12px] opacity-50 text-white`}>
+          {fileType}
+        </p>
       </div>
       <div
         className="bg-[rgba(0,0,0,0.2)] absolute top-2 right-2 cursor-pointer opacity-80 hover:opacity-100 rounded-full w-[24px] h-[24px] flex items-center justify-center"
-        onClick={() => removeFile(i)}
+        onClick={(e) => {
+          e.stopPropagation();
+          removeFile(i);
+        }}
       >
         <Image
           src={"/icons/close.svg"}

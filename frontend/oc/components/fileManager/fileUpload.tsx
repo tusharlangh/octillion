@@ -20,7 +20,7 @@ export default function FileUpload({
     <section className="relative mt-2 shrink-0">
       <div
         style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
-        className="bg-[rgb(46,38,38)] w-[90vw] md:w-[60vw] rounded-[20px] flex flex-col p-3 gap-2"
+        className="bg-[rgb(46,38,38)] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2"
       >
         <section
           className="flex gap-1 opacity-40 select-none w-full justify-center items-center p-6 border-2 border-dashed border-[rgba(70,92,136,0.4)] rounded-[20px] hover:opacity-60 transition-all cursor-pointer"

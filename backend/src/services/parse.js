@@ -1,26 +1,44 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
-export async function parse(link) {
-  const loadingTask = pdfjs.getDocument(link); //loads the pdf and dowloads it for use and parses it.
+export async function parse(pdfUrls) {
+  /*
+  const links = [
+    "https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf", //1
+    "https://pdfobject.com/pdf/sample.pdf", //2
+  ];
+  */
 
-  const pdf = await loadingTask.promise;
+  return { message: "it worked from node" };
+
+  const links = pdfUrls;
 
   let pagesContent = [];
 
-  // Loop through pages
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const content = await page.getTextContent();
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
+    const loadingTask = pdfjs.getDocument(link);
+    const pdf = await loadingTask.promise;
 
-    const pageText = content.items.map((item) => item.str).join(" ");
+    let site_content = "";
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      let pageText = content.items.map((item) => item.str).join(" ");
+      pageText = formatResponse(pageText);
+      site_content += " " + pageText;
+    }
+
     pagesContent.push({
-      page: pageNum,
-      page_content: formatResponse(pageText),
+      id: i + 1,
+      name: link,
+      site_content,
+      total_words: site_content.split(" ").length,
     });
   }
 
   const inverted = await createInvertedSearch(pagesContent);
-  searchContent(inverted);
+
+  await searchContent(pagesContent, inverted, "This PDF is three pages long.");
 
   return pagesContent;
 }
@@ -28,88 +46,64 @@ export async function parse(link) {
 function formatResponse(res) {
   return res
     .toLowerCase()
-    .replace(/[^a-zA-Z0-9 ]/g, "")
-    .trim();
+    .replace(/[^a-z0-9 ]/gi, "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
-async function createInvertedSearch(pagesContent) {
+async function createInvertedSearch(sitesContent) {
   const inverted = new Map();
 
-  for (let i = 0; i < pagesContent.length; i++) {
-    const { page, page_content } = pagesContent[i];
-
-    for (let c of page_content.split(" ")) {
-      if (inverted.has(c)) {
-        inverted.get(c).push(page);
-      } else {
-        inverted.set(c, []);
-        inverted.get(c).push(page);
-      }
+  for (const { id, site_content } of sitesContent) {
+    for (const word of site_content.split(" ")) {
+      if (!inverted.has(word)) inverted.set(word, new Map());
+      const termMap = inverted.get(word);
+      termMap.set(id, (termMap.get(id) || 0) + 1);
     }
   }
 
   return inverted;
 }
 
-async function searchContent(inverted, search = "the") {
-  //yet to handle duplicates in query. grammatical mistakes and extract page numbers, remove commas and dots from search
+async function searchContent(sitesContent, inverted, search) {
+  const terms = search.toLowerCase().replace(/[.,]/g, "").split(/\s+/);
+  const N = sitesContent.length;
 
-  const wordCounts = new Map();
+  const appearance = {}; //space = search length
+  const TF = []; //space = search length
 
-  search = search.toLowerCase();
-
-  wordCounts.set(1, 179);
-  wordCounts.set(2, 11);
-
-  const TF = [];
-  const appearance = {};
-
-  const N = 2;
-
-  for (let doc = 1; doc <= N; doc++) {
-    for (let term of search.split(" ")) {
-      let counts = 0;
-
-      if (inverted.has(term)) {
-        for (let index of inverted.get(term)) {
-          if (index === doc) {
-            counts++;
-          }
-        }
-      }
+  for (const { id, total_words } of sitesContent) {
+    //n * t
+    for (const term of terms) {
+      const counts =
+        inverted.has(term) && inverted.get(term).has(id)
+          ? inverted.get(term).get(id)
+          : 0;
 
       if (counts > 0) {
-        if (!appearance[term]) appearance[term] = [];
-        appearance[term].push(doc);
+        if (!appearance[term]) appearance[term] = new Set();
+        appearance[term].add(id);
       }
 
-      TF.push({ doc, term, counts, tf: counts / wordCounts.get(doc) });
+      TF.push({ id, term, tf: counts / total_words });
     }
   }
 
   const IDF = {};
+  for (const term of terms) {
+    //t
+    const df = appearance[term] ? appearance[term].size : 0;
 
-  for (let term of search.split(" ")) {
-    const df = appearance[term] ? appearance[term].length : 0;
-    const idf = df === 0 ? 0 : Math.log(N / appearance[term].length);
-    IDF[term] = idf;
+    IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
   }
 
   const scores = {};
-
-  for (let doc = 1; doc <= N; doc++) {
-    let score = 0;
-    for (let term of search.split(" ")) {
-      for (let i = 0; i < TF.length; i++) {
-        const tile = TF[i];
-        if (tile.doc === doc && tile.term === term) {
-          score += tile.tf * IDF[term];
-          break;
-        }
-      }
-    }
-    scores[doc] = score;
+  for (const { id, term, tf } of TF) {
+    //t
+    if (!scores[id]) scores[id] = 0;
+    scores[id] += tf * IDF[term];
   }
 
-  console.log(scores);
+  console.log("TF–IDF Scores:", scores);
+  return scores;
 }
