@@ -41,7 +41,8 @@ export default function FileUpload({
 
         <div className="w-full justify-end flex mt-auto">
           <button
-            className={`bg-[#465C88] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#5F76A2] transition-colors`}
+            className={`bg-[#465C88] rounded-[20px] px-4 py-1 cursor-pointer transition-colors`}
+            disabled
           >
             <p
               className={`${font} text-[16px] text-white font-bold select-none text-shadow-sm`}
