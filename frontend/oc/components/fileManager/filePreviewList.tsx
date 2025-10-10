@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import FileItem from "./fileItem";
 import FileOpener from "./fileOpener";
+import { useRouter } from "next/navigation";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -15,9 +16,11 @@ export default function FilePreviewList({
 }: FilePreviewListProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const router = useRouter();
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const openPDF = (file: File) => {
     const url = URL.createObjectURL(file);
@@ -27,15 +30,27 @@ export default function FilePreviewList({
   };
 
   const sendPdf = async () => {
-    const data = selectedFiles.map((file, i) => URL.createObjectURL(file));
+    const formData = new FormData();
+    const id = crypto.randomUUID();
+    formData.append("id", id);
+
+    selectedFiles.forEach((file, i) => formData.append("files", file));
 
     try {
-      const res = await fetch(`${process.env.FRONTEND_URL}/api/files`, {
+      setLoading(true);
+      const res = await fetch(`http://localhost:5002/save-files`, {
         method: "POST",
-        body: JSON.stringify({ files: data }),
-        headers: { "Content-type": "application/json" },
+        body: formData,
       });
-      console.log("it worked");
+
+      const data = await res.json();
+
+      if (data.urls.length !== 0) {
+        setLoading(false);
+        router.push(`/search/${id}`);
+      }
+
+      console.log(data.urls);
     } catch (error) {
       console.log("error occured during sending");
     }
