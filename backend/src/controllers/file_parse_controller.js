@@ -2,11 +2,16 @@ import { parse } from "../services/parse.js";
 
 export async function file_parse_controller(req, res) {
   try {
-    const { link } = req.query;
-    const parsed = await parse(link);
+    const { files } = req.body;
+    console.log(files);
 
-    res.json({ message: "successfully parsed" });
+    const parsed = await parse(files);
+
+    return res.json({ message: parsed });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res
+      .status(500)
+      .json({ error: "Failed to parse PDFs", detail: error?.message });
   }
 }

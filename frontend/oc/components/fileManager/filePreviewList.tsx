@@ -26,6 +26,21 @@ export default function FilePreviewList({
     setIsOpen(true);
   };
 
+  const sendPdf = async () => {
+    const data = selectedFiles.map((file, i) => URL.createObjectURL(file));
+
+    try {
+      const res = await fetch(`${process.env.FRONTEND_URL}/api/files`, {
+        method: "POST",
+        body: JSON.stringify({ files: data }),
+        headers: { "Content-type": "application/json" },
+      });
+      console.log("it worked");
+    } catch (error) {
+      console.log("error occured during sending");
+    }
+  };
+
   return (
     <section className="relative mt-2 shrink-0 cursor-pointer">
       <div
@@ -55,6 +70,7 @@ export default function FilePreviewList({
         <div className="w-full justify-end flex mt-auto">
           <button
             className={`bg-[#465C88] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#5F76A2] transition-colors`}
+            onClick={sendPdf}
           >
             <p
               className={`${font} text-[16px] text-white font-bold select-none text-shadow-sm`}
