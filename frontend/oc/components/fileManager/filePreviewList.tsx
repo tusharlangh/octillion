@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import FileItem from "./fileItem";
 import FileOpener from "./fileOpener";
 import { useRouter } from "next/navigation";
+import FileUploadLoading from "./fileUploadLoading";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -46,8 +47,7 @@ export default function FilePreviewList({
       const data = await res.json();
 
       if (data.urls.length !== 0) {
-        setLoading(false);
-        router.push(`/search/${id}`);
+        setTimeout(() => router.push(`/search/${id}`), 5000);
       }
 
       console.log(data.urls);
@@ -95,6 +95,7 @@ export default function FilePreviewList({
           </button>
         </div>
       </div>
+      <FileUploadLoading isOpen={loading} />
     </section>
   );
 }
