@@ -2,10 +2,12 @@ import { parse } from "../services/parse.js";
 
 export async function file_parse_controller(req, res) {
   try {
-    const { id, files } = req.body;
-    console.log(`id: ${id} anad files: ${files}`);
+    const { id, search } = req.query;
+    console.log(`id: ${id} anad search: ${search}`);
 
-    return res.json({ message: parsed });
+    const parsed = await parse(id, search);
+
+    return res.json({ message: "it works" });
   } catch (error) {
     console.error(error);
     return res

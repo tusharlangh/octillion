@@ -1,12 +1,36 @@
-import Logo from "@/components/logo";
+"use client";
+
 import Image from "next/image";
+import React, { useEffect, useState } from "react";
 
 interface Props {
-  children: React.ReactNode;
+  id: string;
 }
 
-export default function SearchLayout({ children }: Props) {
+export default function Header({ id }: Props) {
   const font: string = "font-(family-name:--font-dm-sans)";
+  const [search, setSearch] = useState<string>("");
+
+  useEffect(() => {
+    async function get() {
+      try {
+        const query = new URLSearchParams({ id: id, search: search });
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
+          {
+            method: "GET",
+            headers: { method: "application/json" },
+          }
+        );
+
+        console.log(res);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    //get();
+  }, [search]);
+
   return (
     <div>
       <section className="absolute top-2 left-2 right-2 flex justify-between items-center">
@@ -42,6 +66,7 @@ export default function SearchLayout({ children }: Props) {
               placeholder="Search documents"
               className={`${font} text-[16px] h-[50px] text-white placeholder-white font-normal bg-[rgb(46,38,37)] rounded-full pl-12 px-1 border-1 border-[rgb(46,38,37)] outline-none w-full hover:bg-[#463A3A] hover:border-[#504343] transition-all focus:border-white`}
               type="text"
+              onChange={(e) => setSearch(e.target.value)}
             />
           </section>
           <div className="rounded-full bg-[rgb(46,38,37)] h-[50px] w-[50px] cursor-pointer flex justify-center items-center hover:bg-[#463A3A] hover:border-[#504343] border-1 border-[rgb(46,38,37)] hover:border-[#504343] transition-all">
@@ -55,8 +80,6 @@ export default function SearchLayout({ children }: Props) {
           </div>
         </section>
       </section>
-
-      <div>{children}</div>
     </div>
   );
 }

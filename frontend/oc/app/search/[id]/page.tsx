@@ -1,10 +1,16 @@
-interface SearchProps {
-  id: number;
+import Header from "@/components/searchManager/header";
+interface SearchPageProps {
+  params: {
+    id: string; // Next.js route params are always strings
+  };
 }
-export default function Page({ id }: SearchProps) {
+
+export default async function SearchPage({ params }: SearchPageProps) {
+  const id = await params.id;
+
   return (
-    <div>
-      <div></div>
-    </div>
+    <main>
+      <Header id={id} />
+    </main>
   );
 }

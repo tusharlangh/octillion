@@ -6,6 +6,6 @@ import upload from "../middleware/multer.js";
 const router = express.Router();
 
 router.post(`/save-files`, upload.array("files", 10), save_files_controller);
-router.post(`/parse-files`, file_parse_controller);
+router.get(`/parse-files`, file_parse_controller);
 
 export default router;
