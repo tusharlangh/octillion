@@ -1,19 +1,15 @@
-import { uploadToS3 } from "../services/uploadToS3.js";
+import { saveFiles } from "../services/saveFiles.js";
 
 export async function save_files_controller(req, res) {
   try {
     const id = req.body.id;
     const files = req.files;
 
-    const uploadedUrls = await Promise.all(
-      files.map((file, index) => uploadToS3(id, index, file))
-    );
+    const uploadedUrls = await saveFiles(id, files);
 
-    return res.json({ urls: uploadedUrls });
+    return res.json({ success: true });
   } catch (error) {
     console.error(error);
-    return res
-      .status(500)
-      .json({ error: "Failed to parse PDFs", detail: error?.message });
+    return res.json({ success: false });
   }
 }

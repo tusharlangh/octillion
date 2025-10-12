@@ -1,12 +1,20 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { s3 } from "../utils/aws/s3Client.js";
+import { GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import dotenv from "dotenv";
 
-export async function parse(pdfUrls) {
+dotenv.config();
+
+export async function parse(id, search) {
   /*
   const links = [
     "https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf", //1
     "https://pdfobject.com/pdf/sample.pdf", //2
   ];
   */
+
+  console.log(files);
 
   return { message: "it worked from node" };
 

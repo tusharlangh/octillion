@@ -15,6 +15,10 @@ export default function FilePreviewList({
   selectedFiles,
   removeFile,
 }: FilePreviewListProps) {
+  if (selectedFiles.length === 0) {
+    return <FileUploadLoading isOpen={true} />;
+  }
+
   const font: string = "font-(family-name:--font-dm-sans)";
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const router = useRouter();
@@ -39,18 +43,16 @@ export default function FilePreviewList({
 
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:5002/save-files`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/save-files`, {
         method: "POST",
         body: formData,
       });
 
       const data = await res.json();
 
-      if (data.urls.length !== 0) {
+      if (data.success) {
         setTimeout(() => router.push(`/search/${id}`), 5000);
       }
-
-      console.log(data.urls);
     } catch (error) {
       console.log("error occured during sending");
     }
