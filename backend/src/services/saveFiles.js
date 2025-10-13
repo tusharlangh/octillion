@@ -38,7 +38,7 @@ async function getPresignedUrls(id) {
     });
 
     const file = await getSignedUrl(s3, command, {
-      expiresIn: 60 * 60 * 24 * 4,
+      expiresIn: 60 * 60 * 24 * 4, //4 days
     });
 
     urls.push({

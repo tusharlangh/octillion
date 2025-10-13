@@ -2,6 +2,10 @@
 
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import SeeFiles from "../animations/seeFiles/seeFiles";
+import { motion, AnimatePresence } from "framer-motion";
+import SeeFilesManager from "../animations/seeFiles/seeFilesManager";
 
 interface Props {
   id: string;
@@ -11,7 +15,13 @@ export default function Header({ id }: Props) {
   const font: string = "font-(family-name:--font-dm-sans)";
   const [search, setSearch] = useState<string>("");
 
+  const router = useRouter();
+
   useEffect(() => {
+    if (search === "") {
+      return;
+    }
+
     async function get() {
       try {
         const query = new URLSearchParams({ id: id, search: search });
@@ -35,7 +45,7 @@ export default function Header({ id }: Props) {
     <div>
       <section className="absolute top-2 left-2 right-2 flex justify-between items-center">
         <section className="flex gap-2 w-full p-2">
-          <div className="rounded-full h-[50px] w-[50px] bg-[rgba(41, 31, 29, 1)] flex justify-center items-center border-1 border-[rgb(46,38,37)] hover:bg-[#463A3A] hover:border-[#504343] transition-all cursor-pointer">
+          <div className="shrink-0 rounded-full h-[50px] w-[50px] bg-[rgba(41, 31, 29, 1)] flex justify-center items-center border-1 border-[rgb(46,38,37)] hover:bg-[#463A3A] hover:border-[#504343] transition-all cursor-pointer">
             <Image
               src={"/icons/menu.svg"}
               alt="menu-icon"
@@ -43,7 +53,11 @@ export default function Header({ id }: Props) {
               width={24}
             />
           </div>
-          <div className="rounded-full h-[50px] w-[50px] bg-[rgb(46,38,37)] flex justify-center items-center border-1 border-[rgb(46,38,37)] hover:bg-[#463A3A] hover:border-[#504343] transition-all cursor-pointer">
+
+          <div
+            className="shrink-0 rounded-full h-[50px] w-[50px] bg-[rgb(46,38,37)] flex justify-center items-center border-1 border-[rgb(46,38,37)] hover:bg-[#463A3A] hover:border-[#504343] transition-all cursor-pointer"
+            onClick={() => router.replace("/")}
+          >
             <Image
               src={"/icons/home.svg"}
               alt="home-icon"
@@ -52,8 +66,8 @@ export default function Header({ id }: Props) {
             />
           </div>
 
-          <section className="relative w-1/2 md:w-lg shadow-xs md:ml-4">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2">
+          <section className="relative w-1/2 min-w-100 md:w-lg shadow-xs md:ml-4">
+            <div className="absolute left-4 top-[13px]">
               <Image
                 src="/icons/search.svg"
                 alt="search-icon"
@@ -69,15 +83,8 @@ export default function Header({ id }: Props) {
               onChange={(e) => setSearch(e.target.value)}
             />
           </section>
-          <div className="rounded-full bg-[rgb(46,38,37)] h-[50px] w-[50px] cursor-pointer flex justify-center items-center hover:bg-[#463A3A] hover:border-[#504343] border-1 border-[rgb(46,38,37)] hover:border-[#504343] transition-all">
-            <Image
-              src="/icons/folder.svg"
-              alt="search-icon"
-              height={26}
-              width={26}
-              className=""
-            />
-          </div>
+
+          <SeeFilesManager />
         </section>
       </section>
     </div>
