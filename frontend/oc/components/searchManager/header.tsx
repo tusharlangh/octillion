@@ -84,7 +84,7 @@ export default function Header({ id }: Props) {
             />
           </section>
 
-          <SeeFilesManager />
+          <SeeFilesManager id={id} />
         </section>
       </section>
     </div>
