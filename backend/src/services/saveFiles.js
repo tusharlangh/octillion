@@ -21,7 +21,7 @@ async function uploadToS3(id, index, file) {
   await s3.send(command);
 }
 
-async function getPresignedUrls(id) {
+async function getPresignedUrls(id, files) {
   const command = new ListObjectsV2Command({
     Bucket: process.env.S3_BUCKET_NAME,
     Prefix: id,
@@ -31,7 +31,9 @@ async function getPresignedUrls(id) {
 
   const urls = [];
 
-  for (let obj of response.Contents) {
+  for (let i = 0; i < response.Contents.length; i++) {
+    const obj = response.Contents[i];
+
     const command = new GetObjectCommand({
       Bucket: process.env.S3_BUCKET_NAME,
       Key: obj.Key,
@@ -42,6 +44,8 @@ async function getPresignedUrls(id) {
     });
 
     urls.push({
+      file_name: files[i].originalname,
+      file_type: files[i].mimetype,
       key: obj.Key,
       presignedUrl: file,
       date: new Date().toISOString(),
@@ -54,7 +58,7 @@ async function getPresignedUrls(id) {
 export async function saveFiles(id, files) {
   await Promise.all(files.map((file, i) => uploadToS3(id, i, file)));
 
-  const urls = await getPresignedUrls(id);
+  const urls = await getPresignedUrls(id, files);
 
   const { data, error } = await supabase.from("files").insert([
     {

@@ -6,7 +6,7 @@ interface SearchPageProps {
 }
 
 export default async function SearchPage({ params }: SearchPageProps) {
-  const id = await params.id;
+  const id = params.id;
 
   return (
     <main>
