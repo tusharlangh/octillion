@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import FileItem from "./fileItem";
 import FileOpener from "./fileOpener";
+import { useRouter } from "next/navigation";
+import FileUploadLoading from "./fileUploadLoading";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -13,11 +15,17 @@ export default function FilePreviewList({
   selectedFiles,
   removeFile,
 }: FilePreviewListProps) {
+  if (selectedFiles.length === 0) {
+    return <FileUploadLoading isOpen={true} />;
+  }
+
   const font: string = "font-(family-name:--font-dm-sans)";
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const router = useRouter();
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
   const openPDF = (file: File) => {
     const url = URL.createObjectURL(file);
@@ -27,15 +35,24 @@ export default function FilePreviewList({
   };
 
   const sendPdf = async () => {
-    const data = selectedFiles.map((file, i) => URL.createObjectURL(file));
+    const formData = new FormData();
+    const id = crypto.randomUUID();
+    formData.append("id", id);
+
+    selectedFiles.forEach((file, i) => formData.append("files", file));
 
     try {
-      const res = await fetch(`${process.env.FRONTEND_URL}/api/files`, {
+      setLoading(true);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/save-files`, {
         method: "POST",
-        body: JSON.stringify({ files: data }),
-        headers: { "Content-type": "application/json" },
+        body: formData,
       });
-      console.log("it worked");
+
+      const data = await res.json();
+
+      if (data.success) {
+        setTimeout(() => router.push(`/search/${id}`), 5000);
+      }
     } catch (error) {
       console.log("error occured during sending");
     }
@@ -80,6 +97,7 @@ export default function FilePreviewList({
           </button>
         </div>
       </div>
+      <FileUploadLoading isOpen={loading} />
     </section>
   );
 }

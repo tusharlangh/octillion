@@ -1,21 +1,27 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import supabase from "../utils/supabase/client.js";
+import dotenv from "dotenv";
 
-export async function parse(pdfUrls) {
-  /*
-  const links = [
-    "https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf", //1
-    "https://pdfobject.com/pdf/sample.pdf", //2
-  ];
-  */
+dotenv.config();
 
-  return { message: "it worked from node" };
+export async function parse(id, search) {
+  const { data, error } = await supabase
+    .from("files")
+    .select("*")
+    .eq("parse_id", id);
 
-  const links = pdfUrls;
+  if (error) {
+    console.error(error);
+    return { message: "error" };
+  }
+
+  const links = data.map((row) => row.files);
 
   let pagesContent = [];
 
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i];
+  for (let i = 0; i < links[0].length; i++) {
+    const link = links[0][i].presignedUrl;
+
     const loadingTask = pdfjs.getDocument(link);
     const pdf = await loadingTask.promise;
 
@@ -38,7 +44,7 @@ export async function parse(pdfUrls) {
 
   const inverted = await createInvertedSearch(pagesContent);
 
-  await searchContent(pagesContent, inverted, "This PDF is three pages long.");
+  await searchContent(pagesContent, inverted, search);
 
   return pagesContent;
 }
