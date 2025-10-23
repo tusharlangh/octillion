@@ -20,13 +20,14 @@ async function uploadToS3(id, index, file) {
   return { key: key, file_name: file.originalname, file_type: file.mimetype };
 }
 
-export async function saveFiles(id, files) {
+export async function saveFiles(id, files, userId) {
   const keys = await Promise.all(
     files.map((file, i) => uploadToS3(id, i, file))
   );
 
   const { data, error } = await supabase.from("files").insert([
     {
+      user_id: userId,
       parse_id: id,
       files: keys,
     },
