@@ -63,7 +63,7 @@ export default function SeeFilesManager({ id }: SeeFileManagerProps) {
             duration: 0.1,
             ease: "linear",
           }}
-          className="rounded-full bg-[rgb(46,38,37)] h-[50px] w-[50px] cursor-pointer flex justify-center items-center hover:bg-[#463A3A] hover:border-[#504343] border-1 border-[rgb(46,38,37)] hover:border-[#504343] transition-all"
+          className="rounded-full h-[50px] w-[50px] cursor-pointer flex justify-center items-center bg-[#1C1C1E] hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(255,255,255,0.12)] border-1 border-[#1C1C1E] transition-all"
           onClick={() => setOpenSeeFiles(true)}
         >
           <Image

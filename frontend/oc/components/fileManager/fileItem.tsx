@@ -15,7 +15,7 @@ export default function FileItem({
   const font: string = "font-(family-name:--font-dm-sans)";
 
   return (
-    <section className="bg-[rgb(55,46,46)] w-[242px] h-[62px] rounded-[20px] flex items-center gap-[10px] p-[12px] shadow-sm relative">
+    <section className="bg-[#2C2C2E] w-[242px] h-[62px] rounded-[20px] flex items-center gap-[10px] p-[12px] shadow-sm relative ">
       <div className="bg-[#EB5858] rounded-[4px] px-3 py-3 ">
         <Image
           src={"/icons/draft.svg"}
@@ -35,7 +35,7 @@ export default function FileItem({
         </p>
       </div>
       <div
-        className="bg-[rgba(0,0,0,0.2)] absolute top-2 right-2 cursor-pointer opacity-80 hover:opacity-100 rounded-full w-[24px] h-[24px] flex items-center justify-center"
+        className="bg-transparent hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(255,255,255,0.12)] absolute top-2 right-2 cursor-pointer rounded-full w-[24px] h-[24px] flex items-center justify-center"
         onClick={(e) => {
           e.stopPropagation();
           removeFile(i);
