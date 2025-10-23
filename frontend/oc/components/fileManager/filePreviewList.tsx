@@ -5,6 +5,7 @@ import FileItem from "./fileItem";
 import FileOpener from "./fileOpener";
 import { useRouter } from "next/navigation";
 import FileUploadLoading from "./fileUploadLoading";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -37,6 +38,8 @@ export default function FilePreviewList({
   const sendPdf = async () => {
     const formData = new FormData();
     const id = crypto.randomUUID();
+    const jwt = await handleTokenAction();
+
     formData.append("id", id);
 
     selectedFiles.forEach((file, i) => formData.append("files", file));
@@ -46,6 +49,9 @@ export default function FilePreviewList({
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/save-files`, {
         method: "POST",
         body: formData,
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+        },
       });
 
       const data = await res.json();

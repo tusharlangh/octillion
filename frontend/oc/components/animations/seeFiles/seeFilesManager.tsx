@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import SeeFiles from "./seeFiles";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 
 interface SeeFileManagerProps {
   id: string;
@@ -17,12 +18,16 @@ export default function SeeFilesManager({ id }: SeeFileManagerProps) {
     async function get() {
       try {
         const query = new URLSearchParams({ id: id });
+        const jwt = await handleTokenAction();
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/get-files/?${query}`,
           {
             method: "GET",
-            headers: { method: "application/json" },
+            headers: {
+              method: "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
           }
         );
 
