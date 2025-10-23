@@ -20,10 +20,10 @@ export default function FileUpload({
     <section className="relative mt-2 shrink-0">
       <div
         style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
-        className="bg-[rgb(46,38,38)] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2"
+        className="bg-[#1C1C1E] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2"
       >
         <section
-          className="flex gap-1 opacity-40 select-none w-full justify-center items-center p-6 border-2 border-dashed border-[rgba(70,92,136,0.4)] rounded-[20px] hover:opacity-60 transition-all cursor-pointer"
+          className="flex gap-1 opacity-40 select-none w-full justify-center items-center p-6 border-2 border-dashed border-[rgba(255,255,255,0.4)] rounded-[20px] hover:opacity-60 transition-all cursor-pointer"
           onClick={handleButtonClick}
         >
           <p
@@ -41,11 +41,11 @@ export default function FileUpload({
 
         <div className="w-full justify-end flex mt-auto">
           <button
-            className={`bg-[#465C88] rounded-[20px] px-4 py-1 cursor-pointer transition-colors`}
+            className={`bg-[#8E8E93] rounded-[20px] px-4 py-1 cursor-pointer transition-colors`}
             disabled
           >
             <p
-              className={`${font} text-[16px] text-white font-bold select-none text-shadow-sm`}
+              className={`${font} text-[16px] text-black font-bold select-none `}
             >
               parse
             </p>
