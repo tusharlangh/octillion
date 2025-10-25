@@ -5,10 +5,11 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws/s3Client.js";
 dotenv.config();
 
-export async function getFiles(id) {
+export async function getFiles(id, userId) {
   const { data, error } = await supabase
     .from("files")
     .select("*")
+    .eq("user_id", userId)
     .eq("parse_id", id);
 
   if (error) {
