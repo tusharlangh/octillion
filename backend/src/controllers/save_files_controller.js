@@ -4,8 +4,9 @@ export async function save_files_controller(req, res) {
   try {
     const id = req.body.id;
     const files = req.files;
+    const userId = req.user;
 
-    const uploadedUrls = await saveFiles(id, files);
+    const uploadedUrls = await saveFiles(id, files, userId);
 
     return res.json({ success: true });
   } catch (error) {

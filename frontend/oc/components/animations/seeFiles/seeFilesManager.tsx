@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import SeeFiles from "./seeFiles";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
+import { useRouter } from "next/navigation";
 
 interface SeeFileManagerProps {
   id: string;
@@ -12,17 +14,24 @@ interface SeeFileManagerProps {
 export default function SeeFilesManager({ id }: SeeFileManagerProps) {
   const [openSeeFiles, setOpenSeeFiles] = useState<boolean>(false);
   const [files, setFiles] = useState<Record<string, any>[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     async function get() {
       try {
         const query = new URLSearchParams({ id: id });
+        const jwt = await handleTokenAction();
+
+        console.log("jwt token: ", jwt);
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/get-files/?${query}`,
           {
             method: "GET",
-            headers: { method: "application/json" },
+            headers: {
+              method: "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
           }
         );
 
@@ -58,7 +67,7 @@ export default function SeeFilesManager({ id }: SeeFileManagerProps) {
             duration: 0.1,
             ease: "linear",
           }}
-          className="rounded-full bg-[rgb(46,38,37)] h-[50px] w-[50px] cursor-pointer flex justify-center items-center hover:bg-[#463A3A] hover:border-[#504343] border-1 border-[rgb(46,38,37)] hover:border-[#504343] transition-all"
+          className="rounded-full h-[50px] w-[50px] cursor-pointer flex justify-center items-center bg-[#1C1C1E] hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(255,255,255,0.12)] border-1 border-[#1C1C1E] transition-all"
           onClick={() => setOpenSeeFiles(true)}
         >
           <Image
