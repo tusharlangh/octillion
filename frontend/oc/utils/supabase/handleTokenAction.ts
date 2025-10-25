@@ -8,7 +8,7 @@ export async function handleTokenAction() {
     return;
   }
 
-  if (data.session) {
+  if (data.session?.access_token) {
     const jwt = data.session.access_token;
 
     return jwt;

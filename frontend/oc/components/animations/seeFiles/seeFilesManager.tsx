@@ -5,6 +5,7 @@ import SeeFiles from "./seeFiles";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
+import { useRouter } from "next/navigation";
 
 interface SeeFileManagerProps {
   id: string;
@@ -13,12 +14,15 @@ interface SeeFileManagerProps {
 export default function SeeFilesManager({ id }: SeeFileManagerProps) {
   const [openSeeFiles, setOpenSeeFiles] = useState<boolean>(false);
   const [files, setFiles] = useState<Record<string, any>[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     async function get() {
       try {
         const query = new URLSearchParams({ id: id });
         const jwt = await handleTokenAction();
+
+        console.log("jwt token: ", jwt);
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/get-files/?${query}`,
