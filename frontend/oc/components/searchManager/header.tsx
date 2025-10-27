@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import SeeFiles from "../animations/seeFiles/seeFiles";
 import { motion, AnimatePresence } from "framer-motion";
 import SeeFilesManager from "../animations/seeFiles/seeFilesManager";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 
 interface Props {
   id: string;
@@ -25,11 +26,16 @@ export default function Header({ id }: Props) {
     async function get() {
       try {
         const query = new URLSearchParams({ id: id, search: search });
+        const jwt = await handleTokenAction();
+
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
           {
             method: "GET",
-            headers: { method: "application/json" },
+            headers: {
+              method: "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
           }
         );
 
@@ -38,7 +44,7 @@ export default function Header({ id }: Props) {
         console.error(error);
       }
     }
-    //get();
+    get();
   }, [search]);
 
   return (

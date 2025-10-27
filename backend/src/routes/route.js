@@ -14,6 +14,6 @@ router.post(
   auth,
   save_files_controller
 );
-router.get(`/parse-files`, file_parse_controller);
+router.get(`/parse-files`, auth, file_parse_controller);
 
 export default router;

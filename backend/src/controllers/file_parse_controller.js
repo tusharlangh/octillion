@@ -3,9 +3,9 @@ import { parse } from "../services/parse.js";
 export async function file_parse_controller(req, res) {
   try {
     const { id, search } = req.query;
-    console.log(`id: ${id} anad search: ${search}`);
+    const userId = req.user;
 
-    const parsed = await parse(id, search);
+    const parsed = await parse(id, search, userId);
 
     return res.json({ message: "it works" });
   } catch (error) {

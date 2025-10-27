@@ -41,14 +41,10 @@ export default function FileUpload({
 
         <div className="w-full justify-end flex mt-auto">
           <button
-            className={`bg-[#8E8E93] rounded-[20px] px-4 py-1 cursor-pointer transition-colors`}
+            className={`bg-[#8E8E93] rounded-[20px] px-4 py-1 transition-colors cursor-not-allowed`}
             disabled
           >
-            <p
-              className={`${font} text-[16px] text-black font-bold select-none `}
-            >
-              parse
-            </p>
+            <p className={`${font} text-[16px] text-black font-bold `}>parse</p>
           </button>
         </div>
       </div>

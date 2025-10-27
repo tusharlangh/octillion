@@ -46,7 +46,7 @@ export default function SeeFiles({ setOpenSeeFiles, files }: SeeFilesProps) {
         damping: 13, // keeps bounce tight
         mass: 0.3, // lighter feel
       }}
-      className="relative bg-[rgb(46,38,37)] px-8 py-3 rounded-[30px] flex flex-col justify-center items-center shrink-0"
+      className="relative bg-[#1C1C1E] px-8 py-3 rounded-[30px] flex flex-col justify-center items-center shrink-0"
     >
       <ul>
         {files.map((file, i) => (

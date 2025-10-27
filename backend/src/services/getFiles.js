@@ -41,5 +41,7 @@ export async function getFiles(id, userId) {
     });
   }
 
+  console.log(urls);
+
   return urls;
 }
