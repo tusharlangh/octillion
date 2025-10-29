@@ -7,7 +7,11 @@ export async function file_parse_controller(req, res) {
 
     const parsed = await parse(id, search, userId);
 
-    return res.json({ message: "it works" });
+    return res.json({
+      success: parsed.success,
+      searchResults: parsed.searchResults,
+      error: parsed.error,
+    });
   } catch (error) {
     console.error(error);
     return res

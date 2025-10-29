@@ -52,7 +52,7 @@ export default function SeeFiles({ setOpenSeeFiles, files }: SeeFilesProps) {
         {files.map((file, i) => (
           <li key={i}>
             <div
-              className="flex justify-start items-center gap-2 opacity-80"
+              className="flex justify-start items-center gap-2 opacity-80 "
               onClick={() => openPdf(file.presignedUrl, file.file_name)}
             >
               <Image

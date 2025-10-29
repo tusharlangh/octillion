@@ -5,6 +5,56 @@ import { getFiles } from "./getFiles.js";
 
 dotenv.config();
 
+class TrieNode {
+  constructor() {
+    this.children = new Map();
+    this.positions = [];
+  }
+}
+
+class Trie {
+  constructor() {
+    this.trie = new TrieNode();
+  }
+
+  insert(word, position) {
+    let node = this.trie;
+
+    for (let char of word) {
+      if (!node.children.has(char)) {
+        node.children.set(char, new TrieNode());
+      }
+      node = node.children.get(char);
+    }
+
+    node.positions.push(position);
+  }
+
+  searchPrefix(prefix) {
+    let node = this.trie;
+
+    for (let char of prefix) {
+      if (!node.children.has(char)) {
+        return [];
+      }
+      node = node.children.get(char);
+    }
+
+    return this.collectAllPositions(node);
+  }
+
+  collectAllPositions(node) {
+    const results = [...node.positions];
+    for (let child of node.children.values()) {
+      results.push(...this.collectAllPositions(child));
+    }
+
+    return results;
+  }
+}
+
+const wordTrie = new Trie();
+
 export async function parse(id, search, userId) {
   const { data, error } = await supabase
     .from("files")
@@ -14,7 +64,11 @@ export async function parse(id, search, userId) {
 
   if (error) {
     console.error(error);
-    return { message: "error" };
+    return {
+      success: false,
+      searchResults: [],
+      error: `failed extracting files`,
+    };
   }
 
   const urls = await getFiles(id, userId);
@@ -73,7 +127,7 @@ export async function parse(id, search, userId) {
     });
   }
 
-  const wordIndex = buildWordIndex(pagesContent);
+  buildWordIndex(pagesContent);
   const inverted = await createInvertedSearch(pagesContent);
   const scores = await searchContent(pagesContent, inverted, search);
 
@@ -82,56 +136,75 @@ export async function parse(id, search, userId) {
     .slice(0, 5) // top 10 pages
     .map(([id]) => parseInt(id));
 
-  const searchResults = searchWordFast(
-    pagesContent,
-    wordIndex,
-    search,
-    topPages
-  );
+  if (inverted.size === 0 || Object.keys(scores).length === 0) {
+    return {
+      success: false,
+      searchResults: [],
+      error: "word trie or inverted or scores failed.",
+    };
+  }
+
+  const searchResults = searchWordFast(pagesContent, search, topPages);
+
+  if (searchResults.length === 0) {
+    return {
+      success: false,
+      searchResults: [],
+      error: "failed search results",
+    };
+  }
 
   console.log(searchResults);
 
-  return pagesContent;
+  return { success: true, searchResults, error: null };
 }
 
 function buildWordIndex(pagesContent) {
-  const wordIndex = new Map(); // word -> [{pageId, y, x, ...}]
-
   for (const page of pagesContent) {
     for (const [y, row] of page.mapping) {
       for (const wordObj of row) {
-        const word = wordObj.word;
-        if (!wordIndex.has(word)) {
-          wordIndex.set(word, []);
-        }
-        wordIndex.get(word).push({
+        const word = wordObj.word.toLowerCase();
+        const normalizedWord = word
+          .toLowerCase()
+          .replace(/[.,;:!?'"()[\]{}]+/g, "");
+
+        if (!normalizedWord) continue;
+
+        const position = {
           pageId: page.id,
-          y: y,
           x: wordObj.x,
+          y: wordObj.y,
           width: wordObj.width,
           height: wordObj.height,
-        });
+          hasPunctuation: word !== normalizedWord,
+        };
+
+        wordTrie.insert(normalizedWord, position);
       }
     }
   }
-
-  return wordIndex;
 }
 
-function searchWordFast(pagesContent, wordIndex, searchTerms, topPageIds) {
+function searchWordFast(pagesContent, searchTerms, topPageIds) {
   const results = [];
   const terms = searchTerms.toLowerCase().split(/\s+/);
 
-  const pageSet = new Set(topPageIds); // Only search in top-ranked pages
+  const pageSet = new Set(topPageIds);
+  const sentenceMap = new Map();
 
   for (const term of terms) {
-    if (!wordIndex.has(term)) continue;
+    const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+    const searchHasPunctuation = term !== normalizedTerm;
 
-    const positions = wordIndex.get(term);
+    const positions = wordTrie.searchPrefix(normalizedTerm);
 
-    const relevantPositions = positions.filter((p) => pageSet.has(p.pageId)); // Filter to only top-ranked pages
+    const matchingPositions = searchHasPunctuation
+      ? positions.filter((p) => p.hasPunctuation)
+      : positions.filter((p) => !p.hasPunctuation);
 
-    const sentenceMap = new Map(); // Filter to only top-ranked pages
+    const relevantPositions = matchingPositions.filter((p) =>
+      pageSet.has(p.pageId)
+    );
 
     for (const pos of relevantPositions) {
       const page = pagesContent.find((p) => p.id === pos.pageId);
@@ -140,7 +213,7 @@ function searchWordFast(pagesContent, wordIndex, searchTerms, topPageIds) {
       const row = page.mapping.get(pos.y);
       if (!row) continue;
 
-      const key = `${pos.pageId}-${pos.y}`; //checks for the duplicate word within the sentence
+      const key = `${pos.pageId}-${pos.y}`;
       if (!sentenceMap.has(key)) {
         sentenceMap.set(key, {
           pageId: pos.pageId,
@@ -149,9 +222,9 @@ function searchWordFast(pagesContent, wordIndex, searchTerms, topPageIds) {
         });
       }
     }
-
-    results.push(...sentenceMap.values());
   }
+
+  results.push(...sentenceMap.values());
 
   return results;
 }
