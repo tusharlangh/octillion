@@ -67,15 +67,20 @@ export default function SeeFilesManager({ id }: SeeFileManagerProps) {
             duration: 0.1,
             ease: "linear",
           }}
-          className="rounded-full h-[50px] w-[50px] cursor-pointer flex justify-center items-center bg-[#1C1C1E] hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(255,255,255,0.12)] border-1 border-[#1C1C1E] transition-all"
+          className=""
           onClick={() => setOpenSeeFiles(true)}
         >
-          <Image
-            src="/icons/folder.svg"
-            alt="folder-icon"
-            height={26}
-            width={26}
-          />
+          <button
+            className="cursor-pointer h-9 w-9 flex items-center justify-center rounded-md hover:bg-[rgba(255,255,255,0.08)] active:bg-[rgba(255,255,255,0.15)] transition-colors"
+            aria-label="Menu"
+          >
+            <Image
+              src="/icons/folder.svg"
+              alt="folder-icon"
+              height={20}
+              width={20}
+            />
+          </button>
         </motion.div>
       )}
     </AnimatePresence>
