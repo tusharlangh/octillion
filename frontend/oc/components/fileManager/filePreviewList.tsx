@@ -93,6 +93,7 @@ export default function FilePreviewList({
         <div className="w-full justify-end flex mt-auto">
           <button
             className={`bg-[#FFFFFF] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#F2F2F2] transition-colors active:bg-[#E5E5E5]`}
+            onClick={() => sendPdf()}
           >
             <p
               className={`${font} text-[16px] text-black font-bold select-none`}
