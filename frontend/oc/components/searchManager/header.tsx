@@ -16,48 +16,58 @@ export default function Header({ id }: Props) {
   const font: string = "font-(family-name:--font-dm-sans)";
   const router = useRouter();
   const context = useContext(queryContext);
+  const [searchType, setSearchType] = useState<"Enhanced" | "keyword">(
+    "keyword"
+  );
 
   if (!context)
     throw new Error("queryContext in Header component is not working");
 
   const { setIsLoading, setQuery, search, setSearch } = context;
 
-  useEffect(() => {
-    if (search === "") {
+  const handleSearch = async () => {
+    if (!search.trim()) {
       return;
     }
 
-    async function get() {
-      try {
-        const query = new URLSearchParams({ id: id, search: search });
-        const jwt = await handleTokenAction();
+    try {
+      const query = new URLSearchParams({
+        id: id,
+        search: search,
+      });
+      const jwt = await handleTokenAction();
+      console.log(jwt);
 
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
-          {
-            method: "GET",
-            headers: {
-              method: "application/json",
-              Authorization: `Bearer ${jwt}`,
-            },
-          }
-        );
-
-        const data = await res.json();
-
-        if (data.success) {
-          setIsLoading(true);
-          setQuery(data.searchResults);
-          setIsLoading(false);
-        } else {
-          console.log(data.error);
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
+        {
+          method: "GET",
+          headers: {
+            method: "application/json",
+            Authorization: `Bearer ${jwt}`,
+          },
         }
-      } catch (error) {
-        console.error(error);
+      );
+
+      const data = await res.json();
+
+      if (data.success) {
+        setIsLoading(true);
+        setQuery(data.searchResults);
+        setIsLoading(false);
+      } else {
+        console.log(data.error);
       }
+    } catch (error) {
+      console.error(error);
     }
-    get();
-  }, [search]);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSearch();
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
@@ -82,21 +92,52 @@ export default function Header({ id }: Props) {
             </div>
 
             <div className="flex-1 max-w-2xl mx-4">
-              <div className="relative group cursor-pointer">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 group-focus-within:opacity-100 transition-opacity">
-                  <Image
-                    src="/icons/search.svg"
-                    alt=""
-                    height={18}
-                    width={18}
-                  />
+              <div className="flex items-center">
+                <div className="relative group cursor-pointer flex-1">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 group-focus-within:opacity-100 transition-opacity">
+                    <Image
+                      src="/icons/search.svg"
+                      alt=""
+                      height={18}
+                      width={18}
+                    />
+                  </div>
+                  <div className="relative w-full">
+                    <input
+                      placeholder="Search documents"
+                      className={`${font} px-8 w-full h-9 text-[15px] text-white placeholder-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.06)] spl-10 pr-16 outline-none transition-all border border-transparent rounded-l-md`}
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                    />
+                  </div>
                 </div>
-                <input
-                  placeholder="Search documents"
-                  className={`${font} w-full h-9 text-[15px] text-white placeholder-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.08)] rounded-md pl-10 pr-3 outline-none transition-all border border-transparent `}
-                  type="text"
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+                <div className="w-1 h-9 bg-[rgba(255,255,255,0.06)] pr-2">
+                  <div className="w-[1px] py-3 bg-white/10 mt-1.5"></div>
+                </div>
+                <div className="relative h-9 inline-flex items-center bg-[rgba(255,255,255,0.06)] rounded-r-md p-0.5 shrink-0 pr-2">
+                  <button
+                    onClick={() => setSearchType("keyword")}
+                    className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
+                      searchType === "keyword"
+                        ? "text-white"
+                        : "text-[rgba(255,255,255,0.5)]  hover:text-[rgba(255,255,255,0.8)]"
+                    }`}
+                  >
+                    Keyword
+                  </button>
+                  <button
+                    onClick={() => setSearchType("Enhanced")}
+                    className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
+                      searchType === "Enhanced"
+                        ? "text-white"
+                        : "text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)]"
+                    }`}
+                  >
+                    Enhanced
+                  </button>
+                </div>
               </div>
             </div>
 
