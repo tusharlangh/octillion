@@ -1,74 +1,118 @@
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import supabase from "../utils/supabase/client.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-export async function parse(id, search) {
+export async function parse(id, search, userId) {
+  if (!search.trim()) {
+    return {
+      success: false,
+      searchResults: [],
+      error: `failed since the search is empty`,
+    };
+  }
+
   const { data, error } = await supabase
     .from("files")
     .select("*")
+    .eq("user_id", userId)
     .eq("parse_id", id);
 
   if (error) {
     console.error(error);
-    return { message: "error" };
+    return {
+      success: false,
+      searchResults: [],
+      error: `failed extracting files`,
+    };
   }
 
-  const links = data.map((row) => row.files);
+  const d = data[0];
 
-  let pagesContent = [];
+  const pagesContent = d.pages_metadata;
 
-  for (let i = 0; i < links[0].length; i++) {
-    const link = links[0][i].presignedUrl;
+  const inverted = d.inverted_index;
+  const buildIndex = d.build_index;
 
-    const loadingTask = pdfjs.getDocument(link);
-    const pdf = await loadingTask.promise;
+  const scores = await searchContent(pagesContent, inverted, search);
 
-    let site_content = "";
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const content = await page.getTextContent();
-      let pageText = content.items.map((item) => item.str).join(" ");
-      pageText = formatResponse(pageText);
-      site_content += " " + pageText;
-    }
+  const topPages = Object.entries(scores)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5) // top 10 pages
+    .map(([id]) => id);
 
-    pagesContent.push({
-      id: i + 1,
-      name: link,
-      site_content,
-      total_words: site_content.split(" ").length,
-    });
+  if (inverted.size === 0 || Object.keys(scores).length === 0) {
+    return {
+      success: false,
+      searchResults: [],
+      error: "word trie or inverted or scores failed.",
+    };
   }
 
-  const inverted = await createInvertedSearch(pagesContent);
+  const searchResults = searchBuildIndex(
+    buildIndex,
+    search,
+    pagesContent,
+    topPages
+  );
 
-  await searchContent(pagesContent, inverted, search);
+  if (searchResults.length === 0) {
+    return {
+      success: false,
+      searchResults: [],
+      error: "failed search results",
+    };
+  }
 
-  return pagesContent;
+  //console.log(searchResults);
+
+  return { success: true, searchResults, error: null };
 }
 
-function formatResponse(res) {
-  return res
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/gi, "")
-    .trim()
-    .replace(/\s+/g, " ");
-}
+function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
+  const terms = searchTerms.toLowerCase().split(/\s+/);
 
-async function createInvertedSearch(sitesContent) {
-  const inverted = new Map();
+  const pageSet = new Set(topPageIds);
+  const sentenceMap = new Map();
 
-  for (const { id, site_content } of sitesContent) {
-    for (const word of site_content.split(" ")) {
-      if (!inverted.has(word)) inverted.set(word, new Map());
-      const termMap = inverted.get(word);
-      termMap.set(id, (termMap.get(id) || 0) + 1);
+  const pageMappings = new Map();
+  for (let page of pagesContent) {
+    if (pageSet.has(page.id)) {
+      pageMappings.set(page.id, new Map(page.mapping));
     }
   }
 
-  return inverted;
+  for (const term of terms) {
+    const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+
+    const positions = buildIndex[normalizedTerm[0].toLowerCase()] || [];
+
+    for (const pos of positions) {
+      const mapping = pageMappings.get(pos.pageId);
+      if (!mapping) continue;
+
+      const row = mapping.get(pos.y);
+      if (!row) continue;
+
+      if (
+        pos.word === normalizedTerm ||
+        pos.word.startsWith(normalizedTerm) ||
+        pos.word.endsWith(normalizedTerm) ||
+        pos.word.includes(normalizedTerm)
+      ) {
+        const key = `${pos.pageId}-${pos.y}`;
+        if (!sentenceMap.has(key)) {
+          sentenceMap.set(key, {
+            pageId: pos.pageId,
+            y: pos.y,
+            sentence: row.map((w) => w.word).join(" "),
+          });
+        }
+      }
+    }
+  }
+
+  return [...sentenceMap.values()];
 }
 
 async function searchContent(sitesContent, inverted, search) {
@@ -82,9 +126,7 @@ async function searchContent(sitesContent, inverted, search) {
     //n * t
     for (const term of terms) {
       const counts =
-        inverted.has(term) && inverted.get(term).has(id)
-          ? inverted.get(term).get(id)
-          : 0;
+        inverted[term] && inverted[term][id] ? inverted[term][id] : 0;
 
       if (counts > 0) {
         if (!appearance[term]) appearance[term] = new Set();
@@ -110,6 +152,6 @@ async function searchContent(sitesContent, inverted, search) {
     scores[id] += tf * IDF[term];
   }
 
-  console.log("TF–IDF Scores:", scores);
+  //console.log("TF–IDF Scores:", scores, "for search: ", search);
   return scores;
 }
