@@ -10,6 +10,7 @@ interface QueryContextProps {
   setIsLoading: (loading: boolean) => void;
   setQuery: (query: any[]) => void;
   isLoading: boolean;
+  lastSuccessfulSearch: string;
 }
 
 export const queryContext = createContext<QueryContextProps | undefined>(
@@ -21,12 +22,27 @@ export default function SearchManager({
 }: {
   children: React.ReactNode;
 }) {
-  const { search, setSearch, query, setIsLoading, setQuery, isLoading } =
-    useQuery();
+  const {
+    search,
+    setSearch,
+    query,
+    setIsLoading,
+    setQuery,
+    isLoading,
+    lastSuccessfulSearch,
+  } = useQuery();
 
   return (
     <queryContext.Provider
-      value={{ search, setSearch, query, setIsLoading, setQuery, isLoading }}
+      value={{
+        search,
+        setSearch,
+        query,
+        setIsLoading,
+        setQuery,
+        isLoading,
+        lastSuccessfulSearch,
+      }}
     >
       {children}
     </queryContext.Provider>

@@ -8,40 +8,54 @@ export default function Result() {
 
   if (!context) throw new Error("queryContext is not working");
 
-  const { isLoading, query, search } = context;
+  const { isLoading, query, lastSuccessfulSearch } = context;
 
-  const renderSentence = (sentence: string) => {
-    //the only problem right now is if the user searches "door," any text with "door." will be highlighted
-    const searchNormalized = search
-      .toLowerCase()
-      .replace(/[.,!?;:'"()[\]{}]+/g, "");
+  function renderSentence(sentence: string) {
+    const s: string = sentence;
+    const search: string = lastSuccessfulSearch.toLowerCase();
+    let keyCounter = 0;
+    let seen: number[][] = [];
+    for (let word of search.split(" ")) {
+      let pos = 0;
+      while ((pos = s.toLowerCase().indexOf(word, pos)) !== -1) {
+        seen.push([pos, pos + word.length - 1]);
+        pos += 1;
+      }
+    }
+    seen.sort((a, b) => a[0] - b[0]);
 
-    const regexPattern = searchNormalized
-      .split("")
-      .map((char) => `${char}[.,!?;:'"()\\[\\]{}]*`)
-      .join("");
+    const arr: any[] = new Array(s.length).fill(null);
+    let range_i = 0;
 
-    const regex = new RegExp(`(${regexPattern})`, "gi");
-    const parts = sentence.split(regex);
+    for (let i = 0; i < s.length; i++) {
+      if (range_i < seen.length - 1 && i > seen[range_i][1]) {
+        range_i++;
+      }
 
-    return parts.filter(Boolean).map((part, idx) => {
-      const normalized = part.toLowerCase().replace(/[.,!?;:'"()[\]{}]+/g, "");
-      const isMatch = normalized.startsWith(searchNormalized);
+      if (
+        range_i < seen.length &&
+        i >= seen[range_i][0] &&
+        i <= seen[range_i][1]
+      ) {
+        arr[i] = (
+          <span
+            key={keyCounter++}
+            className="bg-blue-500/15 text-blue-400 py-[2px] font-medium"
+          >
+            {s[i]}
+          </span>
+        );
+      } else {
+        arr[i] = (
+          <span key={keyCounter++} className="text-neutral-200">
+            {s[i]}
+          </span>
+        );
+      }
+    }
 
-      return (
-        <span
-          key={idx}
-          className={
-            isMatch
-              ? "bg-blue-500/15 text-blue-400 py-[2px] rounded-md font-medium"
-              : "text-neutral-200"
-          }
-        >
-          {part}
-        </span>
-      );
-    });
-  };
+    return arr;
+  }
 
   if (isLoading) {
     return (
@@ -88,7 +102,7 @@ export default function Result() {
             </h1>
             <p className="text-neutral-500 text-[16px] font-light">
               Found {query.length} {query.length === 1 ? "result" : "results"}{" "}
-              for "{search}"
+              for "{lastSuccessfulSearch}"
             </p>
           </div>
         </div>
