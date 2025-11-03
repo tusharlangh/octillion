@@ -40,14 +40,14 @@ export default function Result() {
         arr[i] = (
           <span
             key={keyCounter++}
-            className="bg-blue-500/15 text-blue-400 py-[2px] font-medium"
+            className="bg-yellow-200/90 text-black-400 dark:bg-blue-500/15 dark:text-blue-400 py-[2px] font-medium"
           >
             {s[i]}
           </span>
         );
       } else {
         arr[i] = (
-          <span key={keyCounter++} className="text-neutral-200">
+          <span key={keyCounter++} className="text-black dark:text-neutral-200">
             {s[i]}
           </span>
         );
@@ -97,7 +97,7 @@ export default function Result() {
       <div className="pt-24 px-6 max-w-5xl mx-auto">
         <div className="flex items-end justify-between">
           <div className="">
-            <h1 className="text-[20px] font-medium text-white tracking-tight">
+            <h1 className="text-[20px] font-medium text-black dark:text-white tracking-tight">
               Top Results
             </h1>
             <p className="text-neutral-500 text-[16px] font-light">
@@ -113,9 +113,10 @@ export default function Result() {
           {query.map((result, i) => (
             <div
               key={i}
-              className="group bg-neutral-950/50 backdrop-blur-xl border border-[#1C1C1E] 
+              className="group backdrop-blur-xl border border-[#E5E5E5] dark:border-[#1C1C1E] 
                        rounded-[20px] p-8 
-                       hover:bg-[#1C1C1E] 
+                       hover:bg-[#E5E5E5]
+                       dark:hover:bg-[#1C1C1E] 
                        transition-all duration-300 cursor-pointer"
             >
               <p className="text-[18px] leading-[1.6] font-light tracking-[-0.01em]">

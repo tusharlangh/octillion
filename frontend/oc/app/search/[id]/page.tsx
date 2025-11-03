@@ -12,7 +12,7 @@ export default async function SearchPage({ params }: SearchPageProps) {
   const id = params.id;
 
   return (
-    <main>
+    <main className="bg-[#F5F5F7] dark:bg-[#0B0B0C]">
       <SearchManager>
         <Header id={id} />
         <Result />

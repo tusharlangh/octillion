@@ -67,8 +67,8 @@ export default function FilePreviewList({
   return (
     <section className="relative mt-2 shrink-0 cursor-pointer">
       <div
-        style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
-        className="bg-[#1C1C1E] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2" //flex justify-center items-center
+        //style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
+        className="bg-[#FFFFFF] dark:bg-[#1C1C1E] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2" //flex justify-center items-center
       >
         <ul className="flex gap-4 md:gap-6 overflow-x-auto h-full pb-2">
           {selectedFiles.map((file, index) => (
@@ -92,11 +92,11 @@ export default function FilePreviewList({
 
         <div className="w-full justify-end flex mt-auto">
           <button
-            className={`bg-[#FFFFFF] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#F2F2F2] transition-colors active:bg-[#E5E5E5]`}
+            className={`bg-black dark:bg-[#FFFFFF] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#2C2C2E] dark:hover:bg-[#F2F2F2] transition-colors active:bg-[#3A3A3C] dark:active:bg-[#E5E5E5]`}
             onClick={() => sendPdf()}
           >
             <p
-              className={`${font} text-[16px] text-black font-bold select-none`}
+              className={`${font} text-[16px] text-white dark:text-black font-bold select-none`}
             >
               parse
             </p>
