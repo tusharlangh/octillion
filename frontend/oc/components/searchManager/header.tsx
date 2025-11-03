@@ -16,7 +16,7 @@ export default function Header({ id }: Props) {
   const font: string = "font-(family-name:--font-dm-sans)";
   const router = useRouter();
   const context = useContext(queryContext);
-  const [searchType, setSearchType] = useState<"Enhanced" | "keyword">(
+  const [searchType, setSearchType] = useState<"enhanced" | "keyword">(
     "keyword"
   );
 
@@ -33,6 +33,7 @@ export default function Header({ id }: Props) {
     try {
       const query = new URLSearchParams({
         id: id,
+        searchType: searchType,
         search: search,
       });
       const jwt = await handleTokenAction();
@@ -155,9 +156,9 @@ export default function Header({ id }: Props) {
                     Keyword
                   </button>
                   <button
-                    onClick={() => setSearchType("Enhanced")}
+                    onClick={() => setSearchType("enhanced")}
                     className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
-                      searchType === "Enhanced"
+                      searchType === "enhanced"
                         ? "text-black dark:text-white"
                         : "text-[rgba(0,0,0,0.35)] hover:text-[rgba(0,0,0,0.55)] dark:text-[rgba(255,255,255,0.5)] dark:hover:text-[rgba(255,255,255,0.8)]"
                     }`}
