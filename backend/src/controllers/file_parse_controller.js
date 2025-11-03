@@ -2,10 +2,14 @@ import { parse } from "../services/parse.js";
 
 export async function file_parse_controller(req, res) {
   try {
-    const { id, search } = req.query;
+    const { id, searchType, search } = req.query;
     const userId = req.user;
 
-    const parsed = await parse(id, search, userId);
+    console.log(searchType);
+
+    const parsed = await parse(id, search, userId, {
+      searchMode: searchType === "enhanced" ? "semantic" : "tfidf",
+    });
 
     return res.json({
       success: parsed.success,

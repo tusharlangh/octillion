@@ -1,9 +1,116 @@
 import supabase from "../utils/supabase/client.js";
+import { pipeline } from "@xenova/transformers";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-export async function parse(id, search, userId) {
+let embeddingPipeline = null;
+
+async function loadEmbeddingModel() {
+  if (embeddingPipeline) return embeddingPipeline;
+
+  console.log("Loading embedding model...");
+  embeddingPipeline = await pipeline(
+    "feature-extraction",
+    "Xenova/all-MiniLM-L6-v2"
+  );
+  console.log("Model loaded successfully");
+  return embeddingPipeline;
+}
+
+async function generateEmbedding(text) {
+  if (!embeddingPipeline) {
+    await loadEmbeddingModel();
+  }
+
+  const output = await embeddingPipeline(text, {
+    pooling: "mean",
+    normalize: true,
+  });
+
+  return Array.from(output.data);
+}
+
+function cosineSimilarity(vecA, vecB) {
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+async function semanticSearchPages(pagesContent, queryEmbedding) {
+  const semanticScores = {};
+
+  for (const page of pagesContent) {
+    let pageEmbedding;
+
+    if (page.embedding) {
+      pageEmbedding = page.embedding;
+    } else {
+      const pageText = page.mapping
+        .flatMap((row) => row.map((w) => w.word))
+        .join(" ");
+      pageEmbedding = await generateEmbedding(pageText);
+    }
+
+    const similarity = cosineSimilarity(queryEmbedding, pageEmbedding);
+    semanticScores[page.id] = similarity;
+  }
+
+  return semanticScores;
+}
+
+async function semanticSearchSentences(
+  pagesContent,
+  queryEmbedding,
+  topPageIds
+) {
+  const pageSet = new Set(topPageIds);
+  const sentenceResults = [];
+
+  for (const page of pagesContent) {
+    if (!pageSet.has(page.id)) continue;
+
+    const mapping = new Map(page.mapping);
+
+    for (const [y, row] of mapping) {
+      const sentence = row.map((w) => w.word).join(" ");
+
+      // Skip very short sentences
+      if (sentence.split(/\s+/).length < 3) continue;
+
+      // Generate embedding for this sentence
+      let sentenceEmbedding;
+      if (row[0]?.embedding) {
+        sentenceEmbedding = row[0].embedding;
+      } else {
+        sentenceEmbedding = await generateEmbedding(sentence);
+      }
+
+      const similarity = cosineSimilarity(queryEmbedding, sentenceEmbedding);
+
+      sentenceResults.push({
+        pageId: page.id,
+        y,
+        sentence,
+        semanticScore: similarity,
+      });
+    }
+  }
+
+  return sentenceResults;
+}
+
+export async function parse(id, search, userId, options = {}) {
+  const { searchMode, topK = 5 } = options;
+
   if (!search.trim()) {
     return {
       success: false,
@@ -28,33 +135,58 @@ export async function parse(id, search, userId) {
   }
 
   const d = data[0];
-
   const pagesContent = d.pages_metadata;
-
   const inverted = d.inverted_index;
   const buildIndex = d.build_index;
 
-  const scores = await searchContent(pagesContent, inverted, search);
+  let scores;
+  let topPages;
 
-  const topPages = Object.entries(scores)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5) // top 10 pages
-    .map(([id]) => id);
+  if (searchMode === "tfidf") {
+    scores = await searchContent(pagesContent, inverted, search);
+    topPages = Object.entries(scores)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, topK)
+      .map(([id]) => id);
+  } else {
+    const queryEmbedding = await generateEmbedding(search);
+    scores = await semanticSearchPages(pagesContent, queryEmbedding);
+    topPages = Object.entries(scores)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, topK)
+      .map(([id]) => id);
+  }
 
-  if (inverted.size === 0 || Object.keys(scores).length === 0) {
+  if (Object.keys(scores).length === 0) {
     return {
       success: false,
       searchResults: [],
-      error: "word trie or inverted or scores failed.",
+      error: "No results found",
     };
   }
 
-  const searchResults = searchBuildIndex(
-    buildIndex,
-    search,
-    pagesContent,
-    topPages
-  );
+  let searchResults;
+  if (searchMode === "semantic") {
+    // Use semantic sentence search
+    const queryEmbedding = await generateEmbedding(search);
+    const sentenceResults = await semanticSearchSentences(
+      pagesContent,
+      queryEmbedding,
+      topPages
+    );
+
+    searchResults = sentenceResults
+      .sort((a, b) => b.semanticScore - a.semanticScore)
+      .slice(0, 10);
+  } else {
+    // Use your original keyword-based sentence search
+    searchResults = searchBuildIndex(
+      buildIndex,
+      search,
+      pagesContent,
+      topPages
+    );
+  }
 
   if (searchResults.length === 0) {
     return {
@@ -64,9 +196,16 @@ export async function parse(id, search, userId) {
     };
   }
 
-  //console.log(searchResults);
-
-  return { success: true, searchResults, error: null };
+  return {
+    success: true,
+    searchResults,
+    error: null,
+    metadata: {
+      searchMode,
+      totalResults: searchResults.length,
+      topPages,
+    },
+  };
 }
 
 function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
@@ -74,8 +213,8 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
 
   const pageSet = new Set(topPageIds);
   const sentenceMap = new Map();
-
   const pageMappings = new Map();
+
   for (let page of pagesContent) {
     if (pageSet.has(page.id)) {
       pageMappings.set(page.id, new Map(page.mapping));
@@ -84,7 +223,6 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
 
   for (const term of terms) {
     const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
-
     const positions = buildIndex[normalizedTerm[0].toLowerCase()] || [];
 
     for (const pos of positions) {
@@ -101,6 +239,7 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
         pos.word.includes(normalizedTerm)
       ) {
         const key = `${pos.pageId}-${pos.y}`;
+        console.log(key);
         if (!sentenceMap.has(key)) {
           sentenceMap.set(key, {
             pageId: pos.pageId,
@@ -119,11 +258,10 @@ async function searchContent(sitesContent, inverted, search) {
   const terms = search.toLowerCase().replace(/[.,]/g, "").split(/\s+/);
   const N = sitesContent.length;
 
-  const appearance = {}; //space = search length
-  const TF = []; //space = search length
+  const appearance = {};
+  const TF = [];
 
   for (const { id, total_words } of sitesContent) {
-    //n * t
     for (const term of terms) {
       const counts =
         inverted[term] && inverted[term][id] ? inverted[term][id] : 0;
@@ -139,19 +277,17 @@ async function searchContent(sitesContent, inverted, search) {
 
   const IDF = {};
   for (const term of terms) {
-    //t
     const df = appearance[term] ? appearance[term].size : 0;
-
     IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
   }
 
   const scores = {};
   for (const { id, term, tf } of TF) {
-    //t
     if (!scores[id]) scores[id] = 0;
     scores[id] += tf * IDF[term];
   }
 
-  //console.log("TF–IDF Scores:", scores, "for search: ", search);
+  console.log(scores);
+
   return scores;
 }

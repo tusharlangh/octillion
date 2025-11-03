@@ -58,10 +58,10 @@ export async function saveFiles(id, files, userId) {
     const loadingTask = pdfjs.getDocument(link);
     const pdf = await loadingTask.promise;
 
-    let site_content = "";
-    let new_map = new Map();
-
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      let site_content = "";
+      let new_map = new Map();
+
       const page = await pdf.getPage(pageNum);
       const content = await page.getTextContent();
       content.items.forEach((item) => {
@@ -84,16 +84,16 @@ export async function saveFiles(id, files, userId) {
 
       let pageText = content.items.map((item) => item.str).join(" ");
       pageText = formatResponse(pageText);
-      site_content += " " + pageText;
-    }
+      site_content = pageText;
 
-    pagesContent.push({
-      id: `${i + 1}`,
-      name: link,
-      site_content,
-      total_words: site_content.split(" ").length,
-      mapping: Array.from(new_map.entries()),
-    });
+      pagesContent.push({
+        id: `${i + 1}.${pageNum}`,
+        name: link,
+        site_content,
+        total_words: site_content.split(" ").length,
+        mapping: Array.from(new_map.entries()),
+      });
+    }
   }
 
   const invertedIndex = createInvertedSearch(pagesContent);
