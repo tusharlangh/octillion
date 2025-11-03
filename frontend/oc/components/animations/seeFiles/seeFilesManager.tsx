@@ -75,10 +75,18 @@ export default function SeeFilesManager({ id }: SeeFileManagerProps) {
             aria-label="Menu"
           >
             <Image
-              src="/icons/folder.svg"
-              alt="folder-icon"
+              src="/icons/folder_light.svg"
+              alt=""
               height={20}
               width={20}
+              className="block dark:hidden"
+            />
+            <Image
+              src="/icons/folder.svg"
+              alt=""
+              height={20}
+              width={20}
+              className="hidden dark:block"
             />
           </button>
         </motion.div>
