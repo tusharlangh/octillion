@@ -71,23 +71,49 @@ export default function Header({ id }: Props) {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
-      <nav className="relative backdrop-blur-2xl bg-[#171717]">
+      <nav className="relative backdrop-blur-2xl bg-[#F2F2F7] dark:bg-[#171717]">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-[52px] gap-4">
             <div className="flex items-center gap-2 shrink-0">
               <button
-                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-[rgba(255,255,255,0.08)] active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
+                className="h-9 w-9 flex items-center justify-center rounded-md  hover:bg-[rgba(0, 0, 0, 0.08)] dark:hover:bg-[rgba(255,255,255,0.08)] active:bg-[rgba(255,255,255,0.15)] dark:active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
                 aria-label="Menu"
               >
-                <Image src={"/icons/menu.svg"} alt="" height={20} width={20} />
+                <Image
+                  src="/icons/menu_light.svg"
+                  alt=""
+                  height={20}
+                  width={20}
+                  className="block dark:hidden"
+                />
+                <Image
+                  src="/icons/menu.svg"
+                  alt=""
+                  height={20}
+                  width={20}
+                  className="hidden dark:block"
+                />
               </button>
 
               <button
-                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-[rgba(255,255,255,0.08)] active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
+                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-[rgba(0,0,0,0.05)] actvie:bg-[rgba(0,0,0,0.10)] dark:hover:bg-[rgba(255,255,255,0.08)] dark:active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
                 onClick={() => router.replace("/")}
                 aria-label="Home"
               >
-                <Image src={"/icons/home.svg"} alt="" height={20} width={20} />
+                <Image
+                  src="/icons/home_light.svg"
+                  alt=""
+                  height={20}
+                  width={20}
+                  className="block dark:hidden"
+                />
+                <Image
+                  src="/icons/home.svg"
+                  alt=""
+                  height={20}
+                  width={20}
+                  className="hidden dark:block"
+                />
               </button>
             </div>
 
@@ -105,7 +131,8 @@ export default function Header({ id }: Props) {
                   <div className="relative w-full">
                     <input
                       placeholder="Search documents"
-                      className={`${font} px-8 w-full h-9 text-[15px] text-white placeholder-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.06)] spl-10 pr-16 outline-none transition-all border border-transparent rounded-l-md`}
+                      className={`${font} px-8 w-full h-9 text-[15px] text-black dark:text-white placeholder-[rgba(0,0,0,0.4)] bg-[rgba(0,0,0,0.04)]
+ dark:placeholder-[rgba(255,255,255,0.5)] dark:bg-[rgba(255,255,255,0.06)] spl-10 pr-16 outline-none transition-all border border-transparent rounded-l-md`}
                       type="text"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
@@ -113,16 +140,16 @@ export default function Header({ id }: Props) {
                     />
                   </div>
                 </div>
-                <div className="w-1 h-9 bg-[rgba(255,255,255,0.06)] pr-2">
-                  <div className="w-[1px] py-3 bg-white/10 mt-1.5"></div>
+                <div className="w-1 h-9 bg-[rgba(0,0,0,0.04)] dark:bg-[rgba(255,255,255,0.06)] pr-2">
+                  <div className="w-[1px] py-3 bg-black/10 dark:bg-white/10 mt-1.5"></div>
                 </div>
-                <div className="relative h-9 inline-flex items-center bg-[rgba(255,255,255,0.06)] rounded-r-md p-0.5 shrink-0 pr-2">
+                <div className="relative h-9 inline-flex items-center bg-[rgba(0,0,0,0.04)] dark:bg-[rgba(255,255,255,0.06)] rounded-r-md p-0.5 shrink-0 pr-2">
                   <button
                     onClick={() => setSearchType("keyword")}
                     className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
                       searchType === "keyword"
-                        ? "text-white"
-                        : "text-[rgba(255,255,255,0.5)]  hover:text-[rgba(255,255,255,0.8)]"
+                        ? "text-black dark:text-white"
+                        : "text-[rgba(0,0,0,0.35)] hover:text-[rgba(0,0,0,0.55)] dark:text-[rgba(255,255,255,0.5)] dark:hover:text-[rgba(255,255,255,0.8)]"
                     }`}
                   >
                     Keyword
@@ -131,8 +158,8 @@ export default function Header({ id }: Props) {
                     onClick={() => setSearchType("Enhanced")}
                     className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
                       searchType === "Enhanced"
-                        ? "text-white"
-                        : "text-[rgba(255,255,255,0.5)] hover:text-[rgba(255,255,255,0.8)]"
+                        ? "text-black dark:text-white"
+                        : "text-[rgba(0,0,0,0.35)] hover:text-[rgba(0,0,0,0.55)] dark:text-[rgba(255,255,255,0.5)] dark:hover:text-[rgba(255,255,255,0.8)]"
                     }`}
                   >
                     Enhanced
