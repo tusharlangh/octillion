@@ -2,6 +2,13 @@
 
 import { useContext } from "react";
 import { queryContext } from "./searchManger";
+import { DM_Sans } from "next/font/google";
+import SearchLoading from "../animations/searchLoading";
+
+const dmSans = DM_Sans({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
 
 export default function Result() {
   const context = useContext(queryContext);
@@ -40,14 +47,19 @@ export default function Result() {
         arr[i] = (
           <span
             key={keyCounter++}
-            className="bg-yellow-200/90 text-black-400 dark:bg-blue-500/15 dark:text-blue-400 py-[2px] font-medium"
+            className="bg-amber-100 text-amber-900 
+                     dark:bg-blue-400/10 dark:text-blue-300 
+                     py-[2px] font-medium transition-colors duration-200"
           >
             {s[i]}
           </span>
         );
       } else {
         arr[i] = (
-          <span key={keyCounter++} className="text-black dark:text-neutral-200">
+          <span
+            key={keyCounter++}
+            className="text-neutral-800 dark:text-neutral-200 transition-colors duration-200"
+          >
             {s[i]}
           </span>
         );
@@ -57,77 +69,95 @@ export default function Result() {
     return arr;
   }
 
-  if (isLoading) {
+  if (lastSuccessfulSearch.trim() === "" && query.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-neutral-700 border-t-white rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (query.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-neutral-900 flex items-center justify-center">
-            <svg
-              className="w-10 h-10 text-neutral-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-          <p className="text-neutral-500 text-lg font-light">
-            No results found
+      <div className="">
+        <div className="pt-2 px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+          <p
+            className={`${dmSans.className} text-8xl font-medium 
+                       text-neutral-800 dark:text-neutral-200
+                       transition-colors duration-200`}
+          >
+            (◠‿◠)
+          </p>
+          <p
+            className={`${dmSans.className} text-2xl font-medium 
+                       text-neutral-800 dark:text-neutral-200
+                       transition-colors duration-200`}
+          >
+            Start your search!
           </p>
         </div>
       </div>
     );
   }
 
+  if (lastSuccessfulSearch.trim() !== "" && query.length === 0) {
+    return (
+      <div className="">
+        <div className="pt-2 px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+          <p
+            className={`${dmSans.className} text-8xl font-medium 
+                       text-neutral-800 dark:text-neutral-200
+                       transition-colors duration-200`}
+          >
+            (^_^)
+          </p>
+          <p
+            className={`${dmSans.className} text-2xl font-medium 
+                       text-neutral-800 dark:text-neutral-200
+                       transition-colors duration-200`}
+          >
+            No results found for "{lastSuccessfulSearch}"
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <SearchLoading />;
+  }
+
   return (
-    <div className="min-h-screen">
-      <div className="pt-24 px-6 max-w-5xl mx-auto">
+    <div className="pt-2 px-13">
+      <div className="pb-2">
         <div className="flex items-end justify-between">
-          <div className="">
-            <h1 className="text-[20px] font-medium text-black dark:text-white tracking-tight">
-              Top Results
-            </h1>
-            <p className="text-neutral-500 text-[16px] font-light">
-              Found {query.length} {query.length === 1 ? "result" : "results"}{" "}
-              for "{lastSuccessfulSearch}"
+          {query.length !== 0 && (
+            <p
+              className={`${dmSans.className} text-neutral-500 dark:text-neutral-400
+                          transition-colors duration-200`}
+            >
+              {query.length} items
             </p>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="px-6 max-w-5xl mx-auto pt-4 pb-16">
+      <div className="pt-5 pb-16">
         <div className="space-y-4">
           {query.map((result, i) => (
             <div
               key={i}
-              className="group backdrop-blur-xl border border-[#E5E5E5] dark:border-[#1C1C1E] 
+              className="group backdrop-blur-xl 
+                       border border-neutral-200 dark:border-neutral-800
+                       bg-white/50 dark:bg-neutral-900/50
                        rounded-[20px] p-8 
-                       hover:bg-[#E5E5E5]
-                       dark:hover:bg-[#1C1C1E] 
+                       hover:bg-neutral-100 dark:hover:bg-neutral-800/50
                        transition-all duration-300 cursor-pointer"
             >
-              <p className="text-[18px] leading-[1.6] font-light tracking-[-0.01em]">
+              <p
+                className={`${dmSans.className} text-[18px] leading-[1.6] 
+                           font-light tracking-[-0.01em]
+                           text-neutral-800 dark:text-neutral-200
+                           transition-colors duration-200`}
+              >
                 {renderSentence(result.sentence)}
               </p>
             </div>
           ))}
         </div>
       </div>
-
-      <div className="h-32" />
     </div>
   );
 }
