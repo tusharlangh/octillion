@@ -15,7 +15,7 @@ export default function FileItem({
   const font: string = "font-(family-name:--font-dm-sans)";
 
   return (
-    <section className="bg-[#F9F9FB] dark:bg-[#2C2C2E] w-[242px] h-[62px] rounded-[20px] flex items-center gap-[10px] p-[12px] shadow-sm relative ">
+    <section className="bg-[#F9F9FB] dark:bg-[rgb(31,31,31)] w-[242px] h-[62px] rounded-[20px] flex items-center gap-[10px] p-[12px] shadow-sm relative ">
       <div className="bg-black dark:bg-white rounded-[4px] px-3 py-3 ">
         <Image
           src={"/icons/draft.svg"}
