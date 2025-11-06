@@ -1,22 +1,31 @@
 "use client";
 
-import Image from "next/image";
-import React, { useEffect, useState, useContext } from "react";
+import React, { useState, useContext } from "react";
 import { useRouter } from "next/navigation";
-import SeeFilesManager from "../animations/seeFiles/seeFilesManager";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { queryContext } from "./searchManger";
-import Logo from "../logo";
+import { Search, Home } from "lucide-react";
+import { Libre_Baskerville } from "next/font/google";
+import { DM_Sans } from "next/font/google";
+
+const dmSans = DM_Sans({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
+
+const libreBaskerville = Libre_Baskerville({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+});
 
 interface Props {
   id: string;
 }
 
 export default function Header({ id }: Props) {
-  const font: string = "font-(family-name:--font-dm-sans)";
   const router = useRouter();
   const context = useContext(queryContext);
-  const [searchType, setSearchType] = useState<"enhanced" | "keyword">(
+  const [searchType, setSearchType] = useState<"Enhanced" | "keyword">(
     "keyword"
   );
 
@@ -31,13 +40,13 @@ export default function Header({ id }: Props) {
     }
 
     try {
+      setIsLoading(true);
       const query = new URLSearchParams({
         id: id,
         searchType: searchType,
         search: search,
       });
       const jwt = await handleTokenAction();
-      console.log(jwt);
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
@@ -53,7 +62,6 @@ export default function Header({ id }: Props) {
       const data = await res.json();
 
       if (data.success) {
-        setIsLoading(true);
         setQuery(data.searchResults);
         setIsLoading(false);
       } else {
@@ -71,114 +79,68 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
-      <nav className="relative backdrop-blur-2xl bg-[#F2F2F7] dark:bg-[#171717]">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-[52px] gap-4">
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                className="h-9 w-9 flex items-center justify-center rounded-md  hover:bg-[rgba(0, 0, 0, 0.08)] dark:hover:bg-[rgba(255,255,255,0.08)] active:bg-[rgba(255,255,255,0.15)] dark:active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
-                aria-label="Menu"
-              >
-                <Image
-                  src="/icons/menu_light.svg"
-                  alt=""
-                  height={20}
-                  width={20}
-                  className="block dark:hidden"
-                />
-                <Image
-                  src="/icons/menu.svg"
-                  alt=""
-                  height={20}
-                  width={20}
-                  className="hidden dark:block"
-                />
-              </button>
-
-              <button
-                className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-[rgba(0,0,0,0.05)] actvie:bg-[rgba(0,0,0,0.10)] dark:hover:bg-[rgba(255,255,255,0.08)] dark:active:bg-[rgba(255,255,255,0.15)] transition-colors cursor-pointer"
-                onClick={() => router.replace("/")}
-                aria-label="Home"
-              >
-                <Image
-                  src="/icons/home_light.svg"
-                  alt=""
-                  height={20}
-                  width={20}
-                  className="block dark:hidden"
-                />
-                <Image
-                  src="/icons/home.svg"
-                  alt=""
-                  height={20}
-                  width={20}
-                  className="hidden dark:block"
-                />
-              </button>
-            </div>
-
-            <div className="flex-1 max-w-2xl mx-4">
-              <div className="flex items-center">
-                <div className="relative group cursor-pointer flex-1">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 group-focus-within:opacity-100 transition-opacity">
-                    <Image
-                      src="/icons/search.svg"
-                      alt=""
-                      height={18}
-                      width={18}
-                    />
-                  </div>
-                  <div className="relative w-full">
-                    <input
-                      placeholder="Search documents"
-                      className={`${font} px-8 w-full h-9 text-[15px] text-black dark:text-white placeholder-[rgba(0,0,0,0.4)] bg-[rgba(0,0,0,0.04)]
- dark:placeholder-[rgba(255,255,255,0.5)] dark:bg-[rgba(255,255,255,0.06)] spl-10 pr-16 outline-none transition-all border border-transparent rounded-l-md`}
-                      type="text"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                    />
-                  </div>
-                </div>
-                <div className="w-1 h-9 bg-[rgba(0,0,0,0.04)] dark:bg-[rgba(255,255,255,0.06)] pr-2">
-                  <div className="w-[1px] py-3 bg-black/10 dark:bg-white/10 mt-1.5"></div>
-                </div>
-                <div className="relative h-9 inline-flex items-center bg-[rgba(0,0,0,0.04)] dark:bg-[rgba(255,255,255,0.06)] rounded-r-md p-0.5 shrink-0 pr-2">
-                  <button
-                    onClick={() => setSearchType("keyword")}
-                    className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
-                      searchType === "keyword"
-                        ? "text-black dark:text-white"
-                        : "text-[rgba(0,0,0,0.35)] hover:text-[rgba(0,0,0,0.55)] dark:text-[rgba(255,255,255,0.5)] dark:hover:text-[rgba(255,255,255,0.8)]"
-                    }`}
-                  >
-                    Keyword
-                  </button>
-                  <button
-                    onClick={() => setSearchType("enhanced")}
-                    className={`${font} relative z-10 px-1 text-[13px] font-medium rounded-[5px] transition-all duration-200 ease-out ${
-                      searchType === "enhanced"
-                        ? "text-black dark:text-white"
-                        : "text-[rgba(0,0,0,0.35)] hover:text-[rgba(0,0,0,0.55)] dark:text-[rgba(255,255,255,0.5)] dark:hover:text-[rgba(255,255,255,0.8)]"
-                    }`}
-                  >
-                    Enhanced
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <SeeFilesManager id={id} />
-
-              <div className="cursor-pointer">
-                <Logo dynamicSize="text-xl" />
-              </div>
-            </div>
-          </div>
+    <section className="w-full pt-2 px-4 sticky -top-20 z-1 bg-white dark:bg-[#0B0B0C] transition-colors duration-200">
+      <div className="px-7 relative w-full mt-20 group">
+        <Search
+          className={`${
+            search.length === 0
+              ? "text-neutral-400 dark:text-neutral-600"
+              : "text-neutral-900 dark:text-neutral-200"
+          } absolute top-3 
+          group-hover:text-neutral-700 dark:group-hover:text-neutral-400 
+          transition-colors duration-200`}
+          height={18}
+          width={18}
+        />
+        <input
+          placeholder="Search files"
+          className={`${
+            dmSans.className
+          } w-full border-b border-neutral-200 dark:border-neutral-800 
+          p-2 pl-7 text-lg outline-none 
+          placeholder:text-neutral-400 dark:placeholder:text-neutral-600
+          ${
+            search.length === 0
+              ? "text-neutral-500 dark:text-neutral-400"
+              : "text-neutral-900 dark:text-neutral-200"
+          } 
+          focus:text-neutral-900 dark:focus:text-neutral-100 
+          focus:border-neutral-400 dark:focus:border-neutral-600
+          bg-transparent
+          transition-colors duration-200`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <div className="absolute top-3 right-10 inline-flex items-center p-0.5 shrink-0">
+          <button
+            onClick={() => setSearchType("keyword")}
+            className={`${
+              dmSans.className
+            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            transition-all duration-200 ease-out ${
+              searchType === "keyword"
+                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
+                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            }`}
+          >
+            Keyword
+          </button>
+          <button
+            onClick={() => setSearchType("Enhanced")}
+            className={`${
+              dmSans.className
+            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            transition-all duration-200 ease-out ${
+              searchType === "Enhanced"
+                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
+                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            }`}
+          >
+            Enhanced
+          </button>
         </div>
-      </nav>
-    </header>
+      </div>
+    </section>
   );
 }
