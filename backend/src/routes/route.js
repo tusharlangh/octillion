@@ -4,6 +4,7 @@ import { save_files_controller } from "../controllers/save_files_controller.js";
 import upload from "../middleware/multer.js";
 import { auth } from "../middleware/auth.js";
 import { get_files_controller } from "../controllers/get_files_controller.js";
+import { get_view_files_controller } from "../controllers/get_view_files_controller.js";
 
 const router = express.Router();
 
@@ -15,5 +16,6 @@ router.post(
   save_files_controller
 );
 router.get(`/parse-files`, auth, file_parse_controller);
+router.get(`/get-view-files`, auth, get_view_files_controller);
 
 export default router;

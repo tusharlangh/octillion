@@ -67,10 +67,19 @@ export default function FilePreviewList({
   return (
     <section className="relative mt-2 shrink-0 cursor-pointer">
       <div
-        //style={{ boxShadow: "0 0 10px rgba(0, 0, 0, 0.02)" }}
-        className="bg-[#FFFFFF] dark:bg-[#1C1C1E] w-[90vw] md:w-[50vw] rounded-[20px] flex flex-col p-3 gap-2" //flex justify-center items-center
+        className="bg-white dark:bg-[rgb(18,18,18)] w-[90vw] md:w-[50vw] rounded-[20px] 
+                   flex flex-col p-3 gap-2 
+                   
+                   border border-neutral-200/80 dark:border-neutral-800/80
+                   transition-all duration-200"
       >
-        <ul className="flex gap-4 md:gap-6 overflow-x-auto h-full pb-2">
+        <ul
+          className="flex gap-4 md:gap-6 overflow-x-auto h-full pb-2
+                      scrollbar-thin scrollbar-track-transparent
+                      scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300
+                      dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
+                      transition-colors duration-200"
+        >
           {selectedFiles.map((file, index) => (
             <li key={index} onClick={() => openPDF(file)}>
               <FileItem
@@ -92,11 +101,17 @@ export default function FilePreviewList({
 
         <div className="w-full justify-end flex mt-auto">
           <button
-            className={`bg-black dark:bg-[#FFFFFF] rounded-[20px] px-4 py-1 cursor-pointer hover:bg-[#2C2C2E] dark:hover:bg-[#F2F2F2] transition-colors active:bg-[#3A3A3C] dark:active:bg-[#E5E5E5]`}
+            className={`bg-neutral-900 dark:bg-white 
+                       hover:bg-neutral-800 dark:hover:bg-neutral-100
+                       active:bg-neutral-700 dark:active:bg-neutral-200
+                       rounded-[20px] px-4 py-1.5
+                       transition-all duration-200
+                       disabled:opacity-50 disabled:cursor-not-allowed`}
             onClick={() => sendPdf()}
           >
             <p
-              className={`${font} text-[16px] text-white dark:text-black font-bold select-none`}
+              className={`${font} text-[16px] text-white dark:text-neutral-900 
+                         font-medium select-none tracking-wide`}
             >
               parse
             </p>

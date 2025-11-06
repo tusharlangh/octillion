@@ -1,0 +1,145 @@
+"use client";
+
+import { motion, AnimatePresence } from "framer-motion";
+import { useState } from "react";
+import { ChevronRight, Folder, File, FolderOpen } from "lucide-react";
+import FileOpener from "../fileManager/fileOpener";
+import { useRouter } from "next/navigation";
+
+const font: string = "font-(family-name:--font-dm-sans)";
+
+interface FileNode {
+  id: number;
+  user_id: string;
+  created_at: string;
+  parse_id: string;
+  files: any[];
+  type: "folder" | "file";
+  name: string;
+  presignedUrl?: string;
+}
+
+interface FileTreeProps {
+  fileStructure: FileNode[];
+}
+
+export default function AnimatedFileTree({ fileStructure }: FileTreeProps) {
+  return (
+    <div className={`${font} font-mono text-md text-white rounded-xl`}>
+      {fileStructure.map((node, index) => (
+        <TreeNode key={index} node={node} />
+      ))}
+    </div>
+  );
+}
+
+interface TreeNodeProps {
+  node: FileNode;
+}
+
+function TreeNode({ node }: TreeNodeProps) {
+  const [open, setOpen] = useState(false);
+  const hasChildren = node.type === "folder" && node.files?.length;
+  const [openFile, setOpenFile] = useState(false);
+
+  const router = useRouter();
+
+  return (
+    <div className="select-none">
+      <motion.div
+        className={`w-full flex items-center justify-between py-1 cursor-pointer rounded-lg px-2 hover:bg-black/2 dark:hover:bg-white/8 transition-colors text-black/50 dark:text-white/70 text-black dark:hover:text-white group`}
+        whileHover={{ x: node.type === "folder" ? 3 : 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        onClick={(e) => {
+          // Only handle folder click if the click wasn't on the chevron
+          if (hasChildren && !e.defaultPrevented) {
+            router.push(`/search/${node.parse_id}`);
+          } else if (node.type === "file" && node.presignedUrl) {
+            setOpenFile(true);
+          }
+        }}
+      >
+        <div className="flex items-center space-x-2">
+          {hasChildren ? (
+            <motion.div
+              animate={{ rotate: open ? 90 : 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpen(!open);
+              }}
+            >
+              <ChevronRight
+                size={14}
+                className={`group-hover:text-black dark:group-hover:text-white ${
+                  open ? "text-black" : ""
+                }`}
+              />
+            </motion.div>
+          ) : (
+            <div className="w-[14px]" />
+          )}
+
+          {node.type === "folder" ? (
+            open ? (
+              <FolderOpen size={16} className="text-black dark:text-white" />
+            ) : (
+              <Folder
+                size={16}
+                className="group-hover:text-black dark:group-hover:text-white"
+              />
+            )
+          ) : (
+            <File size={14} className="" />
+          )}
+
+          <span
+            className={`${font} group-hover:text-black dark:group-hover:text-white transition-colors pr-4 truncate max-w-[140px] text-[14px] ${
+              open ? "text-black dark:text-white" : ""
+            }`}
+          >
+            {node.name}
+          </span>
+        </div>
+
+        {node.type === "folder" && (
+          <span
+            className={`${font} shrink-0 text-[12px] group-hover:text-black dark:group-hover:text-white ${
+              open ? "text-black dark:text-white" : ""
+            }`}
+          >
+            {new Date(node.created_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+        )}
+      </motion.div>
+
+      <AnimatePresence initial={false}>
+        {open && hasChildren && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="pl-6 border-l border-white/20"
+          >
+            {node.files.map((child: FileNode, i: number) => (
+              <TreeNode key={i} node={child} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {node.type === "file" && node.presignedUrl && (
+        <FileOpener
+          isOpen={openFile}
+          setIsOpen={setOpenFile}
+          url={node.presignedUrl}
+          fileName={node.name}
+        />
+      )}
+    </div>
+  );
+}
