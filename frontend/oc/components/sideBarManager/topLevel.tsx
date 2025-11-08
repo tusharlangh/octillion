@@ -34,13 +34,6 @@ export default function TopLevel() {
           height={18}
           width={18}
         />
-        <PanelRightOpen
-          className="text-neutral-400 dark:text-neutral-500 cursor-pointer 
-                     hover:text-neutral-900 dark:hover:text-white 
-                     transition-colors duration-200"
-          height={18}
-          width={18}
-        />
       </div>
     </div>
   );

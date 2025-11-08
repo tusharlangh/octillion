@@ -88,7 +88,7 @@ export async function saveFiles(id, files, userId) {
 
       pagesContent.push({
         id: `${i + 1}.${pageNum}`,
-        name: link,
+        name: files[i].originalname,
         site_content,
         total_words: site_content.split(" ").length,
         mapping: Array.from(new_map.entries()),
