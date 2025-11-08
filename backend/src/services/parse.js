@@ -97,6 +97,7 @@ async function semanticSearchSentences(
       const similarity = cosineSimilarity(queryEmbedding, sentenceEmbedding);
 
       sentenceResults.push({
+        file_name: pagesContent.find((p) => p.id === page.id).name,
         pageId: page.id,
         y,
         sentence,
@@ -113,7 +114,7 @@ export async function parse(id, search, userId, options = {}) {
 
   if (!search.trim()) {
     return {
-      success: false,
+      success: true,
       searchResults: [],
       error: `failed since the search is empty`,
     };
@@ -131,6 +132,14 @@ export async function parse(id, search, userId, options = {}) {
       success: false,
       searchResults: [],
       error: `failed extracting files`,
+    };
+  }
+
+  if (!data || data.length === 0) {
+    return {
+      success: false,
+      searchResults: [],
+      error: "No files found for the given ID",
     };
   }
 
@@ -159,7 +168,7 @@ export async function parse(id, search, userId, options = {}) {
 
   if (Object.keys(scores).length === 0) {
     return {
-      success: false,
+      success: true,
       searchResults: [],
       error: "No results found",
     };
@@ -167,7 +176,6 @@ export async function parse(id, search, userId, options = {}) {
 
   let searchResults;
   if (searchMode === "semantic") {
-    // Use semantic sentence search
     const queryEmbedding = await generateEmbedding(search);
     const sentenceResults = await semanticSearchSentences(
       pagesContent,
@@ -179,7 +187,6 @@ export async function parse(id, search, userId, options = {}) {
       .sort((a, b) => b.semanticScore - a.semanticScore)
       .slice(0, 10);
   } else {
-    // Use your original keyword-based sentence search
     searchResults = searchBuildIndex(
       buildIndex,
       search,
@@ -190,9 +197,9 @@ export async function parse(id, search, userId, options = {}) {
 
   if (searchResults.length === 0) {
     return {
-      success: false,
+      success: true,
       searchResults: [],
-      error: "failed search results",
+      error: "search yielded no results",
     };
   }
 
@@ -239,9 +246,10 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
         pos.word.includes(normalizedTerm)
       ) {
         const key = `${pos.pageId}-${pos.y}`;
-        console.log(key);
+
         if (!sentenceMap.has(key)) {
           sentenceMap.set(key, {
+            file_name: pagesContent.find((p) => p.id === pos.pageId).name,
             pageId: pos.pageId,
             y: pos.y,
             sentence: row.map((w) => w.word).join(" "),
@@ -286,8 +294,6 @@ async function searchContent(sitesContent, inverted, search) {
     if (!scores[id]) scores[id] = 0;
     scores[id] += tf * IDF[term];
   }
-
-  console.log(scores);
 
   return scores;
 }

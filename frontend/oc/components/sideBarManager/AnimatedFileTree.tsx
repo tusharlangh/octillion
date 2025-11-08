@@ -24,6 +24,21 @@ interface FileTreeProps {
 }
 
 export default function AnimatedFileTree({ fileStructure }: FileTreeProps) {
+  if (!fileStructure || fileStructure.length === 0) {
+    return (
+      <div
+        className={`${font} flex flex-col text-black/50 dark:text-white/50 items-center justify-center py-8`}
+      >
+        <p className="text-3xl">(·.·)</p>
+        <p
+          className={`${font} text-sm text-black/50 dark:text-white/50 px-4 py-2`}
+        >
+          No files or folders found
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={`${font} font-mono text-md text-white rounded-xl`}>
       {fileStructure.map((node, index) => (
@@ -72,7 +87,7 @@ function TreeNode({ node }: TreeNodeProps) {
             >
               <ChevronRight
                 size={14}
-                className={`group-hover:text-black dark:group-hover:text-white ${
+                className={`dark:text-white/70 group-hover:text-black dark:group-hover:text-white ${
                   open ? "text-black" : ""
                 }`}
               />
