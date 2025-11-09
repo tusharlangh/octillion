@@ -6,6 +6,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { generateEmbedding, createContextualChunks } from "./parse.js";
 import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
+import { uploadChunksToQdrant } from "./qdrantService.js";
 
 dotenv.config();
 
@@ -117,7 +118,47 @@ export async function saveFiles(id, files, userId) {
 
   const build_index = keywordIndex.toJSON();
 
-  pagesContent = await generateAndStoreEmbeddings(pagesContent);
+  // Generate chunks temporarily for Qdrant upload
+  pagesContent = await generateChunks(pagesContent);
+
+  try {
+    const chunksData = [];
+    const BATCH_SIZE = 10;
+
+    for (const page of pagesContent) {
+      if (page.chunks && page.chunks.length > 0) {
+        for (let i = 0; i < page.chunks.length; i += BATCH_SIZE) {
+          const batch = page.chunks.slice(i, i + BATCH_SIZE);
+          const batchEmbeddings = await Promise.all(
+            batch.map((chunk) => generateEmbedding(chunk.text))
+          );
+
+          for (let j = 0; j < batch.length; j++) {
+            chunksData.push({
+              embedding: batchEmbeddings[j],
+              pageId: page.id,
+              file_name: page.name,
+              startY: batch[j].startY,
+              endY: batch[j].endY,
+              text: batch[j].text,
+              wordCount: batch[j].wordCount,
+            });
+          }
+        }
+      }
+      delete page.chunks;
+    }
+
+    if (chunksData.length > 0) {
+      await uploadChunksToQdrant(id, userId, chunksData);
+      console.log(
+        `Uploaded ${chunksData.length} chunks to Qdrant for parse_id: ${id}`
+      );
+    }
+  } catch (error) {
+    console.error("Error uploading to Qdrant", error);
+    throw error;
+  }
 
   const { data, error } = await supabase.from("files").insert([
     {
@@ -178,45 +219,19 @@ function buildOptimizedIndex(pagesContent) {
     }
   }
 
-  // Sort arrays for binary search
   index.finalize();
 
   return index;
 }
 
-/**
- * Generate and store embeddings for all pages and chunks
- * This pre-computes embeddings during file save to avoid regeneration during search
- */
-async function generateAndStoreEmbeddings(pagesContent) {
-  const BATCH_SIZE = 10;
-
+async function generateChunks(pagesContent) {
   for (const page of pagesContent) {
     try {
-      const pageText = page.mapping
-        .flatMap((row) => row.map((w) => w.word))
-        .join(" ");
-
-      page.embedding = await generateEmbedding(pageText);
-
       const chunks = createContextualChunks(page.mapping);
       page.chunks = chunks;
-
-      const chunkEmbeddings = [];
-      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE);
-        const batchEmbeddings = await Promise.all(
-          batch.map((chunk) => generateEmbedding(chunk.text))
-        );
-        chunkEmbeddings.push(...batchEmbeddings);
-      }
-
-      page.chunk_embeddings = chunkEmbeddings;
     } catch (error) {
-      console.error(`Error generating embeddings for page ${page.id}:`, error);
-      page.embedding = null;
+      console.error(`Error generating chunks for page ${page.id}:`, error);
       page.chunks = [];
-      page.chunk_embeddings = [];
     }
   }
 
