@@ -3,6 +3,17 @@
 import { motion } from "framer-motion";
 
 export function SideBarLoading() {
+  // Deterministic values to prevent hydration errors
+  const mainWidths = [75, 82, 68, 85, 70]; // % widths for main items
+  const nestedCounts = [2, 1, 3, 2, 1]; // Number of nested items
+  const nestedWidths = [
+    [55, 48], // for item 0
+    [52], // for item 1
+    [45, 58, 50], // for item 2
+    [53, 47], // for item 3
+    [51], // for item 4
+  ];
+
   return (
     <div className="w-full h-full">
       <div className="space-y-3 px-3 py-4">
@@ -32,7 +43,7 @@ export function SideBarLoading() {
               />
               <motion.div
                 className="h-4 rounded bg-neutral-200/80 dark:bg-white/10 transition-colors duration-200"
-                style={{ width: `${Math.random() * 30 + 60}%` }}
+                style={{ width: `${mainWidths[i]}%` }}
                 animate={{
                   opacity: [0.5, 0.3, 0.5],
                 }}
@@ -48,7 +59,7 @@ export function SideBarLoading() {
             {/* Nested items with increasing indentation */}
             {i % 2 === 0 && (
               <div className="ml-6 mt-2 space-y-2 border-l border-neutral-200/50 dark:border-white/10 transition-colors duration-200 pl-2">
-                {[...Array(Math.floor(Math.random() * 3 + 1))].map((_, j) => (
+                {[...Array(nestedCounts[i])].map((_, j) => (
                   <motion.div
                     key={j}
                     initial={{ opacity: 0, x: -5 }}
@@ -74,7 +85,7 @@ export function SideBarLoading() {
                     />
                     <motion.div
                       className="h-3 rounded bg-neutral-200/60 dark:bg-white/8 transition-colors duration-200"
-                      style={{ width: `${Math.random() * 20 + 40}%` }}
+                      style={{ width: `${nestedWidths[i][j]}%` }}
                       animate={{
                         opacity: [0.3, 0.15, 0.3],
                       }}

@@ -13,6 +13,8 @@ interface QueryContextProps {
   setQuery: (query: any[]) => void;
   isLoading: boolean;
   lastSuccessfulSearch: string;
+  lastSearchType: string;
+  setLastSearchType: (type: string) => void;
 }
 
 export const queryContext = createContext<QueryContextProps | undefined>(
@@ -32,6 +34,8 @@ export default function SearchManager({
     setQuery,
     isLoading,
     lastSuccessfulSearch,
+    lastSearchType,
+    setLastSearchType,
   } = useQuery();
 
   const router = useRouter();
@@ -46,6 +50,8 @@ export default function SearchManager({
         setQuery,
         isLoading,
         lastSuccessfulSearch,
+        lastSearchType,
+        setLastSearchType,
       }}
     >
       <div

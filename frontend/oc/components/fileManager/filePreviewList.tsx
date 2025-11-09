@@ -57,7 +57,7 @@ export default function FilePreviewList({
       const data = await res.json();
 
       if (data.success) {
-        setTimeout(() => router.push(`/search/${id}`), 5000);
+        router.push(`/search/${id}`);
       }
     } catch (error) {
       console.log("error occured during sending");

@@ -1,9 +1,10 @@
 "use client";
 
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { queryContext } from "./searchManger";
 import { DM_Sans } from "next/font/google";
 import SearchLoading from "../animations/searchLoading";
+import { File } from "lucide-react";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -15,7 +16,11 @@ export default function Result() {
 
   if (!context) throw new Error("queryContext is not working");
 
-  const { isLoading, query, lastSuccessfulSearch } = context;
+  const { isLoading, query, lastSuccessfulSearch, lastSearchType } = context;
+
+  useEffect(() => {
+    console.log(lastSearchType);
+  }, [lastSearchType]);
 
   function renderSentence(sentence: string) {
     const s: string = sentence;
@@ -142,18 +147,44 @@ export default function Result() {
               className="group backdrop-blur-xl 
                        border border-neutral-200 dark:border-neutral-800
                        bg-white/50 dark:bg-neutral-900/50
-                       rounded-[20px] p-8 
+                       rounded-[20px] p-6 sm:p-8
                        hover:bg-neutral-100 dark:hover:bg-neutral-800/50
+                       hover:shadow-xs
                        transition-all duration-300 cursor-pointer"
             >
-              <p
-                className={`${dmSans.className} text-[18px] leading-[1.6] 
-                           font-light tracking-[-0.01em]
-                           text-neutral-800 dark:text-neutral-200
-                           transition-colors duration-200`}
-              >
-                {renderSentence(result.sentence)}
-              </p>
+              <div className="flex flex-col gap-4">
+                <p
+                  className={`${dmSans.className} text-[17px] sm:text-[18px] leading-[1.8] 
+                             font-light tracking-[-0.01em]
+                             text-neutral-800 dark:text-neutral-200
+                             transition-colors duration-200`}
+                >
+                  {lastSearchType === "keyword"
+                    ? renderSentence(result.sentence)
+                    : result.sentence}
+                </p>
+                <div className="flex items-center gap-2 text-sm">
+                  <span
+                    className="inline-flex items-center gap-1.5 
+                                 px-3 py-1 rounded-full
+                                 bg-neutral-100 dark:bg-neutral-800
+                                 text-neutral-600 dark:text-neutral-300
+                                 font-medium tracking-wide"
+                  >
+                    <File
+                      className="text-neutral-500 dark:text-neutral-400"
+                      height={14}
+                      width={14}
+                    />
+                    <span className="mt-0.5 truncate max-w-80">
+                      {result.file_name}
+                    </span>
+                  </span>
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    Page {result.pageId.split(".")[1]}
+                  </span>
+                </div>
+              </div>
             </div>
           ))}
         </div>

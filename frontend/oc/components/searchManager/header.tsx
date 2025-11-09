@@ -5,16 +5,11 @@ import { useRouter } from "next/navigation";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { queryContext } from "./searchManger";
 import { Search, Home } from "lucide-react";
-import { Libre_Baskerville } from "next/font/google";
 import { DM_Sans } from "next/font/google";
+import ErrorPopUp from "../popUp/errorPopUp";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
-  subsets: ["latin"],
-});
-
-const libreBaskerville = Libre_Baskerville({
-  weight: ["400", "700"],
   subsets: ["latin"],
 });
 
@@ -25,14 +20,16 @@ interface Props {
 export default function Header({ id }: Props) {
   const router = useRouter();
   const context = useContext(queryContext);
-  const [searchType, setSearchType] = useState<"Enhanced" | "keyword">(
+  const [searchType, setSearchType] = useState<"enhanced" | "keyword">(
     "keyword"
   );
+  const [error, setError] = useState<string | null>(null);
 
   if (!context)
     throw new Error("queryContext in Header component is not working");
 
-  const { setIsLoading, setQuery, search, setSearch } = context;
+  const { setIsLoading, setQuery, search, setSearch, setLastSearchType } =
+    context;
 
   const handleSearch = async () => {
     if (!search.trim()) {
@@ -44,7 +41,7 @@ export default function Header({ id }: Props) {
       const query = new URLSearchParams({
         id: id,
         searchType: searchType,
-        search: search,
+        search: search.trim(),
       });
       const jwt = await handleTokenAction();
 
@@ -65,9 +62,13 @@ export default function Header({ id }: Props) {
         setQuery(data.searchResults);
         setIsLoading(false);
       } else {
-        console.log(data.error);
+        setError(data.error || "An error occurred while searching");
+        setTimeout(() => {
+          router.replace("/");
+        }, 3000);
       }
     } catch (error) {
+      setError("An unexpected error occurred. Please try again.");
       console.error(error);
     }
   };
@@ -79,7 +80,7 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <section className="w-full pt-2 px-4 sticky -top-20 z-1 bg-white dark:bg-[#0B0B0C] transition-colors duration-200">
+    <section className="w-full pt-2 px-4 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
       <div className="px-7 relative w-full mt-20 group">
         <Search
           className={`${
@@ -114,7 +115,10 @@ export default function Header({ id }: Props) {
         />
         <div className="absolute top-3 right-10 inline-flex items-center p-0.5 shrink-0">
           <button
-            onClick={() => setSearchType("keyword")}
+            onClick={() => {
+              setSearchType("keyword");
+              setLastSearchType("keyword");
+            }}
             className={`${
               dmSans.className
             } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
@@ -127,12 +131,15 @@ export default function Header({ id }: Props) {
             Keyword
           </button>
           <button
-            onClick={() => setSearchType("Enhanced")}
+            onClick={() => {
+              setSearchType("enhanced");
+              setLastSearchType("enhanced");
+            }}
             className={`${
               dmSans.className
             } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
             transition-all duration-200 ease-out ${
-              searchType === "Enhanced"
+              searchType === "enhanced"
                 ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
                 : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
             }`}
@@ -141,6 +148,13 @@ export default function Header({ id }: Props) {
           </button>
         </div>
       </div>
+      {error && (
+        <ErrorPopUp
+          errorMessage={error}
+          onDismiss={() => setError(null)}
+          duration={3000}
+        />
+      )}
     </section>
   );
 }
