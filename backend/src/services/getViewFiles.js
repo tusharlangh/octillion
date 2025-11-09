@@ -44,7 +44,7 @@ export async function getViewFiles(userId) {
 
     data[i].files = urls;
     data[i].type = "folder";
-    data[i].name = `Documents ${i + 1}`;
+    data[i].name = `Documents ${data.length - i}`;
   }
 
   return data;

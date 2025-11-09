@@ -1,6 +1,8 @@
 import supabase from "../utils/supabase/client.js";
 import { pipeline } from "@xenova/transformers";
 import dotenv from "dotenv";
+import { MinHeap } from "../utils/MinHeap.js";
+import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
 
 dotenv.config();
 
@@ -18,17 +20,68 @@ async function loadEmbeddingModel() {
   return embeddingPipeline;
 }
 
-async function generateEmbedding(text) {
+export async function generateEmbedding(text) {
   if (!embeddingPipeline) {
     await loadEmbeddingModel();
   }
 
-  const output = await embeddingPipeline(text, {
-    pooling: "mean",
-    normalize: true,
-  });
+  try {
+    const output = await embeddingPipeline(text, {
+      pooling: "mean",
+      normalize: true,
+    });
 
-  return Array.from(output.data);
+    return Array.from(output.data);
+  } catch (error) {
+    console.error("Error generating embedding:", error);
+    throw new Error(`Failed to generate embedding: ${error.message}`);
+  }
+}
+
+export function createContextualChunks(
+  sortedMapping,
+  chunkSizeInWords = 80,
+  overlapWords = 20
+) {
+  const chunks = [];
+  let currentWords = [];
+  let currentYRange = [];
+
+  for (const [y, row] of sortedMapping) {
+    const words = row.map((w) => w.word);
+
+    currentWords.push(...words);
+    currentYRange.push(y);
+
+    // Create chunk when we reach target size
+    if (currentWords.length >= chunkSizeInWords) {
+      const chunkText = currentWords.join(" ");
+
+      chunks.push({
+        text: chunkText,
+        startY: currentYRange[0],
+        endY: currentYRange[currentYRange.length - 1],
+        wordCount: currentWords.length,
+      });
+
+      // Keep overlap for context
+      currentWords = currentWords.slice(-overlapWords);
+      currentYRange = currentYRange.slice(-overlapWords);
+    }
+  }
+
+  // Add remaining words as final chunk
+  if (currentWords.length > 30) {
+    // Lower minimum for last chunk
+    chunks.push({
+      text: currentWords.join(" "),
+      startY: currentYRange[0],
+      endY: currentYRange[currentYRange.length - 1],
+      wordCount: currentWords.length,
+    });
+  }
+
+  return chunks;
 }
 
 function cosineSimilarity(vecA, vecB) {
@@ -45,74 +98,106 @@ function cosineSimilarity(vecA, vecB) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+async function semanticSearchAllChunks(
+  pagesContent,
+  queryEmbedding,
+  topK = 10
+) {
+  const minHeap = new MinHeap(topK);
+
+  // Process all pages
+  for (const page of pagesContent) {
+    // Use cached chunks and embeddings if available, otherwise generate on-the-fly
+    let chunks, chunkEmbeddings;
+
+    if (
+      page.chunks &&
+      page.chunk_embeddings &&
+      page.chunk_embeddings.length > 0
+    ) {
+      // Use cached embeddings (preferred - much faster)
+      chunks = page.chunks;
+      chunkEmbeddings = page.chunk_embeddings;
+    } else {
+      // Fallback: generate chunks and embeddings on-the-fly (for backward compatibility)
+      chunks = createContextualChunks(page.mapping);
+      // Generate embeddings in parallel batches
+      const BATCH_SIZE = 10;
+      chunkEmbeddings = [];
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const batchEmbeddings = await Promise.all(
+          batch.map((chunk) => generateEmbedding(chunk.text))
+        );
+        chunkEmbeddings.push(...batchEmbeddings);
+      }
+    }
+
+    // Compute similarities and maintain top-K using MinHeap
+    for (let i = 0; i < chunks.length; i++) {
+      try {
+        const similarity = cosineSimilarity(queryEmbedding, chunkEmbeddings[i]);
+
+        minHeap.push({
+          file_name: page.name,
+          pageId: page.id,
+          startY: chunks[i].startY,
+          endY: chunks[i].endY,
+          sentence: chunks[i].text,
+          semanticScore: similarity,
+          wordCount: chunks[i].wordCount,
+        });
+      } catch (error) {
+        console.error(
+          `Error computing similarity for chunk ${i} on page ${page.id}:`,
+          error
+        );
+        // Continue with other chunks
+      }
+    }
+  }
+
+  // Return top K chunks sorted by score (descending)
+  return minHeap.toArray();
+}
+
 async function semanticSearchPages(pagesContent, queryEmbedding) {
   const semanticScores = {};
 
   for (const page of pagesContent) {
-    let pageEmbedding;
+    try {
+      let pageEmbedding;
 
-    if (page.embedding) {
-      pageEmbedding = page.embedding;
-    } else {
-      const pageText = page.mapping
-        .flatMap((row) => row.map((w) => w.word))
-        .join(" ");
-      pageEmbedding = await generateEmbedding(pageText);
+      if (
+        page.embedding &&
+        Array.isArray(page.embedding) &&
+        page.embedding.length > 0
+      ) {
+        // Use cached page embedding (preferred)
+        pageEmbedding = page.embedding;
+      } else {
+        // Fallback: generate on-the-fly (for backward compatibility)
+        const pageText = page.mapping
+          .flatMap((row) => row.map((w) => w.word))
+          .join(" ");
+        pageEmbedding = await generateEmbedding(pageText);
+      }
+
+      const similarity = cosineSimilarity(queryEmbedding, pageEmbedding);
+      semanticScores[page.id] = similarity;
+    } catch (error) {
+      console.error(`Error processing page ${page.id}:`, error);
+      semanticScores[page.id] = 0; // Set to 0 if error occurs
     }
-
-    const similarity = cosineSimilarity(queryEmbedding, pageEmbedding);
-    semanticScores[page.id] = similarity;
   }
 
   return semanticScores;
 }
 
-async function semanticSearchSentences(
-  pagesContent,
-  queryEmbedding,
-  topPageIds
-) {
-  const pageSet = new Set(topPageIds);
-  const sentenceResults = [];
-
-  for (const page of pagesContent) {
-    if (!pageSet.has(page.id)) continue;
-
-    const mapping = new Map(page.mapping);
-
-    for (const [y, row] of mapping) {
-      const sentence = row.map((w) => w.word).join(" ");
-
-      // Skip very short sentences
-      if (sentence.split(/\s+/).length < 3) continue;
-
-      // Generate embedding for this sentence
-      let sentenceEmbedding;
-      if (row[0]?.embedding) {
-        sentenceEmbedding = row[0].embedding;
-      } else {
-        sentenceEmbedding = await generateEmbedding(sentence);
-      }
-
-      const similarity = cosineSimilarity(queryEmbedding, sentenceEmbedding);
-
-      sentenceResults.push({
-        file_name: pagesContent.find((p) => p.id === page.id).name,
-        pageId: page.id,
-        y,
-        sentence,
-        semanticScore: similarity,
-      });
-    }
-  }
-
-  return sentenceResults;
-}
-
 export async function parse(id, search, userId, options = {}) {
-  const { searchMode, topK = 5 } = options;
+  const { searchMode, topK = 10 } = options;
 
-  if (!search.trim()) {
+  if (!search || !search.trim()) {
     return {
       success: true,
       searchResults: [],
@@ -120,104 +205,128 @@ export async function parse(id, search, userId, options = {}) {
     };
   }
 
-  const { data, error } = await supabase
-    .from("files")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("parse_id", id);
+  try {
+    const { data, error } = await supabase
+      .from("files")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("parse_id", id);
 
-  if (error) {
-    console.error(error);
+    if (error) {
+      console.error("Database error:", error);
+      return {
+        success: false,
+        searchResults: [],
+        error: `failed extracting files: ${error.message}`,
+      };
+    }
+
+    if (!data || data.length === 0) {
+      return {
+        success: false,
+        searchResults: [],
+        error: "No files found for the given ID",
+      };
+    }
+
+    const d = data[0];
+    const pagesContent = d.pages_metadata;
+    const inverted = d.inverted_index;
+    const buildIndex = d.build_index;
+
+    if (!pagesContent || pagesContent.length === 0) {
+      return {
+        success: true,
+        searchResults: [],
+        error: "No pages found in the document",
+      };
+    }
+
+    let scores;
+    let topPages;
+    let queryEmbedding = null;
+
+    if (searchMode === "semantic") {
+      try {
+        queryEmbedding = await generateEmbedding(search);
+      } catch (error) {
+        console.error("Error generating query embedding:", error);
+        return {
+          success: false,
+          searchResults: [],
+          error: `Failed to generate query embedding: ${error.message}`,
+        };
+      }
+    }
+
+    if (searchMode === "tfidf") {
+      scores = await searchContent(pagesContent, inverted, search);
+      topPages = Object.entries(scores)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, topK)
+        .map(([id]) => id);
+    } else if (searchMode === "semantic") {
+      scores = await semanticSearchPages(pagesContent, queryEmbedding);
+      topPages = Object.entries(scores)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, topK)
+        .map(([id]) => id);
+    }
+
+    if (Object.keys(scores || {}).length === 0) {
+      return {
+        success: true,
+        searchResults: [],
+        error: "No results found",
+      };
+    }
+
+    let searchResults;
+    if (searchMode === "semantic") {
+      searchResults = await semanticSearchAllChunks(
+        pagesContent,
+        queryEmbedding,
+        topK
+      );
+    } else {
+      searchResults = searchBuildIndex(
+        buildIndex,
+        search,
+        pagesContent,
+        topPages
+      );
+    }
+
+    if (searchResults.length === 0) {
+      return {
+        success: true,
+        searchResults: [],
+        error: "search yielded no results",
+      };
+    }
+
+    return {
+      success: true,
+      searchResults,
+      error: null,
+      metadata: {
+        searchMode,
+        totalResults: searchResults.length,
+        topPages: topPages || [],
+      },
+    };
+  } catch (error) {
+    console.error("Unexpected error in parse function:", error);
     return {
       success: false,
       searchResults: [],
-      error: `failed extracting files`,
+      error: `Unexpected error: ${error.message}`,
     };
   }
-
-  if (!data || data.length === 0) {
-    return {
-      success: false,
-      searchResults: [],
-      error: "No files found for the given ID",
-    };
-  }
-
-  const d = data[0];
-  const pagesContent = d.pages_metadata;
-  const inverted = d.inverted_index;
-  const buildIndex = d.build_index;
-
-  let scores;
-  let topPages;
-
-  if (searchMode === "tfidf") {
-    scores = await searchContent(pagesContent, inverted, search);
-    topPages = Object.entries(scores)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, topK)
-      .map(([id]) => id);
-  } else {
-    const queryEmbedding = await generateEmbedding(search);
-    scores = await semanticSearchPages(pagesContent, queryEmbedding);
-    topPages = Object.entries(scores)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, topK)
-      .map(([id]) => id);
-  }
-
-  if (Object.keys(scores).length === 0) {
-    return {
-      success: true,
-      searchResults: [],
-      error: "No results found",
-    };
-  }
-
-  let searchResults;
-  if (searchMode === "semantic") {
-    const queryEmbedding = await generateEmbedding(search);
-    const sentenceResults = await semanticSearchSentences(
-      pagesContent,
-      queryEmbedding,
-      topPages
-    );
-
-    searchResults = sentenceResults
-      .sort((a, b) => b.semanticScore - a.semanticScore)
-      .slice(0, 10);
-  } else {
-    searchResults = searchBuildIndex(
-      buildIndex,
-      search,
-      pagesContent,
-      topPages
-    );
-  }
-
-  if (searchResults.length === 0) {
-    return {
-      success: true,
-      searchResults: [],
-      error: "search yielded no results",
-    };
-  }
-
-  return {
-    success: true,
-    searchResults,
-    error: null,
-    metadata: {
-      searchMode,
-      totalResults: searchResults.length,
-      topPages,
-    },
-  };
 }
 
 function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
   const terms = searchTerms.toLowerCase().split(/\s+/);
-
   const pageSet = new Set(topPageIds);
   const sentenceMap = new Map();
   const pageMappings = new Map();
@@ -228,32 +337,86 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
     }
   }
 
-  for (const term of terms) {
-    const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
-    const positions = buildIndex[normalizedTerm[0].toLowerCase()] || [];
+  // Check if buildIndex is the new optimized format
+  const isOptimizedFormat =
+    buildIndex.prefixIndex !== undefined ||
+    buildIndex.suffixIndex !== undefined ||
+    buildIndex.ngramIndex !== undefined;
 
-    for (const pos of positions) {
-      const mapping = pageMappings.get(pos.pageId);
-      if (!mapping) continue;
+  if (isOptimizedFormat) {
+    // Use optimized index
+    const index = OptimizedKeywordIndex.fromJSON(buildIndex);
 
-      const row = mapping.get(pos.y);
-      if (!row) continue;
+    for (const term of terms) {
+      const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+      if (!normalizedTerm) continue;
 
-      if (
-        pos.word === normalizedTerm ||
-        pos.word.startsWith(normalizedTerm) ||
-        pos.word.endsWith(normalizedTerm) ||
-        pos.word.includes(normalizedTerm)
-      ) {
-        const key = `${pos.pageId}-${pos.y}`;
+      // Search for all match types (prefix, suffix, infix)
+      const matches = index.search(normalizedTerm, "all");
 
+      for (const [word, pageId, y] of matches) {
+        // Only include results from top pages
+        if (!pageSet.has(pageId)) continue;
+
+        const mapping = pageMappings.get(pageId);
+        if (!mapping) continue;
+
+        const row = mapping.get(y);
+        if (!row) continue;
+
+        const key = `${pageId}-${y}`;
         if (!sentenceMap.has(key)) {
           sentenceMap.set(key, {
-            file_name: pagesContent.find((p) => p.id === pos.pageId).name,
-            pageId: pos.pageId,
-            y: pos.y,
+            file_name:
+              pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+            pageId: pageId,
+            y: y,
             sentence: row.map((w) => w.word).join(" "),
           });
+        }
+      }
+    }
+  } else {
+    // Legacy format - backward compatibility
+    for (const term of terms) {
+      const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+      const firstChar = normalizedTerm[0]?.toLowerCase();
+      if (!firstChar) continue;
+
+      // Handle both old object format and array format
+      const positions = buildIndex[firstChar] || [];
+
+      for (const pos of positions) {
+        // Handle both old format {word, pageId, y} and new format [word, pageId, y]
+        const word = Array.isArray(pos) ? pos[0] : pos.word;
+        const pageId = Array.isArray(pos) ? pos[1] : pos.pageId;
+        const y = Array.isArray(pos) ? pos[2] : pos.y;
+
+        if (!pageSet.has(pageId)) continue;
+
+        const mapping = pageMappings.get(pageId);
+        if (!mapping) continue;
+
+        const row = mapping.get(y);
+        if (!row) continue;
+
+        // Check all match types
+        if (
+          word === normalizedTerm ||
+          word.startsWith(normalizedTerm) ||
+          word.endsWith(normalizedTerm) ||
+          word.includes(normalizedTerm)
+        ) {
+          const key = `${pageId}-${y}`;
+          if (!sentenceMap.has(key)) {
+            sentenceMap.set(key, {
+              file_name:
+                pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+              pageId: pageId,
+              y: y,
+              sentence: row.map((w) => w.word).join(" "),
+            });
+          }
         }
       }
     }

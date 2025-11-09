@@ -41,7 +41,7 @@ export default function Header({ id }: Props) {
       const query = new URLSearchParams({
         id: id,
         searchType: searchType,
-        search: search,
+        search: search.trim(),
       });
       const jwt = await handleTokenAction();
 

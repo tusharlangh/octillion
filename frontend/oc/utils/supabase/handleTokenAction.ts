@@ -8,6 +8,8 @@ export async function handleTokenAction() {
     return;
   }
 
+  console.log("Session data: ", data);
+
   if (data.session?.access_token) {
     const jwt = data.session.access_token;
 
