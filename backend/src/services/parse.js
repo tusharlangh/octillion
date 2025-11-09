@@ -1,8 +1,8 @@
 import supabase from "../utils/supabase/client.js";
 import { pipeline } from "@xenova/transformers";
 import dotenv from "dotenv";
-import { MinHeap } from "../utils/MinHeap.js";
 import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
+import { searchQdrant } from "./qdrantService.js";
 
 dotenv.config();
 
@@ -53,7 +53,6 @@ export function createContextualChunks(
     currentWords.push(...words);
     currentYRange.push(y);
 
-    // Create chunk when we reach target size
     if (currentWords.length >= chunkSizeInWords) {
       const chunkText = currentWords.join(" ");
 
@@ -64,15 +63,12 @@ export function createContextualChunks(
         wordCount: currentWords.length,
       });
 
-      // Keep overlap for context
       currentWords = currentWords.slice(-overlapWords);
       currentYRange = currentYRange.slice(-overlapWords);
     }
   }
 
-  // Add remaining words as final chunk
   if (currentWords.length > 30) {
-    // Lower minimum for last chunk
     chunks.push({
       text: currentWords.join(" "),
       startY: currentYRange[0],
@@ -82,116 +78,6 @@ export function createContextualChunks(
   }
 
   return chunks;
-}
-
-function cosineSimilarity(vecA, vecB) {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    normA += vecA[i] * vecA[i];
-    normB += vecB[i] * vecB[i];
-  }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-async function semanticSearchAllChunks(
-  pagesContent,
-  queryEmbedding,
-  topK = 10
-) {
-  const minHeap = new MinHeap(topK);
-
-  // Process all pages
-  for (const page of pagesContent) {
-    // Use cached chunks and embeddings if available, otherwise generate on-the-fly
-    let chunks, chunkEmbeddings;
-
-    if (
-      page.chunks &&
-      page.chunk_embeddings &&
-      page.chunk_embeddings.length > 0
-    ) {
-      // Use cached embeddings (preferred - much faster)
-      chunks = page.chunks;
-      chunkEmbeddings = page.chunk_embeddings;
-    } else {
-      // Fallback: generate chunks and embeddings on-the-fly (for backward compatibility)
-      chunks = createContextualChunks(page.mapping);
-      // Generate embeddings in parallel batches
-      const BATCH_SIZE = 10;
-      chunkEmbeddings = [];
-      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-        const batch = chunks.slice(i, i + BATCH_SIZE);
-        const batchEmbeddings = await Promise.all(
-          batch.map((chunk) => generateEmbedding(chunk.text))
-        );
-        chunkEmbeddings.push(...batchEmbeddings);
-      }
-    }
-
-    // Compute similarities and maintain top-K using MinHeap
-    for (let i = 0; i < chunks.length; i++) {
-      try {
-        const similarity = cosineSimilarity(queryEmbedding, chunkEmbeddings[i]);
-
-        minHeap.push({
-          file_name: page.name,
-          pageId: page.id,
-          startY: chunks[i].startY,
-          endY: chunks[i].endY,
-          sentence: chunks[i].text,
-          semanticScore: similarity,
-          wordCount: chunks[i].wordCount,
-        });
-      } catch (error) {
-        console.error(
-          `Error computing similarity for chunk ${i} on page ${page.id}:`,
-          error
-        );
-        // Continue with other chunks
-      }
-    }
-  }
-
-  // Return top K chunks sorted by score (descending)
-  return minHeap.toArray();
-}
-
-async function semanticSearchPages(pagesContent, queryEmbedding) {
-  const semanticScores = {};
-
-  for (const page of pagesContent) {
-    try {
-      let pageEmbedding;
-
-      if (
-        page.embedding &&
-        Array.isArray(page.embedding) &&
-        page.embedding.length > 0
-      ) {
-        // Use cached page embedding (preferred)
-        pageEmbedding = page.embedding;
-      } else {
-        // Fallback: generate on-the-fly (for backward compatibility)
-        const pageText = page.mapping
-          .flatMap((row) => row.map((w) => w.word))
-          .join(" ");
-        pageEmbedding = await generateEmbedding(pageText);
-      }
-
-      const similarity = cosineSimilarity(queryEmbedding, pageEmbedding);
-      semanticScores[page.id] = similarity;
-    } catch (error) {
-      console.error(`Error processing page ${page.id}:`, error);
-      semanticScores[page.id] = 0; // Set to 0 if error occurs
-    }
-  }
-
-  return semanticScores;
 }
 
 export async function parse(id, search, userId, options = {}) {
@@ -242,11 +128,11 @@ export async function parse(id, search, userId, options = {}) {
       };
     }
 
-    let scores;
+    let searchResults;
     let topPages;
-    let queryEmbedding = null;
 
     if (searchMode === "semantic") {
+      let queryEmbedding;
       try {
         queryEmbedding = await generateEmbedding(search);
       } catch (error) {
@@ -257,47 +143,60 @@ export async function parse(id, search, userId, options = {}) {
           error: `Failed to generate query embedding: ${error.message}`,
         };
       }
-    }
 
-    if (searchMode === "tfidf") {
-      scores = await searchContent(pagesContent, inverted, search);
+      try {
+        searchResults = await searchQdrant(id, userId, queryEmbedding, {
+          topK: topK,
+          scoreThreshold: 0.3,
+        });
+
+        if (searchResults.length === 0) {
+          return {
+            success: true,
+            searchResults: [],
+            error: "No results found in Qdrant",
+          };
+        }
+
+        console.log(`Found ${searchResults.length} results from Qdrant`);
+      } catch (error) {
+        console.error("Qdrant search failed:", error);
+        return {
+          success: false,
+          searchResults: [],
+          error: `Qdrant search failed: ${error.message}`,
+        };
+      }
+    } else if (searchMode === "tfidf") {
+      const scores = await searchContent(pagesContent, inverted, search);
       topPages = Object.entries(scores)
         .sort(([, a], [, b]) => b - a)
         .slice(0, topK)
         .map(([id]) => id);
-    } else if (searchMode === "semantic") {
-      scores = await semanticSearchPages(pagesContent, queryEmbedding);
-      topPages = Object.entries(scores)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, topK)
-        .map(([id]) => id);
-    }
 
-    if (Object.keys(scores || {}).length === 0) {
-      return {
-        success: true,
-        searchResults: [],
-        error: "No results found",
-      };
-    }
+      if (Object.keys(scores || {}).length === 0) {
+        return {
+          success: true,
+          searchResults: [],
+          error: "No results found",
+        };
+      }
 
-    let searchResults;
-    if (searchMode === "semantic") {
-      searchResults = await semanticSearchAllChunks(
-        pagesContent,
-        queryEmbedding,
-        topK
-      );
-    } else {
       searchResults = searchBuildIndex(
         buildIndex,
         search,
         pagesContent,
         topPages
       );
+    } else {
+      return {
+        success: false,
+        searchResults: [],
+        error: `Invalid search mode: ${searchMode}`,
+      };
     }
 
-    if (searchResults.length === 0) {
+    if (!searchResults || searchResults.length === 0) {
       return {
         success: true,
         searchResults: [],
@@ -337,25 +236,21 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
     }
   }
 
-  // Check if buildIndex is the new optimized format
   const isOptimizedFormat =
     buildIndex.prefixIndex !== undefined ||
     buildIndex.suffixIndex !== undefined ||
     buildIndex.ngramIndex !== undefined;
 
   if (isOptimizedFormat) {
-    // Use optimized index
     const index = OptimizedKeywordIndex.fromJSON(buildIndex);
 
     for (const term of terms) {
       const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
       if (!normalizedTerm) continue;
 
-      // Search for all match types (prefix, suffix, infix)
       const matches = index.search(normalizedTerm, "all");
 
       for (const [word, pageId, y] of matches) {
-        // Only include results from top pages
         if (!pageSet.has(pageId)) continue;
 
         const mapping = pageMappings.get(pageId);

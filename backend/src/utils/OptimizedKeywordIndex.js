@@ -1,27 +1,12 @@
-/**
- * Optimized Keyword Search Index
- * Efficient storage with support for prefix, infix, and suffix matching
- *
- * Storage Format:
- * {
- *   prefix: { 'a': [['word', 'pageId', y], ...], ... },  // Sorted arrays
- *   suffix: { 'e': [['word', 'pageId', y], ...], ... },   // For suffix matching
- *   ngrams: { 'app': Set(['word:pageId:y', ...]), ... }    // 3-grams for infix
- * }
- */
-
 export class OptimizedKeywordIndex {
   constructor() {
-    this.prefixIndex = {}; // firstChar -> sorted array of [word, pageId, y]
-    this.suffixIndex = {}; // lastChar -> array of [word, pageId, y]
-    this.ngramIndex = new Map(); // ngram -> Set of 'word:pageId:y' keys
-    this.wordPositions = new Map(); // word -> Set of 'pageId:y' keys
-    this.seen = new Set(); // Track unique entries for deduplication
+    this.prefixIndex = {};
+    this.suffixIndex = {};
+    this.ngramIndex = new Map();
+    this.wordPositions = new Map();
+    this.seen = new Set();
   }
 
-  /**
-   * Add a word with its position
-   */
   add(word, pageId, y) {
     if (!word || word.length === 0) return;
 
@@ -69,9 +54,6 @@ export class OptimizedKeywordIndex {
     }
   }
 
-  /**
-   * Finalize index - sort arrays for binary search
-   */
   finalize() {
     // Sort prefix arrays for binary search
     for (const char in this.prefixIndex) {
@@ -84,11 +66,6 @@ export class OptimizedKeywordIndex {
     }
   }
 
-  /**
-   * Search for keywords
-   * @param {string} pattern - Search pattern //term
-   * @param {string} matchType - 'prefix', 'suffix', 'infix', or 'all'
-   */
   search(pattern, matchType = "all") {
     if (!pattern || pattern.length === 0) return [];
 
@@ -124,9 +101,6 @@ export class OptimizedKeywordIndex {
     return Array.from(results.values());
   }
 
-  /**
-   * Prefix search using binary search on sorted array
-   */
   _searchPrefix(prefix) {
     const firstChar = prefix[0];
     if (!firstChar || !this.prefixIndex[firstChar]) {
@@ -170,9 +144,6 @@ export class OptimizedKeywordIndex {
     return results;
   }
 
-  /**
-   * Suffix search
-   */
   _searchSuffix(suffix) {
     const lastChar = suffix[suffix.length - 1];
     if (!lastChar || !this.suffixIndex[lastChar]) {
@@ -192,9 +163,6 @@ export class OptimizedKeywordIndex {
     return results;
   }
 
-  /**
-   * Infix search using n-grams
-   */
   _searchInfix(pattern) {
     if (pattern.length < 3) {
       // For short patterns, check word positions directly
@@ -255,9 +223,6 @@ export class OptimizedKeywordIndex {
     return results;
   }
 
-  /**
-   * Serialize to JSON (for database storage)
-   */
   toJSON() {
     // Convert Sets to Arrays for JSON serialization
     const ngramIndexSerialized = {};
@@ -278,15 +243,11 @@ export class OptimizedKeywordIndex {
     };
   }
 
-  /**
-   * Deserialize from JSON
-   */
   static fromJSON(data) {
     const index = new OptimizedKeywordIndex();
     index.prefixIndex = data.prefixIndex || {};
     index.suffixIndex = data.suffixIndex || {};
 
-    // Ensure arrays are sorted (in case they weren't sorted when serialized)
     for (const char in index.prefixIndex) {
       index.prefixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
     }
@@ -294,7 +255,6 @@ export class OptimizedKeywordIndex {
       index.suffixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
     }
 
-    // Convert Arrays back to Sets
     index.ngramIndex = new Map();
     if (data.ngramIndex) {
       for (const [ngram, array] of Object.entries(data.ngramIndex)) {
@@ -309,7 +269,6 @@ export class OptimizedKeywordIndex {
       }
     }
 
-    // Rebuild seen set
     for (const char in index.prefixIndex) {
       for (const entry of index.prefixIndex[char]) {
         index.seen.add(`${entry[0]}:${entry[1]}:${entry[2]}`);
@@ -319,9 +278,6 @@ export class OptimizedKeywordIndex {
     return index;
   }
 
-  /**
-   * Get storage size estimate
-   */
   getStorageSize() {
     let size = 0;
     for (const char in this.prefixIndex) {
