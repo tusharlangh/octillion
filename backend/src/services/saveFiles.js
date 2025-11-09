@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import supabase from "../utils/supabase/client.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { generateEmbedding, createContextualChunks } from "./parse.js";
+import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
 
 dotenv.config();
 
@@ -64,40 +66,58 @@ export async function saveFiles(id, files, userId) {
 
       const page = await pdf.getPage(pageNum);
       const content = await page.getTextContent();
+
       content.items.forEach((item) => {
         const words = item.str.split(/\s+/);
         const [a, b, c, d, x, y] = item.transform;
 
-        words.forEach((word, index) => {
-          if (word !== "" || word.length !== 0) {
-            if (!new_map.has(y)) {
-              new_map.set(y, []);
+        const roundedY = Math.round(y);
+
+        words.forEach((word) => {
+          if (word && word.trim().length > 0) {
+            if (!new_map.has(roundedY)) {
+              new_map.set(roundedY, []);
             }
 
-            new_map.get(y).push({
+            new_map.get(roundedY).push({
               word: word.toLowerCase(),
-              y: y,
+              x: x,
+              y: roundedY,
             });
           }
         });
       });
 
-      let pageText = content.items.map((item) => item.str).join(" ");
-      pageText = formatResponse(pageText);
-      site_content = pageText;
+      const sortedMapping = Array.from(new_map.entries())
+        .sort((a, b) => b[0] - a[0]) //[y, words]
+        .map(([y, words]) => {
+          const sortedWords = words.sort((a, b) => a.x - b.x);
+          return [y, sortedWords];
+        });
+
+      const orderedText = sortedMapping
+        .map(([y, words]) => words.map((w) => w.word).join(" "))
+        .join(" ");
+
+      site_content = formatResponse(orderedText);
 
       pagesContent.push({
         id: `${i + 1}.${pageNum}`,
         name: files[i].originalname,
         site_content,
         total_words: site_content.split(" ").length,
-        mapping: Array.from(new_map.entries()),
+        mapping: sortedMapping,
       });
     }
   }
 
   const invertedIndex = createInvertedSearch(pagesContent);
-  const build_index = buildIndex(pagesContent);
+
+  const keywordIndex = buildOptimizedIndex(pagesContent);
+
+  const build_index = keywordIndex.toJSON();
+
+  pagesContent = await generateAndStoreEmbeddings(pagesContent);
 
   const { data, error } = await supabase.from("files").insert([
     {
@@ -141,61 +161,64 @@ function createInvertedSearch(sitesContent) {
   return inverted;
 }
 
-function buildIndex(pagesContent) {
-  let buildIndex = {
-    a: [],
-    b: [],
-    c: [],
-    d: [],
-    e: [],
-    f: [],
-    g: [],
-    h: [],
-    i: [],
-    j: [],
-    k: [],
-    l: [],
-    m: [],
-    n: [],
-    o: [],
-    p: [],
-    q: [],
-    r: [],
-    s: [],
-    t: [],
-    u: [],
-    v: [],
-    w: [],
-    x: [],
-    y: [],
-    z: [],
-  };
+function buildOptimizedIndex(pagesContent) {
+  const index = new OptimizedKeywordIndex();
 
-  for (let page of pagesContent) {
+  for (const page of pagesContent) {
     const pageId = page.id;
     const mapping = new Map(page.mapping);
 
-    for (let [y, row] of mapping) {
-      for (let wordObj of row) {
-        const word = wordObj.word.toLowerCase().replace(/[^a-z]/g, "");
-
-        if (!word) continue;
-
-        let seen = new Set();
-
-        for (let char of word) {
-          if (buildIndex[char] && !seen.has(char)) {
-            seen.add(char);
-            buildIndex[char].push({
-              word: word,
-              pageId: pageId,
-              y: y,
-            });
-          }
+    for (const [y, row] of mapping) {
+      for (const wordObj of row) {
+        const word = wordObj.word;
+        if (word) {
+          index.add(word, pageId, y);
         }
       }
     }
   }
 
-  return buildIndex;
+  // Sort arrays for binary search
+  index.finalize();
+
+  return index;
+}
+
+/**
+ * Generate and store embeddings for all pages and chunks
+ * This pre-computes embeddings during file save to avoid regeneration during search
+ */
+async function generateAndStoreEmbeddings(pagesContent) {
+  const BATCH_SIZE = 10;
+
+  for (const page of pagesContent) {
+    try {
+      const pageText = page.mapping
+        .flatMap((row) => row.map((w) => w.word))
+        .join(" ");
+
+      page.embedding = await generateEmbedding(pageText);
+
+      const chunks = createContextualChunks(page.mapping);
+      page.chunks = chunks;
+
+      const chunkEmbeddings = [];
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const batchEmbeddings = await Promise.all(
+          batch.map((chunk) => generateEmbedding(chunk.text))
+        );
+        chunkEmbeddings.push(...batchEmbeddings);
+      }
+
+      page.chunk_embeddings = chunkEmbeddings;
+    } catch (error) {
+      console.error(`Error generating embeddings for page ${page.id}:`, error);
+      page.embedding = null;
+      page.chunks = [];
+      page.chunk_embeddings = [];
+    }
+  }
+
+  return pagesContent;
 }
