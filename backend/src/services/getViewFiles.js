@@ -10,7 +10,8 @@ export async function getViewFiles(userId) {
   const { data, error } = await supabase
     .from("files")
     .select("id, user_id, created_at, parse_id, files")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error(error);
@@ -43,7 +44,7 @@ export async function getViewFiles(userId) {
 
     data[i].files = urls;
     data[i].type = "folder";
-    data[i].name = `Documents ${i + 1}`;
+    data[i].name = `Documents ${data.length - i}`;
   }
 
   return data;

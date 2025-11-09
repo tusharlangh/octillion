@@ -5,6 +5,7 @@ export function useQuery() {
   const [query, setQuery] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastSuccessfulSearch, setLastSuccessfulSearch] = useState<string>("");
+  const [lastSearchType, setLastSearchType] = useState<string>("keyword");
 
   // Wrapper to update both query and lastSuccessfulSearch
   const updateQueryResults = (newQuery: any[]) => {
@@ -20,5 +21,7 @@ export function useQuery() {
     isLoading,
     setIsLoading,
     lastSuccessfulSearch,
+    lastSearchType,
+    setLastSearchType,
   };
 }
