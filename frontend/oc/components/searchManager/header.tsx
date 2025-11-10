@@ -20,9 +20,9 @@ interface Props {
 export default function Header({ id }: Props) {
   const router = useRouter();
   const context = useContext(queryContext);
-  const [searchType, setSearchType] = useState<"enhanced" | "keyword">(
-    "keyword"
-  );
+  const [searchType, setSearchType] = useState<
+    "enhanced" | "keyword" | "hybrid"
+  >("keyword");
   const [error, setError] = useState<string | null>(null);
 
   if (!context)
@@ -145,6 +145,22 @@ export default function Header({ id }: Props) {
             }`}
           >
             Enhanced
+          </button>
+          <button
+            onClick={() => {
+              setSearchType("hybrid");
+              setLastSearchType("hybrid");
+            }}
+            className={`${
+              dmSans.className
+            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            transition-all duration-200 ease-out ${
+              searchType === "hybrid"
+                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
+                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            }`}
+          >
+            Hybrid
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ export class MinHeap {
   }
 
   compare(a, b) {
-    return a.semanticScore - b.semanticScore;
+    return a.score - b.score;
   }
 
   parent(i) {
@@ -60,10 +60,7 @@ export class MinHeap {
     if (this.heap.length < this.maxSize) {
       this.heap.push(item);
       this.heapifyUp(this.heap.length - 1);
-    } else if (
-      this.heap.length > 0 &&
-      item.semanticScore > this.heap[0].semanticScore
-    ) {
+    } else if (this.heap.length > 0 && item.score > this.heap[0].score) {
       this.heap[0] = item;
       this.heapifyDown(0);
     }
@@ -75,7 +72,7 @@ export class MinHeap {
 
   toArray() {
     const result = [...this.heap];
-    return result.sort((a, b) => b.semanticScore - a.semanticScore);
+    return result.sort((a, b) => b.score - a.score);
   }
 
   size() {

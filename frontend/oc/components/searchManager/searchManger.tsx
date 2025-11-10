@@ -56,8 +56,7 @@ export default function SearchManager({
     >
       <div
         className="py-2 px-4 flex items-center gap-1.5 group cursor-pointer mt-0.25
-                   
-                   rounded-lg transition-all duration-200"
+                   transition-all duration-200"
         onClick={() => router.replace("/")}
       >
         <Home
