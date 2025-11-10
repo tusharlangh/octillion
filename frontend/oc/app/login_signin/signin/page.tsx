@@ -9,54 +9,50 @@ export default function Signin() {
   const font: string = "font-(family-name:--font-dm-sans)";
 
   return (
-    <section className="flex justify-center items-center h-screen w-screen">
-      <div className="bg-[#1C1C1E] xs:w-[100vw] sm:w-[100vw] md:w-[600px] sm:rounded-0 md:rounded-[20px] py-10 px-4 max-sm:h-screen">
-        <div>
-          <section className="grid grid-cols-1  gap-[20px]">
-            {<Logo dynamicSize={"text-[24px]"} />}
+    <main className="h-full w-full bg-[#F5F5F7] dark:bg-[rgb(18,18,18)] flex justify-center items-center p-4">
+      <section
+        about="central"
+        className="flex flex-col justify-center items-center relative bg-white dark:bg-[#0B0B0C] w-full max-w-[600px] rounded-[10px] shadow-sm gap-6 py-12 px-8"
+      >
+        <div className="w-full flex flex-col items-center gap-6">
+          <Logo />
 
-            <section>
-              <p className="font-(family-name:--font-dm-sans) font-black text-[#EAEAEA] text-[40px] text-center ">
-                Sign in to start crawling documents
-              </p>
-            </section>
+          <h1 className="font-(family-name:--font-dm-sans) font-black text-4xl text-center text-neutral-900 dark:text-[#EAEAEA]">
+            Sign in to start crawling documents
+          </h1>
 
-            <section className="flex justify-center items-center">
-              <div
-                className="flex justify-center items-center gap-4 bg-[rgba(255,255,255,0.04)] 
-hover:bg-[rgba(255,255,255,0.06)] 
-active:bg-[rgba(255,255,255,0.10)] 
-rounded-[20px] p-2 px-6 cursor-pointer hover:outline-white transition-colors"
-                onClick={signInWithGoogle}
-              >
-                <Image
-                  src={"/google_icon.png"}
-                  alt="google-icon"
-                  width={20}
-                  height={20}
-                />
-                <p className="font-(family-name:--font-dm-sans) font-bold text-[#EAEAEA] text-[16px]">
-                  Sign in with Google
-                </p>
-              </div>
-            </section>
+          <div
+            className="flex justify-center items-center gap-4 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 active:bg-neutral-300 dark:active:bg-neutral-600 rounded-[10px] p-3 px-6 cursor-pointer transition-colors border border-neutral-200 dark:border-neutral-700 w-full"
+            onClick={signInWithGoogle}
+          >
+            <Image
+              src={"/google_icon.png"}
+              alt="google-icon"
+              width={20}
+              height={20}
+            />
+            <p className="font-(family-name:--font-dm-sans) font-bold text-neutral-900 dark:text-[#EAEAEA] text-[16px]">
+              Sign in with Google
+            </p>
+          </div>
 
-            <div className="h-[1px] bg-[rgba(255,255,255,0.06)] mx-4 my-2"></div>
+          <div className="h-[1px] bg-neutral-200 dark:bg-neutral-700 w-full my-2"></div>
 
-            <section className="flex justify-center items-center mt-2 gap-2">
-              <p className={`${font} font-medium text-[14px] text-[#8E8E93]`}>
-                Already have an account?
-              </p>
-              <Link
-                href={"login"}
-                className={`${font} font-medium text-[14px] hover:underline hover:underline-offset-1 hover:text-white transition-colors text-[#8E8E93]`}
-              >
-                Login
-              </Link>
-            </section>
-          </section>
+          <div className="flex justify-center items-center gap-2">
+            <p
+              className={`${font} font-medium text-[14px] text-neutral-600 dark:text-[#8E8E93]`}
+            >
+              Already have an account?
+            </p>
+            <Link
+              href={"login"}
+              className={`${font} font-medium text-[14px] text-blue-600 dark:text-blue-400 hover:underline hover:underline-offset-1 transition-colors`}
+            >
+              Login
+            </Link>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   );
 }

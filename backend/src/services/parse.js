@@ -3,6 +3,7 @@ import { pipeline } from "@xenova/transformers";
 import dotenv from "dotenv";
 import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
 import { searchQdrant } from "./qdrantService.js";
+import { MinHeap } from "../utils/MinHeap.js";
 
 dotenv.config();
 
@@ -130,8 +131,123 @@ export async function parse(id, search, userId, options = {}) {
 
     let searchResults;
     let topPages;
+    if (searchMode === "hybrid") {
+      const [semanticResults, keywordResults] = await Promise.all([
+        (async () => {
+          let queryEmbedding = await generateEmbedding(search);
+          const results = await searchQdrant(id, userId, queryEmbedding, {
+            topK: topK * 2,
+            scoreThreshold: 0.2,
+          });
 
-    if (searchMode === "semantic") {
+          //console.log("sematic scores are: ", results);
+          return results;
+        })(),
+        (async () => {
+          const scores = await searchContent(pagesContent, inverted, search);
+
+          if (Object.keys(scores || {}).length === 0) {
+            return [];
+          }
+          const topPages = Object.entries(scores)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, topK * 2)
+            .map(([id]) => id);
+
+          const results = searchBuildIndex(
+            buildIndex,
+            search,
+            pagesContent,
+            topPages
+          );
+
+          return results.map((result) => ({
+            ...result,
+            score: scores[result.pageId],
+            startY: result.y,
+            endY: result.y,
+          }));
+        })(),
+      ]);
+
+      if (semanticResults.length === 0 && keywordResults.length === 0) {
+        return {
+          success: true,
+          searchResults: [],
+          error: "No results found",
+        };
+      }
+
+      const normalize = (x, min, max) => {
+        const range = max - min;
+        if (range === 0) return 0.5;
+        return (x - min) / range;
+      };
+
+      const getMinMax = (arr) => {
+        if (arr.length === 0) return { min: 0, max: 1 };
+        const scores = arr.map((item) => item.score);
+        return {
+          min: Math.min(...scores),
+          max: Math.max(...scores),
+        };
+      };
+
+      const semanticRange = getMinMax(semanticResults);
+      const keywordRange = getMinMax(keywordResults);
+
+      semanticResults.forEach((item) => {
+        item.score = normalize(
+          item.score,
+          semanticRange.min,
+          semanticRange.max
+        );
+        item.source = "semantic";
+      });
+
+      keywordResults.forEach((item) => {
+        item.score = normalize(item.score, keywordRange.min, keywordRange.max);
+        item.source = "keyword";
+      });
+
+      const resultMap = new Map();
+
+      for (const result of semanticResults) {
+        const key = `${result.pageId}-${result.startY}-${result.endY}`;
+        resultMap.set(key, result);
+      }
+
+      for (const result of keywordResults) {
+        const key = `${result.pageId}-${result.startY}-${result.endY}`;
+
+        if (resultMap.has(key)) {
+          const existing = resultMap.get(key);
+          existing.score = (existing.score + result.score) / 2;
+        } else {
+          resultMap.set(key, result);
+        }
+      }
+
+      const heap = new MinHeap(topK);
+      for (const result of resultMap.values()) {
+        heap.push(result);
+      }
+
+      searchResults = heap.toArray();
+
+      return {
+        success: true,
+        searchResults,
+        error: null,
+        metadata: {
+          searchMode,
+          totalResults: searchResults.length,
+          semanticCount: semanticResults.length,
+          keywordCount: keywordResults.length,
+          uniqueResults: resultMap.size,
+        },
+      };
+    } else if (searchMode === "semantic") {
       let queryEmbedding;
       try {
         queryEmbedding = await generateEmbedding(search);
