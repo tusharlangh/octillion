@@ -12,7 +12,7 @@ export default async function SearchPage({ params }: SearchPageProps) {
   const id = params.id;
 
   return (
-    <main className="bg-[#F5F5F7] dark:bg-[#0B0B0C] h-full w-full">
+    <main className="bg-[#F5F5F7] dark:bg-[#0B0B0C] h-full w-full rounded-[10px]">
       <section
         about="central"
         className="flex flex-col relative h-full bg-white dark:bg-[#0B0B0C] w-full rounded-[10px] shadow-sm"

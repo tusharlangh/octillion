@@ -142,7 +142,7 @@ export async function searchQdrant(
       startY: result.payload.startY,
       endY: result.payload.endY,
       sentence: result.payload.text,
-      semanticScore: result.score,
+      score: result.score,
       wordCount: result.payload.wordCount,
     }));
 
