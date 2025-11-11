@@ -59,6 +59,7 @@ export default function Header({ id }: Props) {
       const data = await res.json();
 
       if (data.success) {
+        console.log("Search results:", data.searchResults);
         setQuery(data.searchResults);
         setIsLoading(false);
       } else {
