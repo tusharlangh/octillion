@@ -66,7 +66,6 @@ function TreeNode({ node }: TreeNodeProps) {
         whileHover={{ x: node.type === "folder" ? 3 : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
         onClick={(e) => {
-          // Only handle folder click if the click wasn't on the chevron
           if (hasChildren && !e.defaultPrevented) {
             router.push(`/search/${node.parse_id}`);
           } else if (node.type === "file" && node.presignedUrl) {

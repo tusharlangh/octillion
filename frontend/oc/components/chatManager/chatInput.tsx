@@ -1,0 +1,300 @@
+"use client";
+
+import { DM_Sans } from "next/font/google";
+import React, { useContext, useEffect, useRef, useState } from "react";
+import { chatContext } from "./charManger";
+import { ArrowUp } from "lucide-react";
+import { Libre_Baskerville } from "next/font/google";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
+import DocumentDropdown from "./documentDropdown";
+
+const libreBaskerville = Libre_Baskerville({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+});
+
+const dmSans = DM_Sans({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
+
+export default function ChatInput() {
+  const context = useContext(chatContext);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isOpenedDropdown, setIsOpenedDropdown] = useState<boolean>(false);
+  const [selectedDoc, setSelectedDoc] = useState<{
+    name: string;
+    parse_id: string;
+  } | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (selectedDoc) {
+      const lastIndex = search.lastIndexOf("@");
+      const before = search.substring(0, lastIndex);
+      setSearch(before + "@" + selectedDoc?.name + " ");
+      setIsOpenedDropdown(false);
+    }
+  }, [selectedDoc]);
+
+  if (!context)
+    throw new Error("chatContext in ChatInput component is not working");
+
+  const { search, setSearch, isLoading, setIsLoading, setMessages, messages } =
+    context;
+
+  const getCursorPosition = () => {
+    if (!textareaRef.current || !sectionRef.current) return null;
+
+    const textarea = textareaRef.current;
+    const cursorPos = textarea.selectionStart;
+    const style = window.getComputedStyle(textarea);
+    const textareaRect = textarea.getBoundingClientRect();
+
+    const mirror = document.createElement("div");
+    mirror.style.cssText = `
+    position: fixed;
+    visibility: hidden;
+    top: ${textareaRect.top}px;
+    left: ${textareaRect.left}px;
+    width: ${textareaRect.width}px;
+    white-space: ${style.whiteSpace};
+    word-break: ${style.wordBreak};
+    font: ${style.font};
+    padding: ${style.padding};
+    border: ${style.border};
+    box-sizing: ${style.boxSizing};
+    letter-spacing: ${style.letterSpacing};
+    text-transform: ${style.textTransform};
+    margin: 0;
+    overflow: hidden;
+  `;
+
+    const textBeforeCursor = textarea.value.substring(0, cursorPos);
+    mirror.textContent = textBeforeCursor;
+
+    const span = document.createElement("span");
+    span.textContent = textarea.value[cursorPos] || "";
+    mirror.appendChild(span); //adds temp elements into the dom for measurement
+
+    document.body.appendChild(mirror); //adds temp elements into the dom for measurement
+    const spanRect = span.getBoundingClientRect(); //inside box
+    const sectionRect = sectionRef.current.getBoundingClientRect(); //outer box
+    document.body.removeChild(mirror);
+
+    return {
+      left: spanRect.left - sectionRect.left, //left is relative to the outside box
+      top: spanRect.top - sectionRect.top, //top is relative to the outside box
+    };
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const cursorPos = textareaRef.current?.selectionStart || newValue.length;
+    const textBeforeCursor = newValue.substring(0, cursorPos);
+
+    const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+    const charBeforeAt =
+      lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : null;
+    const isValidPosition =
+      !charBeforeAt || charBeforeAt === " " || charBeforeAt === "\n";
+
+    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+    const isTypingMention =
+      !textAfterAt.includes(" ") && !textAfterAt.includes("\n");
+
+    const shouldShow = lastAtIndex !== -1 && isValidPosition && isTypingMention;
+
+    if (shouldShow) {
+      const position = getCursorPosition();
+      if (position) {
+        setDropdownPosition(position);
+        setIsOpenedDropdown(true);
+      }
+    } else if (isOpenedDropdown) {
+      setIsOpenedDropdown(false);
+      setDropdownPosition(null);
+    }
+
+    setSearch(newValue);
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        200
+      )}px`;
+    }
+  };
+
+  const handleSend = async () => {
+    if (!search.trim() || isLoading) {
+      return;
+    }
+    const parseId = selectedDoc?.parse_id;
+    const userMessage = search.trim();
+
+    setMessages([...messages, { content: userMessage, role: "user" }]);
+    setIsLoading(true);
+    setSearch("");
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
+    try {
+      const query = new URLSearchParams({
+        id: parseId!,
+        search: userMessage.replace(selectedDoc?.name!, ""),
+      });
+      const jwt = await handleTokenAction();
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/get-chats/?${query}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${jwt}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (data.success) {
+        setMessages((prev) => [
+          ...prev,
+          { content: data.response, role: "assistant" },
+        ]);
+      } else {
+        console.error("Error fetching chat response:", data.error);
+        setMessages((prev) => [
+          ...prev,
+          {
+            content: "Sorry, I encountered an error. Please try again.",
+            role: "assistant",
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          content: "Sorry, I encountered an error. Please try again.",
+          role: "assistant",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !isOpenedDropdown) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <section
+      ref={sectionRef}
+      className="w-full flex justify-center pb-10 max-w-[60%] mx-auto relative"
+    >
+      <div
+        ref={containerRef}
+        className="flex items-center pt-4 gap-2 px-4 py-2 w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 transition-colors duration-200 rounded-lg shadow-lg"
+      >
+        <div className="flex-1 relative">
+          <textarea
+            ref={textareaRef}
+            placeholder="What can I help you with today? Type @ to mention a document"
+            className={`${libreBaskerville.className} w-full
+                     border-0 bg-transparent
+                     text-[16px] outline-none 
+                     placeholder:text-black/40 dark:placeholder:text-white/40
+                     text-black/80 dark:text-white/80
+                     resize-none overflow-y-auto
+                     max-h-[200px]
+                     transition-colors duration-200
+                     scrollbar-thin scrollbar-track-transparent
+                     scrollbar-thumb-neutral-300 hover:scrollbar-thumb-neutral-400
+                     dark:scrollbar-thumb-neutral-700 dark:hover:scrollbar-thumb-neutral-600`}
+            value={search}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onClick={() => {
+              if (isOpenedDropdown) {
+                const position = getCursorPosition();
+                if (position) {
+                  setDropdownPosition(position);
+                }
+              }
+            }}
+            onKeyUp={() => {
+              if (isOpenedDropdown) {
+                const position = getCursorPosition();
+                if (position) {
+                  setDropdownPosition(position);
+                }
+              }
+            }}
+            rows={1}
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="flex items-center mb-1">
+          <button
+            onClick={handleSend}
+            disabled={!search.trim() || isLoading}
+            className={`flex-shrink-0 w-9 h-9 rounded-full
+                     flex items-center justify-center
+                     transition-all duration-200
+                     ${
+                       search.trim() && !isLoading
+                         ? "bg-black hover:bg-black/70 dark:bg-white dark:hover:bg-white/70 text-white cursor-pointer"
+                         : "bg-neutral-300 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-600 cursor-not-allowed"
+                     }`}
+            title="Send message"
+          >
+            <ArrowUp
+              className={`w-4 h-4 ${
+                search.trim() && !isLoading
+                  ? "text-white dark:text-black"
+                  : "text-neutral-400 dark:text-neutral-600"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+      {isOpenedDropdown && dropdownPosition && (
+        <div
+          className="absolute z-50"
+          style={{
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            transform: "translateY(-100%)",
+            marginTop: "-8px",
+          }}
+        >
+          <DocumentDropdown
+            setSelectedDoc={setSelectedDoc}
+            onClose={() => {
+              setIsOpenedDropdown(false);
+              setDropdownPosition(null);
+            }}
+          />
+        </div>
+      )}
+    </section>
+  );
+}

@@ -9,6 +9,7 @@ export async function get_view_files_controller(req, res) {
     }
 
     const data = await getViewFiles(userId);
+    console.log(data);
 
     return res.json({ success: true, data: data });
   } catch (error) {
