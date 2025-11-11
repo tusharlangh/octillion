@@ -7,15 +7,8 @@ function extractPageNumber(pageId) {
   return parts[1];
 }
 
-/**
- * Classifies whether a query requires document search or can be answered directly
- * Uses a lightweight rule-based pre-check for common cases, then LLM for edge cases
- * @param {string} query - The user's query
- * @returns {Promise<string>} - "search" or "direct"
- */
 async function classifyQuery(query) {
   try {
-    // Fast rule-based classification for common direct query patterns
     const directQueryPatterns = [
       /^(give me|provide|show me|tell me).*(summary|summarize|overview|overview of|summary of)/i,
       /^(what is|what's).*(this document|this file|this).*(about|contain)/i,
@@ -24,14 +17,12 @@ async function classifyQuery(query) {
       /^(what does|what do).*(this|the document).*(contain|cover|discuss)/i,
     ];
 
-    // Check if query matches direct patterns
     for (const pattern of directQueryPatterns) {
       if (pattern.test(query)) {
         return "direct";
       }
     }
 
-    // For edge cases, use LLM classification for better accuracy
     const classificationPrompt = `Classify the following user query into one of two categories:
 
 1. "search" - The query requires searching through specific documents to find information (e.g., "What is the budget for Q3?", "Find mentions of marketing strategy", "What does the document say about X?", "When was project Y completed?")
@@ -45,7 +36,8 @@ Respond with ONLY one word: either "search" or "direct".`;
     const messages = [
       {
         role: "system",
-        content: "You are a query classification assistant. Respond with only one word: 'search' or 'direct'.",
+        content:
+          "You are a query classification assistant. Respond with only one word: 'search' or 'direct'.",
       },
       {
         role: "user",
@@ -56,11 +48,9 @@ Respond with ONLY one word: either "search" or "direct".`;
     const response = await callToChat(messages, "gpt-4o-mini", 0.1, 10);
     const classification = response.trim().toLowerCase();
 
-    // Fallback to "search" if classification is unclear
     return classification === "direct" ? "direct" : "search";
   } catch (error) {
     console.error("Error classifying query, defaulting to search:", error);
-    // Default to search for safety
     return "search";
   }
 }
@@ -141,7 +131,22 @@ Response Quality:
 - Match the level of detail to the question asked
 - Use proper formatting (bullets, paragraphs) for readability
 
-Example: "Based on the document, the main topics covered are: [Document.pdf, Page 1-5]..."`;
+**Formatting Requirements:**
+- Use **bold** for emphasis on key terms or important concepts
+- Use bullet points (-) for lists
+- Use ## for section headers when appropriate
+- Use \`code\` for technical terms, file paths, or specific values
+- Use > for block quotes when citing longer passages
+- Format numbers and data clearly
+
+Example response:
+"## Summary
+Based on the document [Document.pdf, Page 1-5], the main topics covered are:
+- **Topic 1**: Description with key details
+- **Topic 2**: Another important point
+- **Topic 3**: Additional information
+
+The document emphasizes **key concept** and provides data showing \`42% increase\`."`;
   }
 
   return `You are a precise document assistant. Answer questions using only the provided context.
@@ -158,17 +163,29 @@ Response Quality:
 - If multiple documents conflict, note the discrepancy and cite both
 - For numerical data, include units and context
 
+**Formatting Requirements:**
+- Use **bold** for emphasis on key findings, numbers, or critical terms
+- Use bullet points (-) for multiple items or comparisons
+- Use \`backticks\` for specific values, amounts, or technical terms
+- Use ## for headers only when answering complex multi-part questions
+- Keep formatting clean and purposeful - don't over-format
+
 Avoid:
 - Speculation beyond the documents
 - Combining information to create new claims
 - Apologetic language ("unfortunately," "I'm afraid")
 
-Example: "The Q3 budget allocated $50K to marketing [Budget-2024.pdf, Page 5], a 15% increase from Q2 [Financial-Summary.xlsx, Sheet 2]."`;
+Example response:
+"The Q3 budget allocated **$50K** to marketing [Budget-2024.pdf, Page 5], representing a **15% increase** from Q2 [Financial-Summary.xlsx, Sheet 2].
+
+Key changes:
+- Marketing: \`$50K\` (+15%)
+- Operations: \`$120K\` (+5%)
+- R&D: \`$80K\` (unchanged)"`;
 }
 
 export async function chat(id, search, userId) {
   try {
-    // First, fetch file data (needed for both search and direct queries)
     const { data, error } = await supabase
       .from("files")
       .select("*")
@@ -202,7 +219,6 @@ export async function chat(id, search, userId) {
       };
     }
 
-    // Classify the query to determine if it needs search or can be answered directly
     const queryType = await classifyQuery(search);
     let context;
     let sources = [];
@@ -210,11 +226,9 @@ export async function chat(id, search, userId) {
     let pagesUsed = 0;
 
     if (queryType === "direct") {
-      // For direct queries (summaries, general questions), use all document content
       context = buildFullContext(pagesContent);
       pagesUsed = pagesContent.length;
 
-      // Extract unique file names for sources
       const sourcesMap = new Map();
       for (const page of pagesContent) {
         const fileName = page.file_name || "Document";
@@ -228,7 +242,6 @@ export async function chat(id, search, userId) {
       }
       sources = Array.from(sourcesMap.values());
     } else {
-      // For search queries, perform hybrid search
       const searchResults = await parse(id, search, userId, {
         searchMode: "hybrid",
         topK: 7,
@@ -259,7 +272,6 @@ export async function chat(id, search, userId) {
       pagesUsed = matchedPages.length;
       searchResultsCount = searchResults.searchResults.length;
 
-      // Extract sources from search results
       const sourcesMap = new Map();
       for (const result of searchResults.searchResults) {
         if (!sourcesMap.has(result.file_name)) {
@@ -273,7 +285,6 @@ export async function chat(id, search, userId) {
       sources = Array.from(sourcesMap.values());
     }
 
-    // Generate AI response with appropriate system prompt
     const messages = [
       {
         role: "system",
@@ -285,11 +296,15 @@ export async function chat(id, search, userId) {
       },
     ];
 
-    // Use slightly higher temperature and tokens for direct queries (summaries need more detail)
     const temperature = queryType === "direct" ? 0.4 : 0.3;
     const maxTokens = queryType === "direct" ? 1200 : 800;
 
-    const aiResponse = await callToChat(messages, "gpt-4o-mini", temperature, maxTokens);
+    const aiResponse = await callToChat(
+      messages,
+      "gpt-4o-mini",
+      temperature,
+      maxTokens
+    );
 
     return {
       success: true,

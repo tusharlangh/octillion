@@ -3,10 +3,10 @@
 import { useContext, useEffect, useRef } from "react";
 import { chatContext } from "./charManger";
 import { DM_Sans } from "next/font/google";
-import { ChevronDown, Check, FileText, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { Libre_Baskerville } from "next/font/google";
 import SurfingLoading from "../animations/surfingLoading";
-import AnimatedText from "./animatedText";
+import ReactMarkdown from "react-markdown";
 
 const libreBaskerville = Libre_Baskerville({
   weight: ["400", "700"],
@@ -92,12 +92,7 @@ export default function ChatMessages() {
                   key={`${message.role}-${index}`}
                   className="space-y-2 p-3 pb-10 "
                 >
-                  <AnimatedText
-                    text={message.content}
-                    className={`${dmSans.className} text-[18px] leading-relaxed 
-                          text-neutral-900 dark:text-neutral-100
-                          space-y-10`}
-                  />
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
                   <div>
                     <Copy
                       className="text-neutral-400 dark:text-neutral-500 
