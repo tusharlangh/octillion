@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Home, Search } from "lucide-react";
 import Logo from "../logo";
 
 export default function TopLevel() {

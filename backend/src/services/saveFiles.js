@@ -146,7 +146,7 @@ export async function saveFiles(id, files, userId) {
           }
         }
       }
-      delete page.chunks;
+      //delete page.chunks;
     }
 
     if (chunksData.length > 0) {

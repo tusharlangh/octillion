@@ -59,6 +59,7 @@ export default function Header({ id }: Props) {
       const data = await res.json();
 
       if (data.success) {
+        console.log("Search results:", data.searchResults);
         setQuery(data.searchResults);
         setIsLoading(false);
       } else {
@@ -169,6 +170,7 @@ export default function Header({ id }: Props) {
           errorMessage={error}
           onDismiss={() => setError(null)}
           duration={3000}
+          isHome={false}
         />
       )}
     </section>
