@@ -1,8 +1,6 @@
 "use client";
 
 import { useQuery } from "@/hooks/useQuery";
-import { Home } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { createContext } from "react";
 
 interface QueryContextProps {
@@ -38,8 +36,6 @@ export default function SearchManager({
     setLastSearchType,
   } = useQuery();
 
-  const router = useRouter();
-
   return (
     <queryContext.Provider
       value={{
@@ -54,26 +50,6 @@ export default function SearchManager({
         setLastSearchType,
       }}
     >
-      <div
-        className="py-2 px-4 flex items-center gap-1.5 group cursor-pointer mt-0.25
-                   transition-all duration-200"
-        onClick={() => router.replace("/")}
-      >
-        <Home
-          className="text-neutral-400 dark:text-neutral-500 
-                     group-hover:text-neutral-700 dark:group-hover:text-neutral-300 
-                     transition-colors duration-200"
-          height={18}
-          width={18}
-        />
-        <p
-          className="text-neutral-400 dark:text-neutral-500 text-[14px] 
-                     group-hover:text-neutral-700 dark:group-hover:text-neutral-300 
-                     transition-colors duration-200 mt-0.5"
-        >
-          Home
-        </p>
-      </div>
       <div
         className={`${
           isLoading ? "overflow-hidden" : "overflow-y-auto"
