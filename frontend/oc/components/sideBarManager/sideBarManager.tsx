@@ -8,6 +8,8 @@ import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { SideBarLoading } from "./sideBarLoading";
 import Image from "next/image";
 import { Home, MessageCircle } from "lucide-react";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import ErrorPopUp from "../popUp/errorPopUp";
 
 export default function SideBarManager() {
   const router = useRouter();
@@ -15,15 +17,21 @@ export default function SideBarManager() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [pfp, setPfp] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
 
   const isHomeActive = pathname === "/";
   const isChatsActive = pathname === "/chats";
 
   useEffect(() => {
     async function GET() {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
         const jwt = await handleTokenAction();
+        if (!jwt) {
+          throw new Error("Failed to get authentication token");
+        }
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/get-view-files/`,
@@ -36,20 +44,53 @@ export default function SideBarManager() {
           }
         );
 
-        const d = await res.json();
-        setData(d.data);
-        setLoading(false);
+        const data = await res.json();
 
-        console.log("Fetched file structure: ", d.data);
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message ||
+            data.error ||
+            getErrorMessageByStatus(res.status);
+
+          console.error("Fetch file structure failed:", {
+            status: res.status,
+            error: errorMessage,
+            details: data.error?.details,
+          });
+
+          setError(errorMessage);
+
+          if (res.status === 401 || res.status === 403) {
+            setTimeout(() => router.replace("/login"), 2000);
+          }
+
+          return;
+        }
+
+        setData(data.data || []);
       } catch (error) {
-        console.error(error);
-        return;
+        console.error("File structure error: ", error);
+
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          setError("Network error. Please check your connection.");
+        } else if (error instanceof Error && error.message.includes("token")) {
+          setError("Authentication failed. Please log in again.");
+          setTimeout(() => router.replace("/login"), 2000);
+        } else {
+          setError("An unexpected error occurred. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
     }
 
     async function GETPFP() {
+      setLoading(true);
       try {
         const jwt = await handleTokenAction();
+        if (!jwt) {
+          throw new Error("Failed to get authentication token");
+        }
 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/get-pfp`, {
           method: "GET",
@@ -59,13 +100,43 @@ export default function SideBarManager() {
           },
         });
 
-        const d = await res.json();
-        setPfp(d.data);
+        const data = await res.json();
 
-        console.log("Fetched pfp", d.data);
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message ||
+            data.error ||
+            getErrorMessageByStatus(res.status);
+
+          console.error("PFP failed:", {
+            status: res.status,
+            error: errorMessage,
+            details: data.error?.details,
+          });
+
+          setError(errorMessage);
+
+          if (res.status === 401 || res.status === 403) {
+            setTimeout(() => router.replace("/login"), 2000);
+          }
+
+          return;
+        }
+
+        setPfp(data.data);
       } catch (error) {
-        console.error(error);
-        return;
+        console.error("PFP error: ", error);
+
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          setError("Network error. Please check your connection.");
+        } else if (error instanceof Error && error.message.includes("token")) {
+          setError("Authentication failed. Please log in again.");
+          setTimeout(() => router.replace("/login"), 2000);
+        } else {
+          setError("An unexpected error occurred. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -157,6 +228,15 @@ export default function SideBarManager() {
           />
         )}
       </div>
+
+      {error && (
+        <ErrorPopUp
+          errorMessage={error}
+          onDismiss={() => setError(null)}
+          duration={3000}
+          isHome={true}
+        />
+      )}
     </div>
   );
 }

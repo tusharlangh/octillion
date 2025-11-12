@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { DM_Sans } from "next/font/google";
 import { useEffect, useRef, useState } from "react";
 import SurfingLoading from "../animations/surfingLoading";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import { useRouter } from "next/navigation";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -24,6 +26,8 @@ export default function DocumentDropdown({
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -31,9 +35,12 @@ export default function DocumentDropdown({
 
   useEffect(() => {
     async function GET() {
+      setLoading(true);
       try {
-        setLoading(true);
         const jwt = await handleTokenAction();
+        if (!jwt) {
+          throw new Error("Failed to get authentication token");
+        }
 
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/get-view-files/`,
@@ -45,15 +52,43 @@ export default function DocumentDropdown({
             },
           }
         );
+        const data = await res.json();
 
-        const d = await res.json();
-        setData(d.data);
-        setLoading(false);
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message ||
+            data.error ||
+            getErrorMessageByStatus(res.status);
 
-        console.log("Fetched file structure: ", d.data);
+          console.error("Document dropdown failed:", {
+            status: res.status,
+            error: errorMessage,
+            details: data.error?.details,
+          });
+
+          setError(errorMessage);
+
+          if (res.status === 401 || res.status === 403) {
+            setTimeout(() => router.replace("/login"), 2000);
+          }
+
+          return;
+        }
+
+        setData(data.data);
       } catch (error) {
-        console.error(error);
-        return;
+        console.error("Document dropdown error: ", error);
+
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          setError("Network error. Please check your connection.");
+        } else if (error instanceof Error && error.message.includes("token")) {
+          setError("Authentication failed. Please log in again.");
+          setTimeout(() => router.replace("/login"), 2000);
+        } else {
+          setError("An unexpected error occurred. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
     }
 
