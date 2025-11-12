@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import { UnauthorizedError } from "./errorHandler.js";
 
 dotenv.config();
 
@@ -8,22 +9,31 @@ export async function auth(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      return res.status(401).json({ error: "No authorization header" });
+      throw new UnauthorizedError("No authorization header");
     }
 
     const token = authHeader.split(" ")[1];
 
     if (!token) {
-      return res.status(401).json({ error: "Malformed token" });
+      throw new UnauthorizedError("Malformed token");
     }
 
     const payload = jwt.verify(token, process.env.SUPABASE_JWT_KEY);
-    const userId = payload.sub;
 
-    req.user = userId;
+    if (!payload.sub) {
+      throw new UnauthorizedError("Invalid token payload");
+    }
+
+    req.user = payload.sub;
     return next();
   } catch (error) {
-    console.error("Authentication error:", error.message);
-    return res.status(403).json({ error: "Invalid token" });
+    if (error.name === "JsonWebTokenError") {
+      return next(new UnauthorizedError("Invalid token"));
+    }
+    if (error.name === "TokenExpiredError") {
+      return next(new UnauthorizedError("Token expired"));
+    }
+
+    next(error);
   }
 }

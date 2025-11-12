@@ -11,19 +11,19 @@ export async function file_parse_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     if (!id) {
-      throw ValidationError("Id is required");
+      throw new ValidationError("Id is required");
     }
 
     if (!search || !search.trim()) {
-      throw ValidationError("Search not found");
+      throw new ValidationError("Search not found");
     }
 
     if (!searchType || !searchType.trim()) {
-      throw ValidationError("SearchType not found");
+      throw new ValidationError("SearchType not found");
     }
 
     const topKNum = topK ? parseInt(topK, 10) : undefined;

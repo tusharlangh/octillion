@@ -3,15 +3,6 @@ dotenv.config();
 
 const apiKey = process.env.OPENAI_API_KEY;
 
-function parseAIJson(responseText) {
-  const cleaned = responseText
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
-    .trim();
-
-  return JSON.parse(cleaned);
-}
-
 export async function callToChat(
   messages,
   model = "gpt-4o-mini",
@@ -36,7 +27,9 @@ export async function callToChat(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        `OpenAI API error: ${response.status} - ${errorData.error?.message || response.statusText}`
+        `OpenAI API error: ${response.status} - ${
+          errorData.error?.message || response.statusText
+        }`
       );
     }
 
