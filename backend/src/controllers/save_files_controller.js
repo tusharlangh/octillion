@@ -12,19 +12,19 @@ export async function save_files_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     if (!id) {
-      throw ValidationError("Id is required");
+      throw new ValidationError("Id is required");
     }
 
     if (!files) {
-      throw ValidationError("No files uploaded");
+      throw new ValidationError("No files uploaded");
     }
 
     if (files.length > 10) {
-      throw ValidationError("Too many files uploaded", {
+      throw new ValidationError("Too many files uploaded", {
         maxFiles: 10,
         uploadedFiles: files.length,
       });
@@ -33,11 +33,7 @@ export async function save_files_controller(req, res, next) {
     const uploadedUrls = await saveFiles(id, files, userId);
 
     if (!uploadedUrls) {
-      throw new AppError(
-        "Failed to save files",
-        500,
-        "SAVE_FILES_ERROR"
-      );
+      throw new AppError("Failed to save files", 500, "SAVE_FILES_ERROR");
     }
 
     return res.status(201).json({
