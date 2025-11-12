@@ -1,46 +1,46 @@
 import { chat } from "../services/chat.js";
+import {
+  ValidationError,
+  UnauthorizedError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
-export async function get_chat_controller(req, res) {
+export async function get_chat_controller(req, res, next) {
   try {
     const { id, search } = req.query;
     const userId = req.user;
 
+    if (!userId) {
+      throw UnauthorizedError("Authorization required");
+    }
+
     if (!id) {
-      return res.status(400).json({
-        success: false,
-        error: "parse_id (id) is required",
-      });
+      throw ValidationError("Id is required");
     }
 
     if (!search || !search.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: "search query is required",
-      });
+      throw ValidationError("Search not found");
     }
 
     const chatResult = await chat(id, search, userId);
 
     if (!chatResult.success) {
-      return res.status(500).json({
-        success: false,
-        response: null,
-        error: chatResult.error,
-      });
+      throw new AppError(
+        chatResult.error || "Failed to process chat request",
+        500,
+        "CHAT_ERROR"
+      );
     }
 
-    return res.json({
-      success: chatResult.success,
-      response: chatResult.response,
-      metadata: chatResult.metadata,
-      error: null,
+    return res.status(200).json({
+      success: true,
+      data: {
+        response: chatResult.response,
+        metadata: chatResult.metadata,
+      },
+      message: "Received chat response",
     });
   } catch (error) {
-    console.error("Error in get_chat_controller:", error);
-    return res.status(500).json({
-      success: false,
-      response: null,
-      error: "Failed to process chat request",
-    });
+    next(error);
   }
 }

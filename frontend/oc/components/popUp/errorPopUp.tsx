@@ -8,12 +8,14 @@ interface ErrorPopUpProps {
   errorMessage?: string;
   duration?: number;
   onDismiss?: () => void;
+  isHome: boolean;
 }
 
 export default function ErrorPopUp({
   errorMessage = "An unexpected error occurred. Please try again later.",
   duration = 3000,
   onDismiss,
+  isHome = false,
 }: ErrorPopUpProps) {
   const [show, setShow] = useState(true);
 
@@ -36,8 +38,8 @@ export default function ErrorPopUp({
   return (
     <Portal>
       <div
-        className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50
-                   animate-in fade-in slide-in-from-top-4 duration-200"
+        className="fixed top-6 transform left-1/2 -translate-x-1/2 z-50
+                   animate-in fade-in slide-in-from-top-4 duration-200 pl-60"
       >
         <div
           className="bg-white dark:bg-neutral-900 
@@ -48,7 +50,9 @@ export default function ErrorPopUp({
                      gap-2"
         >
           <p className="text-neutral-800 dark:text-neutral-200 text-md font-medium">
-            {errorMessage} returning you back to home
+            {isHome
+              ? errorMessage
+              : errorMessage + " returning you back to home"}
           </p>
           <X
             className="text-neutral-400 dark:text-neutral-500 

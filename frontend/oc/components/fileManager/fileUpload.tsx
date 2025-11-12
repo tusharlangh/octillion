@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import React from "react";
-import { Upload, SendHorizonal } from "lucide-react";
+import { Upload } from "lucide-react";
 
 interface FileUploadProps {
   handleButtonClick: React.MouseEventHandler<HTMLDivElement>;
@@ -75,7 +74,7 @@ export default function FileUpload({
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept=".pdf"
+        accept=".pdf,.doc,.docx,.txt,.md"
         multiple
       />
     </section>

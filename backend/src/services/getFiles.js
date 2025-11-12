@@ -41,5 +41,5 @@ export async function getFiles(id, userId) {
     });
   }
 
-  return urls;
+  return { data: urls, success: true };
 }
