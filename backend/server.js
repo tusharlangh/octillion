@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import routes from "./src/routes/route.js";
 import dotenv from "dotenv";
+import { errorHandler } from "./src/middleware/errorHandler.js";
 
 dotenv.config();
 
@@ -14,6 +15,18 @@ app.use(express.json());
 async function startServer() {
   try {
     app.use("/", routes);
+
+    app.use((req, res) => {
+      res.status(404).json({
+        error: {
+          code: "ROUTE_NOT_FOUND",
+          message: `Cannot ${req.method} ${req.path}`,
+        },
+      });
+    });
+
+    app.use(errorHandler);
+
     app.listen(port, () => {
       console.log("Backend server is running");
     });

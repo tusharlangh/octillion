@@ -1,17 +1,30 @@
 import { getPfp } from "../services/getPfp.js";
+import {
+  ValidationError,
+  UnauthorizedError,
+  AppError,
+} from "../middleware/errorHandler.js";
 
-export async function get_pfp_controller(req, res) {
+export async function get_pfp_controller(req, res, next) {
   try {
     const userId = req.user;
 
     if (!userId) {
-      return res.json({ success: false, data: null });
+      throw UnauthorizedError("Authorization required");
     }
 
     const pfp = await getPfp(userId);
 
-    return res.json({ success: pfp.success, data: pfp.pfp });
+    if (!pfp.success) {
+      throw new AppError(pfp.error || "Failed to get pfp", 500, "PFP_ERROR");
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: pfp.pfp,
+      message: "Received profile picture",
+    });
   } catch (error) {
-    console.error(error);
+    next(error);
   }
 }

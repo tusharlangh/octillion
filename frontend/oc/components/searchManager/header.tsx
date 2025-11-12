@@ -170,6 +170,7 @@ export default function Header({ id }: Props) {
           errorMessage={error}
           onDismiss={() => setError(null)}
           duration={3000}
+          isHome={false}
         />
       )}
     </section>

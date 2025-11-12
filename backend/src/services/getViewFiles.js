@@ -47,5 +47,5 @@ export async function getViewFiles(userId) {
     data[i].name = `Documents ${data.length - i}`;
   }
 
-  return data;
+  return { data: data, success: true };
 }
