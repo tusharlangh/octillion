@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws/s3Client.js";
 import { AppError, NotFoundError } from "../middleware/errorHandler.js";
+import { retry } from "../utils/retry.js";
 
 dotenv.config();
 
@@ -13,19 +14,35 @@ export async function getFiles(id, userId) {
       throw new AppError("User ID is required", 400, "USER_ID_ERROR");
     }
 
-    const { data, error } = await supabase
-      .from("files")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("parse_id", id);
+    const result = await retry(
+      async () => {
+        const { data, error } = await supabase
+          .from("files")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("parse_id", id);
 
-    if (error) {
-      throw new AppError(
-        `Failed to fetch files: ${error.message}`,
-        500,
-        "SUPABASE_ERROR"
-      );
-    }
+        if (error) {
+          throw new AppError(
+            `Failed to fetch files: ${error.message}`,
+            500,
+            "SUPABASE_ERROR"
+          );
+        }
+
+        return data;
+      },
+      {
+        maxRetries: 3,
+        delay: 1000,
+        backoff: 2,
+        onRetry: (error, attempt) => {
+          console.warn(
+            `getFiles: retry attempt ${attempt}/3 for userId: ${userId}, error is: ${error}`
+          );
+        },
+      }
+    );
 
     if (!data || data.length === 0) {
       return { data: [], success: true };
@@ -45,20 +62,36 @@ export async function getFiles(id, userId) {
         continue;
       }
       try {
-        const command = new GetObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME,
-          Key: link.key,
-        });
+        const urlData = await retry(
+          async () => {
+            const command = new GetObjectCommand({
+              Bucket: process.env.S3_BUCKET_NAME,
+              Key: link.key,
+            });
 
-        const url = await getSignedUrl(s3, command, {
-          expiresIn: 60 * 60 * 24 * 1, //1 day
-        });
+            const url = await getSignedUrl(s3, command, {
+              expiresIn: 60 * 60 * 24 * 1, //1 day
+            });
 
-        urls.push({
-          file_name: link.file_name,
-          file_type: link.mimetype,
-          presignedUrl: url,
-        });
+            return {
+              file_name: link.file_name,
+              file_type: link.mimetype,
+              presignedUrl: url,
+            };
+          },
+          {
+            maxRetries: 3,
+            delay: 1000,
+            backoff: 2,
+            onRetry: (error, attempt) => {
+              console.warn(
+                `getFiles: retry attempt ${attempt}/3 for userId: ${userId}, error is: ${error}`
+              );
+            },
+          }
+        );
+
+        urls.push(urlData);
       } catch (s3Error) {
         const errorCode = s3Error?.$metadata?.httpStatusCode || s3Error?.code;
 

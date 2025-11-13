@@ -34,10 +34,7 @@ export async function get_chat_controller(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      data: {
-        response: chatResult.response,
-        metadata: chatResult.metadata,
-      },
+      response: chatResult.response,
       message: "Received chat response",
     });
   } catch (error) {

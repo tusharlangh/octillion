@@ -48,10 +48,7 @@ export async function file_parse_controller(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      data: {
-        searchResults: parsed.searchResults,
-        metadata: parsed.metadata,
-      },
+      searchResults: parsed.searchResults,
       message: "Successfully parsed results",
     });
   } catch (error) {
