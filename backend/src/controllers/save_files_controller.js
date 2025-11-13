@@ -32,10 +32,6 @@ export async function save_files_controller(req, res, next) {
 
     const uploadedUrls = await saveFiles(id, files, userId);
 
-    if (!uploadedUrls) {
-      throw new AppError("Failed to save files", 500, "SAVE_FILES_ERROR");
-    }
-
     return res.status(201).json({
       success: true,
       data: null,
