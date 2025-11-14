@@ -183,6 +183,8 @@ export async function saveFiles(id, files, userId) {
 
           const content = await page.getTextContent();
 
+          console.log(content);
+
           if (!content || !content.items) {
             pagesContent.push({
               id: `${i + 1}.${pageNum}`,
@@ -322,6 +324,9 @@ export async function saveFiles(id, files, userId) {
   try {
     pagesContent = await generateChunks(pagesContent);
   } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
     throw new AppError(`Failed to build chunks`, 500, "FAILED_CHUNKS_ERROR");
   }
 
@@ -513,6 +518,9 @@ async function generateChunks(pagesContent) {
         const chunks = createContextualChunks(page.mapping);
         page.chunks = chunks;
       } catch (error) {
+        if (error.isOperational) {
+          throw error;
+        }
         throw new AppError(
           `Failed generating chunks for page id: ${page.id}`,
           500,
@@ -522,6 +530,9 @@ async function generateChunks(pagesContent) {
     }
     return pagesContent;
   } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
     throw new AppError(`Failed generating chunks`, 500, "FAILED_CHUNKS_ERROR");
   }
 }
