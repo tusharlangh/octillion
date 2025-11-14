@@ -10,7 +10,7 @@ export async function get_pfp_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     const pfp = await getPfp(userId);

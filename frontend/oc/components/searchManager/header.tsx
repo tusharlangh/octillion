@@ -7,6 +7,7 @@ import { queryContext } from "./searchManger";
 import { Search, Home } from "lucide-react";
 import { DM_Sans } from "next/font/google";
 import ErrorPopUp from "../popUp/errorPopUp";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -32,25 +33,42 @@ export default function Header({ id }: Props) {
     context;
 
   const handleSearch = async () => {
-    if (!search.trim()) {
+    if (!search?.trim()) {
+      setError("Search is empty");
       return;
     }
 
+    if (!id) {
+      setError("Id not found");
+      return;
+    }
+
+    if (!searchType) {
+      setError("Search type not selected");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
     try {
-      setIsLoading(true);
+      const jwt = await handleTokenAction();
+      if (!jwt) {
+        throw new Error("Failed to get authentication token");
+      }
+
       const query = new URLSearchParams({
         id: id,
         searchType: searchType,
         search: search.trim(),
       });
-      const jwt = await handleTokenAction();
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/parse-files/?${query}`,
         {
           method: "GET",
           headers: {
-            method: "application/json",
+            "Content-Type": "application/json",
             Authorization: `Bearer ${jwt}`,
           },
         }
@@ -58,19 +76,41 @@ export default function Header({ id }: Props) {
 
       const data = await res.json();
 
-      if (data.success) {
-        console.log("Search results:", data.searchResults);
-        setQuery(data.searchResults);
-        setIsLoading(false);
-      } else {
-        setError(data.error || "An error occurred while searching");
-        setTimeout(() => {
-          router.replace("/");
-        }, 3000);
+      if (!res.ok) {
+        const errorMessage =
+          data.error?.message ||
+          data.error ||
+          getErrorMessageByStatus(res.status);
+
+        console.error("Search failed:", {
+          status: res.status,
+          error: errorMessage,
+          details: data.error?.details,
+        });
+
+        setError(errorMessage);
+
+        if (res.status === 401 || res.status === 403) {
+          setTimeout(() => router.replace("/login"), 2000);
+        }
+
+        return;
       }
+
+      setQuery(data.searchResults || []);
     } catch (error) {
-      setError("An unexpected error occurred. Please try again.");
-      console.error(error);
+      console.error("Search error: ", error);
+
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        setError("Network error. Please check your connection.");
+      } else if (error instanceof Error && error.message.includes("token")) {
+        setError("Authentication failed. Please log in again.");
+        setTimeout(() => router.replace("/login"), 2000);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -170,7 +210,7 @@ export default function Header({ id }: Props) {
           errorMessage={error}
           onDismiss={() => setError(null)}
           duration={3000}
-          isHome={false}
+          isHome={true}
         />
       )}
     </section>

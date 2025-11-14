@@ -1,14 +1,38 @@
 import supabase from "../utils/supabase/client.js";
 import { parse } from "./parse.js";
 import { callToChat } from "../utils/openAi/callToChat.js";
+import { AppError, ValidationError } from "../middleware/errorHandler.js";
 
 function extractPageNumber(pageId) {
-  const parts = pageId.split(".");
-  return parts[1];
+  try {
+    const parts = pageId.split(".");
+    if (parts.length < 2 || !parts[1]) {
+      throw new AppError(
+        "Invalid pageId format",
+        500,
+        "INVALID_PAGE_ID_FORMAT"
+      );
+    }
+
+    return parts[1];
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to extract page number: ${error.message}`,
+      500,
+      "EXTRACT_PAGE_NUMBER_ERROR"
+    );
+  }
 }
 
 async function classifyQuery(query) {
   try {
+    if (!query || typeof query !== "string" || !query.trim()) {
+      throw new ValidationError("Query is required");
+    }
+
     const directQueryPatterns = [
       /^(give me|provide|show me|tell me).*(summary|summarize|overview|overview of|summary of)/i,
       /^(what is|what's).*(this document|this file|this).*(about|contain)/i,
@@ -45,78 +69,186 @@ Respond with ONLY one word: either "search" or "direct".`;
       },
     ];
 
-    const response = await callToChat(messages, "gpt-4o-mini", 0.1, 10);
-    const classification = response.trim().toLowerCase();
+    let response;
+    try {
+      response = await callToChat(messages, "gpt-4o-mini", 0.1, 10);
+    } catch (error) {
+      if (error.isOperational) {
+        throw error;
+      }
+      throw new AppError(
+        `Failed to classify query: ${error.message}`,
+        500,
+        "CLASSIFY_QUERY_ERROR"
+      );
+    }
 
+    if (!response) {
+      throw new AppError(
+        "Invalid classification response",
+        500,
+        "INVALID_CLASSIFICATION_RESPONSE"
+      );
+    }
+
+    const classification = response.trim().toLowerCase();
+    console.log(classification === "direct" ? "direct" : "search");
     return classification === "direct" ? "direct" : "search";
   } catch (error) {
-    console.error("Error classifying query, defaulting to search:", error);
-    return "search";
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to classify query: ${error.message}`,
+      500,
+      "CLASSIFY_QUERY_ERROR"
+    );
   }
 }
 
 function buildContext(searchResults, pagesContent) {
-  if (!searchResults || searchResults.length === 0) {
-    return "No relevant content found.";
-  }
-
-  const pageMap = new Map();
-
-  for (const result of searchResults) {
-    if (!pageMap.has(result.pageId)) {
-      pageMap.set(result.pageId, {
-        pageId: result.pageId,
-        fileName: result.file_name,
-        pageNumber: extractPageNumber(result.pageId),
-        sentences: [],
-      });
+  try {
+    if (!searchResults || searchResults.length === 0) {
+      throw new AppError(
+        "Search results are empty",
+        500,
+        "EMPTY_SEARCH_RESULTS"
+      );
     }
 
-    if (!pageMap.get(result.pageId).sentences.includes(result.sentence)) {
-      pageMap.get(result.pageId).sentences.push(result.sentence);
+    if (!pagesContent) {
+      throw new AppError(
+        "Pages content is invalid",
+        500,
+        "INVALID_PAGES_CONTENT"
+      );
     }
-  }
 
-  const contextParts = [];
+    const pageMap = new Map();
 
-  for (const [pageId, pageData] of pageMap) {
-    const page = pagesContent.find((p) => p.id === pageId);
-    const pageRef = `[${pageData.fileName}, Page ${pageData.pageNumber}]`;
+    for (const result of searchResults) {
+      if (!result || !result.pageId) {
+        continue;
+      }
 
-    if (page) {
-      const content = page.site_content;
-      contextParts.push(`${pageRef}\n${content}`);
-    } else {
-      contextParts.push(`${pageRef}\n${pageData.sentences.join(" ")}`);
+      if (!pageMap.has(result.pageId)) {
+        try {
+          pageMap.set(result.pageId, {
+            pageId: result.pageId,
+            fileName: result.file_name || "Unknown",
+            pageNumber: extractPageNumber(result.pageId),
+            sentences: [],
+          });
+        } catch (error) {
+          continue;
+        }
+      }
+
+      if (
+        result.sentence &&
+        !pageMap.get(result.pageId).sentences.includes(result.sentence)
+      ) {
+        pageMap.get(result.pageId).sentences.push(result.sentence);
+      }
     }
-  }
 
-  return contextParts.join("\n\n");
+    if (pageMap.size === 0) {
+      throw new AppError(
+        "No valid pages found in search results",
+        500,
+        "NO_VALID_PAGES"
+      );
+    }
+
+    const contextParts = [];
+
+    for (const [pageId, pageData] of pageMap) {
+      const page = pagesContent.find((p) => p && p.id === pageId);
+      const pageRef = `[${pageData.fileName}, Page ${pageData.pageNumber}]`;
+
+      if (page && page.site_content) {
+        contextParts.push(`${pageRef}\n${page.site_content}`);
+      } else if (pageData.sentences.length > 0) {
+        contextParts.push(`${pageRef}\n${pageData.sentences.join(" ")}`);
+      }
+    }
+
+    if (contextParts.length === 0) {
+      throw new AppError(
+        "No context content available",
+        500,
+        "NO_CONTEXT_CONTENT"
+      );
+    }
+
+    return contextParts.join("\n\n");
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to build context: ${error.message}`,
+      500,
+      "BUILD_CONTEXT_ERROR"
+    );
+  }
 }
 
 function buildFullContext(pagesContent) {
-  if (!pagesContent || pagesContent.length === 0) {
-    return "No document content found.";
-  }
-
-  const contextParts = [];
-
-  for (const page of pagesContent) {
-    const fileName = page.file_name || "Document";
-    const pageNumber = extractPageNumber(page.id);
-    const pageRef = `[${fileName}, Page ${pageNumber}]`;
-
-    if (page.site_content) {
-      contextParts.push(`${pageRef}\n${page.site_content}`);
+  try {
+    if (!pagesContent || pagesContent.length === 0) {
+      throw new AppError("Pages content is empty", 500, "EMPTY_PAGES_CONTENT");
     }
-  }
 
-  return contextParts.join("\n\n");
+    const contextParts = [];
+
+    for (const page of pagesContent) {
+      if (!page || !page.id) {
+        continue;
+      }
+
+      try {
+        const fileName = page.file_name || "Document";
+        const pageNumber = extractPageNumber(page.id);
+        const pageRef = `[${fileName}, Page ${pageNumber}]`;
+
+        if (page.site_content) {
+          contextParts.push(`${pageRef}\n${page.site_content}`);
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    if (contextParts.length === 0) {
+      throw new AppError(
+        "No document content found",
+        500,
+        "NO_DOCUMENT_CONTENT"
+      );
+    }
+
+    return contextParts.join("\n\n");
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to build full context: ${error.message}`,
+      500,
+      "BUILD_FULL_CONTEXT_ERROR"
+    );
+  }
 }
 
 function createSystemPrompt(queryType = "search") {
-  if (queryType === "direct") {
-    return `You are a helpful document assistant that provides comprehensive answers based on the full document context.
+  try {
+    if (!queryType || typeof queryType !== "string") {
+      throw new AppError("Invalid query type", 500, "INVALID_QUERY_TYPE");
+    }
+
+    if (queryType === "direct") {
+      return `You are a helpful document assistant that provides comprehensive answers based on the full document context.
 
 Core Rules:
 - Provide thorough, well-structured answers based on all provided document content
@@ -147,9 +279,9 @@ Based on the document [Document.pdf, Page 1-5], the main topics covered are:
 - **Topic 3**: Additional information
 
 The document emphasizes **key concept** and provides data showing \`42% increase\`."`;
-  }
+    }
 
-  return `You are a precise document assistant. Answer questions using only the provided context.
+    return `You are a precise document assistant. Answer questions using only the provided context.
 
 Core Rules:
 - Give direct answers without preamble
@@ -182,10 +314,32 @@ Key changes:
 - Marketing: \`$50K\` (+15%)
 - Operations: \`$120K\` (+5%)
 - R&D: \`$80K\` (unchanged)"`;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to create system prompt: ${error.message}`,
+      500,
+      "CREATE_SYSTEM_PROMPT_ERROR"
+    );
+  }
 }
 
 export async function chat(id, search, userId) {
   try {
+    if (!id || typeof id !== "string") {
+      throw new ValidationError("Parse ID is required");
+    }
+
+    if (!search || typeof search !== "string" || !search.trim()) {
+      throw new ValidationError("Search query is required");
+    }
+
+    if (!userId || typeof userId !== "string") {
+      throw new ValidationError("User ID is required");
+    }
+
     const { data, error } = await supabase
       .from("files")
       .select("*")
@@ -193,96 +347,140 @@ export async function chat(id, search, userId) {
       .eq("parse_id", id);
 
     if (error) {
-      return {
-        success: false,
-        response: null,
-        error: `Failed to extract files: ${error.message}`,
-      };
+      throw new AppError(
+        `Failed to fetch files: ${error.message}`,
+        500,
+        "SUPABASE_ERROR"
+      );
     }
 
     if (!data || data.length === 0) {
-      return {
-        success: false,
-        response: null,
-        error: "No files found for the given ID",
-      };
+      throw new AppError(
+        "No files found for the given parse ID",
+        404,
+        "NO_FILES_FOUND"
+      );
     }
 
     const fileData = data[0];
+
+    if (!fileData) {
+      throw new AppError("Invalid file data", 500, "INVALID_FILE_DATA");
+    }
+
     const pagesContent = fileData.pages_metadata;
 
     if (!pagesContent || pagesContent.length === 0) {
-      return {
-        success: false,
-        response: null,
-        error: "No pages found in the document",
-      };
+      throw new AppError(
+        "Pages metadata is empty",
+        500,
+        "EMPTY_PAGES_METADATA"
+      );
     }
 
-    const queryType = await classifyQuery(search);
+    let queryType;
+    try {
+      queryType = await classifyQuery(search);
+    } catch (error) {
+      if (error.isOperational) {
+        throw error;
+      }
+      throw new AppError(
+        `Failed to classify query: ${error.message}`,
+        500,
+        "CLASSIFY_QUERY_ERROR"
+      );
+    }
+
+    if (!queryType || (queryType !== "direct" && queryType !== "search")) {
+      throw new AppError("Invalid query type", 500, "INVALID_QUERY_TYPE");
+    }
+
     let context;
-    let sources = [];
-    let searchResultsCount = 0;
-    let pagesUsed = 0;
 
     if (queryType === "direct") {
-      context = buildFullContext(pagesContent);
-      pagesUsed = pagesContent.length;
-
-      const sourcesMap = new Map();
-      for (const page of pagesContent) {
-        const fileName = page.file_name || "Document";
-        if (!sourcesMap.has(fileName)) {
-          sourcesMap.set(fileName, {
-            id: page.id,
-            name: fileName,
-            pageId: page.id,
-          });
+      try {
+        context = buildFullContext(pagesContent);
+      } catch (error) {
+        if (error.isOperational) {
+          throw error;
         }
+        throw new AppError(
+          `Failed to build full context: ${error.message}`,
+          500,
+          "BUILD_FULL_CONTEXT_ERROR"
+        );
       }
-      sources = Array.from(sourcesMap.values());
     } else {
-      const searchResults = await parse(id, search, userId, {
-        searchMode: "hybrid",
-        topK: 7,
-      });
+      let searchResults;
+      try {
+        searchResults = await parse(id, search, userId, {
+          searchMode: "hybrid",
+          topK: 7,
+        });
+      } catch (error) {
+        if (error.isOperational) {
+          throw error;
+        }
+        throw new AppError(
+          `Failed to parse search: ${error.message}`,
+          500,
+          "PARSE_SEARCH_ERROR"
+        );
+      }
 
       if (
+        !searchResults ||
         !searchResults.success ||
         !searchResults.searchResults ||
         searchResults.searchResults.length === 0
       ) {
-        return {
-          success: false,
-          response: null,
-          error: searchResults.error || "No search results found",
-        };
+        throw new AppError("No search results found", 404, "NO_SEARCH_RESULTS");
       }
 
       const uniquePageIds = new Set();
       for (const result of searchResults.searchResults) {
-        uniquePageIds.add(result.pageId);
-      }
-
-      const matchedPages = pagesContent.filter((page) =>
-        uniquePageIds.has(page.id)
-      );
-
-      context = buildContext(searchResults.searchResults, matchedPages);
-      pagesUsed = matchedPages.length;
-      searchResultsCount = searchResults.searchResults.length;
-
-      const sourcesMap = new Map();
-      for (const result of searchResults.searchResults) {
-        if (!sourcesMap.has(result.file_name)) {
-          sourcesMap.set(result.file_name, {
-            id: result.pageId,
-            name: result.file_name,
-            pageId: result.pageId,
-          });
+        if (result && result.pageId) {
+          uniquePageIds.add(result.pageId);
         }
       }
-      sources = Array.from(sourcesMap.values());
+
+      if (uniquePageIds.size === 0) {
+        throw new AppError(
+          "No valid page IDs in search results",
+          500,
+          "NO_VALID_PAGE_IDS"
+        );
+      }
+
+      const matchedPages = pagesContent.filter(
+        (page) => page && page.id && uniquePageIds.has(page.id)
+      );
+
+      if (matchedPages.length === 0) {
+        throw new AppError("No matching pages found", 404, "NO_MATCHING_PAGES");
+      }
+
+      try {
+        context = buildContext(searchResults.searchResults, matchedPages);
+      } catch (error) {
+        if (error.isOperational) {
+          throw error;
+        }
+        throw new AppError(
+          `Failed to build context: ${error.message}`,
+          500,
+          "BUILD_CONTEXT_ERROR"
+        );
+      }
+    }
+
+    if (!context || typeof context !== "string" || !context.trim()) {
+      throw new AppError(
+        "Failed to generate context",
+        500,
+        "CONTEXT_GENERATION_ERROR"
+      );
     }
 
     const messages = [
@@ -299,30 +497,37 @@ export async function chat(id, search, userId) {
     const temperature = queryType === "direct" ? 0.4 : 0.3;
     const maxTokens = queryType === "direct" ? 1200 : 800;
 
-    const aiResponse = await callToChat(
-      messages,
-      "gpt-4o-mini",
-      temperature,
-      maxTokens
-    );
+    let aiResponse;
+    try {
+      aiResponse = await callToChat(
+        messages,
+        "gpt-4o-mini",
+        temperature,
+        maxTokens
+      );
+    } catch (error) {
+      if (error.isOperational) {
+        throw error;
+      }
+      throw new AppError(
+        `Failed to get AI response: ${error.message}`,
+        500,
+        "AI_RESPONSE_ERROR"
+      );
+    }
+
+    if (!aiResponse || typeof aiResponse !== "string") {
+      throw new AppError("Invalid AI response", 500, "INVALID_AI_RESPONSE");
+    }
 
     return {
       success: true,
       response: aiResponse,
-      error: null,
-      metadata: {
-        sources: sources,
-        searchResultsCount: searchResultsCount,
-        pagesUsed: pagesUsed,
-        queryType: queryType,
-      },
     };
   } catch (error) {
-    console.error("Error in chat function:", error);
-    return {
-      success: false,
-      response: null,
-      error: error.message || "An unexpected error occurred",
-    };
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(`Chat error: ${error.message}`, 500, "CHAT_ERROR");
   }
 }

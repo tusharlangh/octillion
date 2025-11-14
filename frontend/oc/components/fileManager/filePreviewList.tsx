@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import FileUploadLoading from "./fileUploadLoading";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import ErrorPopUp from "../popUp/errorPopUp";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
@@ -39,36 +40,27 @@ export default function FilePreviewList({
   };
 
   const sendPdf = async () => {
-    setError(null);
-
     if (selectedFiles.length === 0) {
       setError("Please select at least one file to upload.");
       return;
     }
 
     if (selectedFiles.length > 10) {
-      setError("Too many files uploaded. Maximum 10 files allowed.");
+      setError("Maximum 10 files allowed.");
       return;
     }
 
-    const formData = new FormData();
-    const id = crypto.randomUUID();
+    setError(null);
+    setLoading(true);
 
     try {
-      setLoading(true);
-
-      let jwt: string | undefined;
-      try {
-        jwt = await handleTokenAction();
-        if (!jwt) {
-          throw new Error("Failed to get authentication token");
-        }
-      } catch (tokenError) {
-        console.error("Token error:", tokenError);
-        setError("Authentication failed. Please try logging in again.");
-        setLoading(false);
-        return;
+      const jwt = await handleTokenAction();
+      if (!jwt) {
+        throw new Error("Failed to get authentication token");
       }
+
+      const formData = new FormData();
+      const id = crypto.randomUUID();
 
       formData.append("id", id);
       selectedFiles.forEach((file) => formData.append("files", file));
@@ -81,77 +73,42 @@ export default function FilePreviewList({
         },
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        let errorMessage = "Failed to upload files. Please try again.";
-
-        try {
-          const errorData = await res.json();
-          if (errorData.error?.message) {
-            errorMessage = errorData.error.message;
-          } else if (errorData.error) {
-            errorMessage =
-              typeof errorData.error === "string"
-                ? errorData.error
-                : errorMessage;
-          }
-        } catch (parseError) {
-          if (res.status === 401 || res.status === 403) {
-            errorMessage = "Authentication failed. Please log in again.";
-          } else if (res.status === 400) {
-            errorMessage = "Invalid request. Please check your files.";
-          } else if (res.status === 413) {
-            errorMessage = "File size too large. Please upload smaller files.";
-          } else if (res.status >= 500) {
-            errorMessage =
-              "Server error. Please try again later or contact support.";
-          }
-        }
-
-        console.error("Upload failed:", {
-          status: res.status,
-          statusText: res.statusText,
-          error: errorMessage,
-        });
-
-        setError(errorMessage);
-        setLoading(false);
-        return;
-      }
-
-      let data;
-      try {
-        data = await res.json();
-      } catch (jsonError) {
-        console.error("Failed to parse response:", jsonError);
-        setError("Received invalid response from server. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      if (!data.success) {
         const errorMessage =
           data.error?.message ||
           data.error ||
-          "Failed to upload files. Please try again.";
+          getErrorMessageByStatus(res.status);
 
-        console.error("API error:", {
-          code: data.error?.code,
-          message: errorMessage,
+        console.error("Upload failed:", {
+          status: res.status,
+          error: errorMessage,
           details: data.error?.details,
         });
 
         setError(errorMessage);
-        setLoading(false);
+
+        if (res.status === 401 || res.status === 403) {
+          setTimeout(() => router.replace("/login"), 2000);
+        }
+
         return;
       }
 
       router.push(`/search/${id}`);
     } catch (error) {
-      console.error("Unexpected error during file upload:", error);
+      console.error("Upload error:", error);
 
-      let errorMessage = "An unexpected error occurred. Please try again.";
-
-      setError(errorMessage);
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        setError("Network error. Please check your connection.");
+      } else if (error instanceof Error && error.message.includes("token")) {
+        setError("Authentication failed. Please log in again.");
+        setTimeout(() => router.replace("/login"), 2000);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
       setLoading(false);
     }
   };
