@@ -74,7 +74,7 @@ export default function FileUpload({
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
-        accept=".pdf,.doc,.docx,.txt,.md"
+        accept=".pdf"
         multiple
       />
     </section>

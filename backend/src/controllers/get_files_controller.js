@@ -11,11 +11,11 @@ export async function get_files_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     if (!id) {
-      throw ValidationError("Id is required");
+      throw new ValidationError("Id is required");
     }
 
     const files = await getFiles(id, userId);

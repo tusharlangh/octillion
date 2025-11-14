@@ -6,7 +6,7 @@ export async function get_view_files_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     const data = await getViewFiles(userId);

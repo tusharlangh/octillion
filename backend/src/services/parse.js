@@ -4,21 +4,38 @@ import dotenv from "dotenv";
 import { OptimizedKeywordIndex } from "../utils/OptimizedKeywordIndex.js";
 import { searchQdrant } from "./qdrantService.js";
 import { MinHeap } from "../utils/MinHeap.js";
+import {
+  AppError,
+  ValidationError,
+  NotFoundError,
+} from "../middleware/errorHandler.js";
+import { SearchRewrite } from "./searchRewrite.js";
 
 dotenv.config();
 
 let embeddingPipeline = null;
 
 async function loadEmbeddingModel() {
-  if (embeddingPipeline) return embeddingPipeline;
+  try {
+    if (embeddingPipeline) return embeddingPipeline;
 
-  console.log("Loading embedding model...");
-  embeddingPipeline = await pipeline(
-    "feature-extraction",
-    "Xenova/all-MiniLM-L6-v2"
-  );
-  console.log("Model loaded successfully");
-  return embeddingPipeline;
+    console.log("Loading embedding model...");
+    embeddingPipeline = await pipeline(
+      "feature-extraction",
+      "Xenova/all-MiniLM-L6-v2"
+    );
+    console.log("Model loaded successfully");
+    return embeddingPipeline;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to load model: ${error.message}`,
+      500,
+      "FAILED_MODEL_LOADING_ERROR"
+    );
+  }
 }
 
 export async function generateEmbedding(text) {
@@ -32,10 +49,24 @@ export async function generateEmbedding(text) {
       normalize: true,
     });
 
+    if (!output || !output.data) {
+      throw new AppError(
+        "Invalid embedding output",
+        500,
+        "INVALID_EMBEDDING_OUTPUT"
+      );
+    }
+
     return Array.from(output.data);
   } catch (error) {
-    console.error("Error generating embedding:", error);
-    throw new Error(`Failed to generate embedding: ${error.message}`);
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to generate embedding: ${error.message}`,
+      500,
+      "FAILED_EMBEDDING_ERROR"
+    );
   }
 }
 
@@ -44,55 +75,72 @@ export function createContextualChunks(
   chunkSizeInWords = 80,
   overlapWords = 20
 ) {
-  const chunks = [];
-  let currentWords = [];
-  let currentYRange = [];
+  if (!sortedMapping || sortedMapping.length === 0) {
+    return "";
+  }
 
-  for (const [y, row] of sortedMapping) {
-    const words = row.map((w) => w.word);
+  try {
+    const chunks = [];
+    let currentWords = [];
+    let currentYRange = [];
 
-    currentWords.push(...words);
-    currentYRange.push(y);
+    for (const [y, row] of sortedMapping) {
+      const words = row.map((w) => w.word);
 
-    if (currentWords.length >= chunkSizeInWords) {
-      const chunkText = currentWords.join(" ");
+      if (!words || words.length === 0) continue;
 
+      currentWords.push(...words);
+      currentYRange.push(y);
+
+      if (currentWords.length >= chunkSizeInWords) {
+        const chunkText = currentWords.join(" ");
+
+        chunks.push({
+          text: chunkText,
+          startY: currentYRange[0],
+          endY: currentYRange[currentYRange.length - 1],
+          wordCount: currentWords.length,
+        });
+
+        currentWords = currentWords.slice(-overlapWords);
+        currentYRange = currentYRange.slice(-overlapWords);
+      }
+    }
+
+    if (currentWords.length > 30) {
       chunks.push({
-        text: chunkText,
+        text: currentWords.join(" "),
         startY: currentYRange[0],
         endY: currentYRange[currentYRange.length - 1],
         wordCount: currentWords.length,
       });
-
-      currentWords = currentWords.slice(-overlapWords);
-      currentYRange = currentYRange.slice(-overlapWords);
     }
-  }
 
-  if (currentWords.length > 30) {
-    chunks.push({
-      text: currentWords.join(" "),
-      startY: currentYRange[0],
-      endY: currentYRange[currentYRange.length - 1],
-      wordCount: currentWords.length,
-    });
-  }
+    return chunks;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
 
-  return chunks;
+    throw new AppError("Failed building chunks", 500, "BUILDING_CHUNKS_ERROR");
+  }
 }
 
 export async function parse(id, search, userId, options = {}) {
   const { searchMode, topK = 10 } = options;
 
-  if (!search || !search.trim()) {
-    return {
-      success: true,
-      searchResults: [],
-      error: `failed since the search is empty`,
-    };
-  }
-
   try {
+    let searchRewrite = new SearchRewrite(search);
+    search = searchRewrite.process();
+
+    if (!search || search.length === 0) {
+      throw new AppError(
+        "Rewriting search came out empty",
+        500,
+        "REWRITE_SEARCH_ERROR"
+      );
+    }
+
     const { data, error } = await supabase
       .from("files")
       .select("*")
@@ -100,324 +148,405 @@ export async function parse(id, search, userId, options = {}) {
       .eq("parse_id", id);
 
     if (error) {
-      console.error("Database error:", error);
-      return {
-        success: false,
-        searchResults: [],
-        error: `failed extracting files: ${error.message}`,
-      };
+      throw new AppError(
+        `Failed to fetch files: ${error.message}`,
+        500,
+        "SUPABASE_ERROR"
+      );
     }
 
     if (!data || data.length === 0) {
       return {
-        success: false,
+        success: true,
         searchResults: [],
-        error: "No files found for the given ID",
       };
     }
 
     const d = data[0];
+
+    if (!d || !d.pages_metadata || !d.inverted_index || !d.build_index) {
+      throw new AppError(
+        "Invalid or incomplete data row",
+        500,
+        "INVALID_DATA_ROW"
+      );
+    }
+
     const pagesContent = d.pages_metadata;
     const inverted = d.inverted_index;
     const buildIndex = d.build_index;
 
     if (!pagesContent || pagesContent.length === 0) {
-      return {
-        success: true,
-        searchResults: [],
-        error: "No pages found in the document",
-      };
+      throw new AppError("Pages content is empty", 500, "EMPTY_PAGES_CONTENT");
+    }
+
+    if (
+      !inverted ||
+      typeof inverted !== "object" ||
+      Object.keys(inverted).length === 0
+    ) {
+      throw new AppError(
+        "Inverted index is empty or invalid",
+        500,
+        "EMPTY_INVERTED_INDEX"
+      );
+    }
+
+    if (
+      !buildIndex ||
+      typeof buildIndex !== "object" ||
+      Object.keys(buildIndex).length === 0
+    ) {
+      throw new AppError(
+        "Build index is empty or invalid",
+        500,
+        "EMPTY_BUILD_INDEX"
+      );
     }
 
     let searchResults;
     let topPages;
-    if (searchMode === "hybrid") {
-      const [semanticResults, keywordResults] = await Promise.all([
-        (async () => {
-          let queryEmbedding = await generateEmbedding(search);
-          const results = await searchQdrant(id, userId, queryEmbedding, {
-            topK: topK * 2,
-            scoreThreshold: 0.2,
+
+    try {
+      if (searchMode === "hybrid") {
+        try {
+          const [semanticResults, keywordResults] = await Promise.all([
+            (async () => {
+              try {
+                let queryEmbedding = await generateEmbedding(search);
+
+                if (!queryEmbedding || queryEmbedding.length === 0) {
+                  return [];
+                }
+
+                const results = await searchQdrant(id, userId, queryEmbedding, {
+                  topK: topK * 2,
+                  scoreThreshold: 0.2,
+                });
+
+                if (!results || results.length === 0) {
+                  return [];
+                }
+
+                return results;
+              } catch (error) {
+                if (error.isOperational) {
+                  throw error;
+                }
+                throw new AppError(
+                  `Semantic search failed: ${error.message}`,
+                  500,
+                  "SEMANTIC_SEARCH_ERROR"
+                );
+              }
+            })(),
+            (async () => {
+              try {
+                const scores = await searchContent(
+                  pagesContent,
+                  inverted,
+                  search
+                );
+
+                if (Object.keys(scores || {}).length === 0) {
+                  return [];
+                }
+                const topPages = Object.entries(scores)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, topK * 2)
+                  .map(([id]) => id);
+
+                const results = searchBuildIndex(
+                  buildIndex,
+                  search,
+                  pagesContent,
+                  topPages
+                );
+
+                if (results.length === 0) {
+                  return [];
+                }
+
+                return results.map((result) => ({
+                  ...result,
+                  score: scores[result.pageId],
+                  startY: result.y,
+                  endY: result.y,
+                }));
+              } catch (error) {
+                if (error.isOperational) {
+                  throw error;
+                }
+                throw new AppError(
+                  `Keyword search failed: ${error.message}`,
+                  500,
+                  "KEYWORD_SEARCH_ERROR"
+                );
+              }
+            })(),
+          ]);
+
+          if (semanticResults.length === 0 && keywordResults.length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+
+          const normalize = (x, min, max) => {
+            const range = max - min;
+            if (range === 0) return 0.5;
+            return (x - min) / range;
+          };
+
+          const getMinMax = (arr) => {
+            if (arr.length === 0) return { min: 0, max: 1 };
+            const scores = arr.map((item) => item.score || 0);
+            return {
+              min: Math.min(...scores),
+              max: Math.max(...scores),
+            };
+          };
+
+          const semanticRange = getMinMax(semanticResults);
+          const keywordRange = getMinMax(keywordResults);
+
+          semanticResults.forEach((item) => {
+            item.score = normalize(
+              item.score || 0,
+              semanticRange.min,
+              semanticRange.max
+            );
+            item.source = "semantic";
           });
 
-          //console.log("sematic scores are: ", results);
-          return results;
-        })(),
-        (async () => {
-          const scores = await searchContent(pagesContent, inverted, search);
+          keywordResults.forEach((item) => {
+            item.score = normalize(
+              item.score || 0,
+              keywordRange.min,
+              keywordRange.max
+            );
+            item.source = "keyword";
+          });
 
-          if (Object.keys(scores || {}).length === 0) {
-            return [];
+          const resultMap = new Map();
+
+          for (const result of semanticResults) {
+            const key = `${result.pageId}-${result.startY}-${result.endY}`;
+            resultMap.set(key, result);
           }
-          const topPages = Object.entries(scores)
+
+          for (const result of keywordResults) {
+            const key = `${result.pageId}-${result.startY}-${result.endY}`;
+
+            if (resultMap.has(key)) {
+              const existing = resultMap.get(key);
+              existing.score = (existing.score + result.score) / 2;
+            } else {
+              resultMap.set(key, result);
+            }
+          }
+
+          const heap = new MinHeap(topK);
+          for (const result of resultMap.values()) {
+            heap.push(result);
+          }
+
+          if (!heap) {
+            throw new AppError(
+              "Failed to create heap",
+              500,
+              "HEAP_CREATION_ERROR"
+            );
+          }
+
+          searchResults = heap.toArray();
+
+          if (!searchResults || searchResults.length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+
+          return {
+            success: true,
+            searchResults,
+            metadata: {
+              searchMode,
+              totalResults: searchResults.length,
+              semanticCount: semanticResults.length,
+              keywordCount: keywordResults.length,
+              uniqueResults: resultMap.size,
+            },
+          };
+        } catch (error) {
+          if (error.isOperational) {
+            throw error;
+          }
+          throw new AppError(
+            `Hybrid search failed: ${error.message}`,
+            500,
+            "FAILED_HYBRID_SEARCH_ERROR"
+          );
+        }
+      } else if (searchMode === "semantic") {
+        try {
+          let queryEmbedding = await generateEmbedding(search);
+
+          if (!queryEmbedding || queryEmbedding.length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+
+          searchResults = await searchQdrant(id, userId, queryEmbedding, {
+            topK: topK,
+            scoreThreshold: 0.3,
+          });
+
+          if (searchResults.length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+        } catch (error) {
+          if (error.isOperational) {
+            throw error;
+          }
+          throw new AppError(
+            `Semantic search failed: ${error.message}`,
+            500,
+            "FAILED_SEMANTIC_SEARCH_ERROR"
+          );
+        }
+      } else if (searchMode === "tfidf") {
+        try {
+          const scores = await searchContent(pagesContent, inverted, search);
+          topPages = Object.entries(scores)
             .sort(([, a], [, b]) => b - a)
-            .slice(0, topK * 2)
+            .slice(0, topK)
             .map(([id]) => id);
 
-          const results = searchBuildIndex(
+          if (Object.keys(scores || {}).length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+
+          searchResults = searchBuildIndex(
             buildIndex,
             search,
             pagesContent,
             topPages
           );
 
-          return results.map((result) => ({
-            ...result,
-            score: scores[result.pageId],
-            startY: result.y,
-            endY: result.y,
-          }));
-        })(),
-      ]);
-
-      if (semanticResults.length === 0 && keywordResults.length === 0) {
-        return {
-          success: true,
-          searchResults: [],
-          error: "No results found",
-        };
-      }
-
-      const normalize = (x, min, max) => {
-        const range = max - min;
-        if (range === 0) return 0.5;
-        return (x - min) / range;
-      };
-
-      const getMinMax = (arr) => {
-        if (arr.length === 0) return { min: 0, max: 1 };
-        const scores = arr.map((item) => item.score);
-        return {
-          min: Math.min(...scores),
-          max: Math.max(...scores),
-        };
-      };
-
-      const semanticRange = getMinMax(semanticResults);
-      const keywordRange = getMinMax(keywordResults);
-
-      semanticResults.forEach((item) => {
-        item.score = normalize(
-          item.score,
-          semanticRange.min,
-          semanticRange.max
-        );
-        item.source = "semantic";
-      });
-
-      keywordResults.forEach((item) => {
-        item.score = normalize(item.score, keywordRange.min, keywordRange.max);
-        item.source = "keyword";
-      });
-
-      const resultMap = new Map();
-
-      for (const result of semanticResults) {
-        const key = `${result.pageId}-${result.startY}-${result.endY}`;
-        resultMap.set(key, result);
-      }
-
-      for (const result of keywordResults) {
-        const key = `${result.pageId}-${result.startY}-${result.endY}`;
-
-        if (resultMap.has(key)) {
-          const existing = resultMap.get(key);
-          existing.score = (existing.score + result.score) / 2;
-        } else {
-          resultMap.set(key, result);
+          if (!searchResults || searchResults.length === 0) {
+            return {
+              success: true,
+              searchResults: [],
+            };
+          }
+        } catch (error) {
+          if (error.isOperational) {
+            throw error;
+          }
+          throw new AppError(
+            `Keyword search failed: ${error.message}`,
+            500,
+            "FAILED_KEYWORD_SEARCH_ERROR"
+          );
         }
       }
-
-      const heap = new MinHeap(topK);
-      for (const result of resultMap.values()) {
-        heap.push(result);
+    } catch (error) {
+      if (error.isOperational) {
+        throw error;
       }
-
-      searchResults = heap.toArray();
-
-      return {
-        success: true,
-        searchResults,
-        error: null,
-        metadata: {
-          searchMode,
-          totalResults: searchResults.length,
-          semanticCount: semanticResults.length,
-          keywordCount: keywordResults.length,
-          uniqueResults: resultMap.size,
-        },
-      };
-    } else if (searchMode === "semantic") {
-      let queryEmbedding;
-      try {
-        queryEmbedding = await generateEmbedding(search);
-      } catch (error) {
-        console.error("Error generating query embedding:", error);
-        return {
-          success: false,
-          searchResults: [],
-          error: `Failed to generate query embedding: ${error.message}`,
-        };
-      }
-
-      try {
-        searchResults = await searchQdrant(id, userId, queryEmbedding, {
-          topK: topK,
-          scoreThreshold: 0.3,
-        });
-
-        if (searchResults.length === 0) {
-          return {
-            success: true,
-            searchResults: [],
-            error: "No results found in Qdrant",
-          };
-        }
-
-        console.log(`Found ${searchResults.length} results from Qdrant`);
-      } catch (error) {
-        console.error("Qdrant search failed:", error);
-        return {
-          success: false,
-          searchResults: [],
-          error: `Qdrant search failed: ${error.message}`,
-        };
-      }
-    } else if (searchMode === "tfidf") {
-      const scores = await searchContent(pagesContent, inverted, search);
-      topPages = Object.entries(scores)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, topK)
-        .map(([id]) => id);
-
-      if (Object.keys(scores || {}).length === 0) {
-        return {
-          success: true,
-          searchResults: [],
-          error: "No results found",
-        };
-      }
-
-      searchResults = searchBuildIndex(
-        buildIndex,
-        search,
-        pagesContent,
-        topPages
+      throw new AppError(
+        `Failed searching: ${error.message}`,
+        500,
+        "FAILED_SEARCH_ERROR"
       );
-    } else {
-      return {
-        success: false,
-        searchResults: [],
-        error: `Invalid search mode: ${searchMode}`,
-      };
     }
 
     if (!searchResults || searchResults.length === 0) {
       return {
         success: true,
         searchResults: [],
-        error: "search yielded no results",
       };
     }
 
     return {
       success: true,
       searchResults,
-      error: null,
-      metadata: {
-        searchMode,
-        totalResults: searchResults.length,
-        topPages: topPages || [],
-      },
     };
   } catch (error) {
-    console.error("Unexpected error in parse function:", error);
-    return {
-      success: false,
-      searchResults: [],
-      error: `Unexpected error: ${error.message}`,
-    };
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(`System error: ${error.message}`, 500, "SYSTEM_ERROR");
   }
 }
 
 function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
-  const terms = searchTerms.toLowerCase().split(/\s+/);
-  const pageSet = new Set(topPageIds);
-  const sentenceMap = new Map();
-  const pageMappings = new Map();
+  try {
+    const terms = searchTerms.toLowerCase().split(/\s+/);
+    const pageSet = new Set(topPageIds);
+    const sentenceMap = new Map();
+    const pageMappings = new Map();
 
-  for (let page of pagesContent) {
-    if (pageSet.has(page.id)) {
-      pageMappings.set(page.id, new Map(page.mapping));
-    }
-  }
-
-  const isOptimizedFormat =
-    buildIndex.prefixIndex !== undefined ||
-    buildIndex.suffixIndex !== undefined ||
-    buildIndex.ngramIndex !== undefined;
-
-  if (isOptimizedFormat) {
-    const index = OptimizedKeywordIndex.fromJSON(buildIndex);
-
-    for (const term of terms) {
-      const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
-      if (!normalizedTerm) continue;
-
-      const matches = index.search(normalizedTerm, "all");
-
-      for (const [word, pageId, y] of matches) {
-        if (!pageSet.has(pageId)) continue;
-
-        const mapping = pageMappings.get(pageId);
-        if (!mapping) continue;
-
-        const row = mapping.get(y);
-        if (!row) continue;
-
-        const key = `${pageId}-${y}`;
-        if (!sentenceMap.has(key)) {
-          sentenceMap.set(key, {
-            file_name:
-              pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
-            pageId: pageId,
-            y: y,
-            sentence: row.map((w) => w.word).join(" "),
-          });
+    for (let page of pagesContent) {
+      if (!page || !page.id) {
+        continue;
+      }
+      if (pageSet.has(page.id)) {
+        if (!page.mapping) {
+          continue;
         }
+        pageMappings.set(page.id, new Map(page.mapping));
       }
     }
-  } else {
-    // Legacy format - backward compatibility
-    for (const term of terms) {
-      const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
-      const firstChar = normalizedTerm[0]?.toLowerCase();
-      if (!firstChar) continue;
 
-      // Handle both old object format and array format
-      const positions = buildIndex[firstChar] || [];
+    const isOptimizedFormat =
+      buildIndex.prefixIndex !== undefined ||
+      buildIndex.suffixIndex !== undefined ||
+      buildIndex.ngramIndex !== undefined;
 
-      for (const pos of positions) {
-        // Handle both old format {word, pageId, y} and new format [word, pageId, y]
-        const word = Array.isArray(pos) ? pos[0] : pos.word;
-        const pageId = Array.isArray(pos) ? pos[1] : pos.pageId;
-        const y = Array.isArray(pos) ? pos[2] : pos.y;
+    if (isOptimizedFormat) {
+      let index;
+      try {
+        index = OptimizedKeywordIndex.fromJSON(buildIndex);
+      } catch (error) {
+        throw new AppError(
+          `Failed to parse optimized index: ${error.message}`,
+          500,
+          "INDEX_PARSE_ERROR"
+        );
+      }
 
-        if (!pageSet.has(pageId)) continue;
+      for (const term of terms) {
+        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        if (!normalizedTerm) continue;
 
-        const mapping = pageMappings.get(pageId);
-        if (!mapping) continue;
+        let matches;
+        try {
+          matches = index.search(normalizedTerm, "all");
+        } catch (error) {
+          continue;
+        }
 
-        const row = mapping.get(y);
-        if (!row) continue;
+        for (const [word, pageId, y] of matches) {
+          if (!pageSet.has(pageId)) continue;
 
-        // Check all match types
-        if (
-          word === normalizedTerm ||
-          word.startsWith(normalizedTerm) ||
-          word.endsWith(normalizedTerm) ||
-          word.includes(normalizedTerm)
-        ) {
+          const mapping = pageMappings.get(pageId);
+          if (!mapping) continue;
+
+          const row = mapping.get(y);
+          if (!row || !Array.isArray(row)) continue;
+
           const key = `${pageId}-${y}`;
           if (!sentenceMap.has(key)) {
             sentenceMap.set(key, {
@@ -425,49 +554,153 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
                 pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
               pageId: pageId,
               y: y,
-              sentence: row.map((w) => w.word).join(" "),
+              sentence: row.map((w) => (w && w.word ? w.word : "")).join(" "),
             });
           }
         }
       }
-    }
-  }
+    } else {
+      for (const term of terms) {
+        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        const firstChar = normalizedTerm[0]?.toLowerCase();
+        if (!firstChar) continue;
 
-  return [...sentenceMap.values()];
+        const positions = buildIndex[firstChar] || [];
+
+        if (!Array.isArray(positions)) {
+          continue;
+        }
+
+        for (const pos of positions) {
+          const word = Array.isArray(pos) ? pos[0] : pos.word;
+          const pageId = Array.isArray(pos) ? pos[1] : pos.pageId;
+          const y = Array.isArray(pos) ? pos[2] : pos.y;
+
+          if (!pageSet.has(pageId)) continue;
+
+          const mapping = pageMappings.get(pageId);
+          if (!mapping) continue;
+
+          const row = mapping.get(y);
+          if (!row || !Array.isArray(row)) continue;
+
+          if (
+            word === normalizedTerm ||
+            word.startsWith(normalizedTerm) ||
+            word.endsWith(normalizedTerm) ||
+            word.includes(normalizedTerm)
+          ) {
+            const key = `${pageId}-${y}`;
+            if (!sentenceMap.has(key)) {
+              sentenceMap.set(key, {
+                file_name:
+                  pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+                pageId: pageId,
+                y: y,
+                sentence: row.map((w) => (w && w.word ? w.word : "")).join(" "),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return [...sentenceMap.values()];
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to search build index: ${error.message}`,
+      500,
+      "SEARCH_BUILD_INDEX_ERROR"
+    );
+  }
 }
 
 async function searchContent(sitesContent, inverted, search) {
-  const terms = search.toLowerCase().replace(/[.,]/g, "").split(/\s+/);
-  const N = sitesContent.length;
+  try {
+    if (
+      !sitesContent ||
+      !Array.isArray(sitesContent) ||
+      sitesContent.length === 0
+    ) {
+      throw new AppError(
+        "Sites content is empty or invalid",
+        500,
+        "INVALID_SITES_CONTENT"
+      );
+    }
 
-  const appearance = {};
-  const TF = [];
+    if (!inverted || typeof inverted !== "object") {
+      throw new AppError(
+        "Inverted index is invalid",
+        500,
+        "INVALID_INVERTED_INDEX"
+      );
+    }
 
-  for (const { id, total_words } of sitesContent) {
-    for (const term of terms) {
-      const counts =
-        inverted[term] && inverted[term][id] ? inverted[term][id] : 0;
+    if (!search || typeof search !== "string" || !search.trim()) {
+      throw new ValidationError("Search query is required");
+    }
 
-      if (counts > 0) {
-        if (!appearance[term]) appearance[term] = new Set();
-        appearance[term].add(id);
+    const terms = search
+      .toLowerCase()
+      .replace(/[.,]/g, "")
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) {
+      return {};
+    }
+
+    const N = sitesContent.length;
+    const appearance = {};
+    const TF = [];
+
+    for (const page of sitesContent) {
+      if (!page || !page.id || typeof page.total_words !== "number") {
+        continue;
       }
 
-      TF.push({ id, term, tf: counts / total_words });
+      for (const term of terms) {
+        const counts =
+          inverted[term] && inverted[term][page.id]
+            ? inverted[term][page.id]
+            : 0;
+
+        if (counts > 0) {
+          if (!appearance[term]) appearance[term] = new Set();
+          appearance[term].add(page.id);
+        }
+
+        if (page.total_words > 0) {
+          TF.push({ id: page.id, term, tf: counts / page.total_words });
+        }
+      }
     }
-  }
 
-  const IDF = {};
-  for (const term of terms) {
-    const df = appearance[term] ? appearance[term].size : 0;
-    IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
-  }
+    const IDF = {};
+    for (const term of terms) {
+      const df = appearance[term] ? appearance[term].size : 0;
+      IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
+    }
 
-  const scores = {};
-  for (const { id, term, tf } of TF) {
-    if (!scores[id]) scores[id] = 0;
-    scores[id] += tf * IDF[term];
-  }
+    const scores = {};
+    for (const { id, term, tf } of TF) {
+      if (!scores[id]) scores[id] = 0;
+      scores[id] += tf * IDF[term];
+    }
 
-  return scores;
+    return scores;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to search content: ${error.message}`,
+      500,
+      "SEARCH_CONTENT_ERROR"
+    );
+  }
 }

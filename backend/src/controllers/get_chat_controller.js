@@ -11,15 +11,15 @@ export async function get_chat_controller(req, res, next) {
     const userId = req.user;
 
     if (!userId) {
-      throw UnauthorizedError("Authorization required");
+      throw new UnauthorizedError("Authorization required");
     }
 
     if (!id) {
-      throw ValidationError("Id is required");
+      throw new ValidationError("Id is required");
     }
 
     if (!search || !search.trim()) {
-      throw ValidationError("Search not found");
+      throw new ValidationError("Search not found");
     }
 
     const chatResult = await chat(id, search, userId);
@@ -34,10 +34,7 @@ export async function get_chat_controller(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      data: {
-        response: chatResult.response,
-        metadata: chatResult.metadata,
-      },
+      response: chatResult.response,
       message: "Received chat response",
     });
   } catch (error) {
