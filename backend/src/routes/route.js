@@ -7,6 +7,7 @@ import { get_files_controller } from "../controllers/get_files_controller.js";
 import { get_view_files_controller } from "../controllers/get_view_files_controller.js";
 import { get_pfp_controller } from "../controllers/get_pfp_controller.js";
 import { get_chat_controller } from "../controllers/get_chat_controller.js";
+import { get_name_controller } from "../controllers/get_name_controller.js";
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.post(
 router.get(`/parse-files`, auth, file_parse_controller);
 router.get(`/get-view-files`, auth, get_view_files_controller);
 router.get("/get-pfp", auth, get_pfp_controller);
+router.get("/get-name", auth, get_name_controller);
 router.get("/get-chats", auth, get_chat_controller);
 
 export default router;

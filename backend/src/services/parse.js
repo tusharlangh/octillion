@@ -515,6 +515,39 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
       buildIndex.suffixIndex !== undefined ||
       buildIndex.ngramIndex !== undefined;
 
+    function getSentences(y, mapping, sentenceSeen, pageId) {
+      const keys = Array.from(mapping.keys()).sort((a, b) => b - a);
+
+      const pos = keys.indexOf(y);
+      if (pos === -1) return null;
+
+      const startIndex = Math.max(0, pos - 2);
+      const endIndex = Math.min(keys.length - 1, pos + 2);
+      const needed = keys.slice(startIndex, endIndex + 1);
+
+      if (needed.length === 0) {
+        return null;
+      }
+
+      const parts = [];
+
+      for (let key of needed) {
+        if (sentenceSeen.has(`${pageId}-${key}`)) continue;
+        sentenceSeen.add(`${pageId}-${key}`);
+        const row = mapping.get(key);
+        if (!row) continue;
+
+        const text = row
+          .filter((w) => w && w.word)
+          .map((w) => w.word)
+          .join(" ");
+
+        parts.push(text);
+      }
+
+      return parts.join(" ").trim();
+    }
+
     if (isOptimizedFormat) {
       let index;
       try {
@@ -532,11 +565,15 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
         if (!normalizedTerm) continue;
 
         let matches;
+
         try {
           matches = index.search(normalizedTerm, "all");
+          console.log(matches.length);
         } catch (error) {
           continue;
         }
+
+        let sentenceSeen = new Set();
 
         for (const [word, pageId, y] of matches) {
           if (!pageSet.has(pageId)) continue;
@@ -544,17 +581,25 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
           const mapping = pageMappings.get(pageId);
           if (!mapping) continue;
 
-          const row = mapping.get(y);
-          if (!row || !Array.isArray(row)) continue;
+          if (sentenceSeen.has(`${pageId}-${y}`)) continue;
+
+          const sentence = getSentences(y, mapping, sentenceSeen, pageId);
 
           const key = `${pageId}-${y}`;
+
           if (!sentenceMap.has(key)) {
             sentenceMap.set(key, {
               file_name:
                 pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
               pageId: pageId,
               y: y,
-              sentence: row.map((w) => (w && w.word ? w.word : "")).join(" "),
+              sentence:
+                sentence ||
+                mapping
+                  .get(y)
+                  .filter((w) => w && w.word)
+                  .map((w) => w.word)
+                  .join(" "),
             });
           }
         }
@@ -597,7 +642,7 @@ function searchBuildIndex(buildIndex, searchTerms, pagesContent, topPageIds) {
                   pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
                 pageId: pageId,
                 y: y,
-                sentence: row.map((w) => (w && w.word ? w.word : "")).join(" "),
+                sentence: getSentences(y, mapping),
               });
             }
           }

@@ -57,7 +57,7 @@ export default function SearchManager({
            scrollbar-thin scrollbar-track-transparent
            scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300
            dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
-           transition-colors duration-200`}
+           transition-colors duration-200 rounded-[10px]`}
       >
         {children}
       </div>
