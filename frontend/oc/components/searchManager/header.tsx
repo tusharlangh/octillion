@@ -91,7 +91,7 @@ export default function Header({ id }: Props) {
         setError(errorMessage);
 
         if (res.status === 401 || res.status === 403) {
-          setTimeout(() => router.replace("/login"), 2000);
+          setTimeout(() => router.replace("/login_signin/login"), 2000);
         }
 
         return;
@@ -105,7 +105,7 @@ export default function Header({ id }: Props) {
         setError("Network error. Please check your connection.");
       } else if (error instanceof Error && error.message.includes("token")) {
         setError("Authentication failed. Please log in again.");
-        setTimeout(() => router.replace("/login"), 2000);
+        setTimeout(() => router.replace("/login_signin/login"), 2000);
       } else {
         setError("An unexpected error occurred. Please try again.");
       }

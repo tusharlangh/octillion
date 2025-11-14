@@ -27,17 +27,41 @@ export async function middleware(request: NextRequest) {
             //creates a new response with the updated headers
             request,
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          ); //output: sends back the updated cookies back to the browser: options here contains info like expires
+          cookiesToSet.forEach(({ name, value, options }) => {
+            // Preserve Supabase's original cookie options, but ensure cross-browser compatibility
+            const cookieOptions = {
+              ...options,
+              // Only override if not explicitly set by Supabase
+              sameSite: options?.sameSite ?? "lax",
+              // In production, use secure if not set, but respect Supabase's settings
+              secure: options?.secure ?? (process.env.NODE_ENV === "production" ? true : undefined),
+              // Preserve path if set, otherwise default to root
+              path: options?.path ?? "/",
+            };
+            
+            // Remove undefined values to avoid issues
+            Object.keys(cookieOptions).forEach(key => {
+              if (cookieOptions[key] === undefined) {
+                delete cookieOptions[key];
+              }
+            });
+            
+            response.cookies.set(name, value, cookieOptions);
+          }); //output: sends back the updated cookies back to the browser: options here contains info like expires
         },
       },
     }
   );
 
+  // Refresh session to ensure cookies are up to date
   const {
     data: { session },
+    error: sessionError,
   } = await supabase.auth.getSession(); //get the session of the user are they logged in or not and is the session expired or not.
+
+  if (sessionError) {
+    console.error("Session error in middleware:", sessionError);
+  }
 
   const isAuthPage = //all the pages where you do not need an id
     request.nextUrl.pathname.startsWith("/login_signin/login") ||

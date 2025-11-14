@@ -18,15 +18,12 @@ export default function Result() {
 
   const { isLoading, query, lastSuccessfulSearch, lastSearchType } = context;
 
-  useEffect(() => {
-    console.log(lastSearchType);
-  }, [lastSearchType]);
-
   function renderSentence(sentence: string) {
     const s: string = sentence;
     const search: string = lastSuccessfulSearch.toLowerCase();
     let keyCounter = 0;
     let seen: number[][] = [];
+
     for (let word of search.split(" ")) {
       let pos = 0;
       while ((pos = s.toLowerCase().indexOf(word, pos)) !== -1) {

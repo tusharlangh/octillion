@@ -183,8 +183,6 @@ export async function saveFiles(id, files, userId) {
 
           const content = await page.getTextContent();
 
-          console.log(content);
-
           if (!content || !content.items) {
             pagesContent.push({
               id: `${i + 1}.${pageNum}`,
@@ -209,14 +207,18 @@ export async function saveFiles(id, files, userId) {
 
               words.forEach((word) => {
                 if (word && word.trim().length > 0) {
-                  if (!new_map.has(roundedY)) {
-                    new_map.set(roundedY, []);
-                  }
+                  word.split(/[ -]+/).map((text) => {
+                    if (text.trim().length === 0) return;
 
-                  new_map.get(roundedY).push({
-                    word: word.toLowerCase(),
-                    x: x,
-                    y: roundedY,
+                    if (!new_map.has(roundedY)) {
+                      new_map.set(roundedY, []);
+                    }
+
+                    new_map.get(roundedY).push({
+                      word: text.toLowerCase(),
+                      x: x,
+                      y: roundedY,
+                    });
                   });
                 }
               });
@@ -226,7 +228,7 @@ export async function saveFiles(id, files, userId) {
           });
 
           const sortedMapping = Array.from(new_map.entries())
-            .sort((a, b) => b[0] - a[0]) //[y, words]
+            .sort((a, b) => b[0] - a[0])
             .map(([y, words]) => {
               const sortedWords = words.sort((a, b) => a.x - b.x);
               return [y, sortedWords];
