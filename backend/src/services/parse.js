@@ -9,6 +9,7 @@ import {
   ValidationError,
   NotFoundError,
 } from "../middleware/errorHandler.js";
+import { SearchRewrite } from "./searchRewrite.js";
 
 dotenv.config();
 
@@ -75,11 +76,7 @@ export function createContextualChunks(
   overlapWords = 20
 ) {
   if (!sortedMapping || sortedMapping.length === 0) {
-    throw new AppError(
-      "Sorted mapping is empty",
-      500,
-      "EMPTY_SORTED_MAPPING_ERROR"
-    );
+    return "";
   }
 
   try {
@@ -133,6 +130,17 @@ export async function parse(id, search, userId, options = {}) {
   const { searchMode, topK = 10 } = options;
 
   try {
+    let searchRewrite = new SearchRewrite(search);
+    search = searchRewrite.process();
+
+    if (!search || search.length === 0) {
+      throw new AppError(
+        "Rewriting search came out empty",
+        500,
+        "REWRITE_SEARCH_ERROR"
+      );
+    }
+
     const { data, error } = await supabase
       .from("files")
       .select("*")

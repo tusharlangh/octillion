@@ -92,6 +92,7 @@ Respond with ONLY one word: either "search" or "direct".`;
     }
 
     const classification = response.trim().toLowerCase();
+    console.log(classification === "direct" ? "direct" : "search");
     return classification === "direct" ? "direct" : "search";
   } catch (error) {
     if (error.isOperational) {
