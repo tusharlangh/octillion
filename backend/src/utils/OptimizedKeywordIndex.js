@@ -103,7 +103,6 @@ export class OptimizedKeywordIndex {
     const array = this.prefixIndex[firstChar];
     const results = [];
 
-    // Binary search for first word starting with prefix
     let left = 0;
     let right = array.length - 1;
     let startIdx = -1;
@@ -114,7 +113,7 @@ export class OptimizedKeywordIndex {
 
       if (word.startsWith(prefix)) {
         startIdx = mid;
-        right = mid - 1; // Continue searching left
+        right = mid - 1;
       } else if (word < prefix) {
         left = mid + 1;
       } else {
@@ -124,13 +123,12 @@ export class OptimizedKeywordIndex {
 
     if (startIdx === -1) return [];
 
-    // Collect all words starting with prefix
     for (let i = startIdx; i < array.length; i++) {
       const word = array[i][0];
       if (word.startsWith(prefix)) {
         results.push(array[i]);
       } else {
-        break; // Sorted array, so we can stop
+        break;
       }
     }
 
@@ -217,7 +215,6 @@ export class OptimizedKeywordIndex {
   }
 
   toJSON() {
-    // Convert Sets to Arrays for JSON serialization
     const ngramIndexSerialized = {};
     for (const [ngram, set] of this.ngramIndex.entries()) {
       ngramIndexSerialized[ngram] = Array.from(set);

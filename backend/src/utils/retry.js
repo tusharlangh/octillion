@@ -10,8 +10,9 @@ export async function retry(fn, options = {}) {
     } catch (error) {
       lastError = error;
       if (attempt === maxRetries || !isRetryable(error)) {
+        const errorMessage = error.message || error.code || "Unknown error";
         throw new AppError(
-          `Max retries achieved ${error}`,
+          `Max retries achieved: ${errorMessage}`,
           500,
           "MAX_RETRIES_ERROR"
         );
