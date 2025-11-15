@@ -1,0 +1,271 @@
+import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
+import {
+  AppError,
+  ValidationError,
+} from "../../middleware/errorHandler.js";
+
+export function searchBuildIndex(
+  buildIndex,
+  searchTerms,
+  pagesContent,
+  topPageIds
+) {
+  try {
+    const terms = searchTerms.toLowerCase().split(/\s+/);
+    const pageSet = new Set(topPageIds);
+    const sentenceMap = new Map();
+    const pageMappings = new Map();
+
+    for (let page of pagesContent) {
+      if (!page || !page.id) {
+        continue;
+      }
+      if (pageSet.has(page.id)) {
+        if (!page.mapping) {
+          continue;
+        }
+        pageMappings.set(page.id, new Map(page.mapping));
+      }
+    }
+
+    const isOptimizedFormat =
+      buildIndex.prefixIndex !== undefined ||
+      buildIndex.suffixIndex !== undefined ||
+      buildIndex.ngramIndex !== undefined;
+
+    function getSentences(y, mapping, sentenceSeen, pageId) {
+      const keys = Array.from(mapping.keys()).sort((a, b) => b - a);
+
+      const pos = keys.indexOf(y);
+      if (pos === -1) return null;
+
+      const startIndex = Math.max(0, pos - 2);
+      const endIndex = Math.min(keys.length - 1, pos + 2);
+      const needed = keys.slice(startIndex, endIndex + 1);
+
+      if (needed.length === 0) {
+        return null;
+      }
+
+      const parts = [];
+
+      for (let key of needed) {
+        if (sentenceSeen.has(`${pageId}-${key}`)) continue;
+        sentenceSeen.add(`${pageId}-${key}`);
+        const row = mapping.get(key);
+        if (!row) continue;
+
+        const text = row
+          .filter((w) => w && w.word)
+          .map((w) => w.word)
+          .join(" ");
+
+        parts.push(text);
+      }
+
+      return parts.join(" ").trim();
+    }
+
+    if (isOptimizedFormat) {
+      let index;
+      try {
+        index = OptimizedKeywordIndex.fromJSON(buildIndex);
+      } catch (error) {
+        throw new AppError(
+          `Failed to parse optimized index: ${error.message}`,
+          500,
+          "INDEX_PARSE_ERROR"
+        );
+      }
+
+      for (const term of terms) {
+        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        if (!normalizedTerm) continue;
+
+        let matches;
+
+        try {
+          matches = index.search(normalizedTerm, "all");
+          console.log(matches.length);
+        } catch (error) {
+          continue;
+        }
+
+        let sentenceSeen = new Set();
+
+        for (const [word, pageId, y] of matches) {
+          if (!pageSet.has(pageId)) continue;
+
+          const mapping = pageMappings.get(pageId);
+          if (!mapping) continue;
+
+          if (sentenceSeen.has(`${pageId}-${y}`)) continue;
+
+          const sentence = getSentences(y, mapping, sentenceSeen, pageId);
+
+          const key = `${pageId}-${y}`;
+
+          if (!sentenceMap.has(key)) {
+            sentenceMap.set(key, {
+              file_name:
+                pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+              pageId: pageId,
+              y: y,
+              sentence:
+                sentence ||
+                mapping
+                  .get(y)
+                  .filter((w) => w && w.word)
+                  .map((w) => w.word)
+                  .join(" "),
+            });
+          }
+        }
+      }
+    } else {
+      for (const term of terms) {
+        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        const firstChar = normalizedTerm[0]?.toLowerCase();
+        if (!firstChar) continue;
+
+        const positions = buildIndex[firstChar] || [];
+
+        if (!Array.isArray(positions)) {
+          continue;
+        }
+
+        for (const pos of positions) {
+          const word = Array.isArray(pos) ? pos[0] : pos.word;
+          const pageId = Array.isArray(pos) ? pos[1] : pos.pageId;
+          const y = Array.isArray(pos) ? pos[2] : pos.y;
+
+          if (!pageSet.has(pageId)) continue;
+
+          const mapping = pageMappings.get(pageId);
+          if (!mapping) continue;
+
+          const row = mapping.get(y);
+          if (!row || !Array.isArray(row)) continue;
+
+          if (
+            word === normalizedTerm ||
+            word.startsWith(normalizedTerm) ||
+            word.endsWith(normalizedTerm) ||
+            word.includes(normalizedTerm)
+          ) {
+            const key = `${pageId}-${y}`;
+            if (!sentenceMap.has(key)) {
+              sentenceMap.set(key, {
+                file_name:
+                  pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+                pageId: pageId,
+                y: y,
+                sentence: getSentences(y, mapping),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return [...sentenceMap.values()];
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to search build index: ${error.message}`,
+      500,
+      "SEARCH_BUILD_INDEX_ERROR"
+    );
+  }
+}
+
+export async function searchContent(sitesContent, inverted, search) {
+  try {
+    if (
+      !sitesContent ||
+      !Array.isArray(sitesContent) ||
+      sitesContent.length === 0
+    ) {
+      throw new AppError(
+        "Sites content is empty or invalid",
+        500,
+        "INVALID_SITES_CONTENT"
+      );
+    }
+
+    if (!inverted || typeof inverted !== "object") {
+      throw new AppError(
+        "Inverted index is invalid",
+        500,
+        "INVALID_INVERTED_INDEX"
+      );
+    }
+
+    if (!search || typeof search !== "string" || !search.trim()) {
+      throw new ValidationError("Search query is required");
+    }
+
+    const terms = search
+      .toLowerCase()
+      .replace(/[.,]/g, "")
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
+
+    if (terms.length === 0) {
+      return {};
+    }
+
+    const N = sitesContent.length;
+    const appearance = {};
+    const TF = [];
+
+    for (const page of sitesContent) {
+      if (!page || !page.id || typeof page.total_words !== "number") {
+        continue;
+      }
+
+      for (const term of terms) {
+        const counts =
+          inverted[term] && inverted[term][page.id]
+            ? inverted[term][page.id]
+            : 0;
+
+        if (counts > 0) {
+          if (!appearance[term]) appearance[term] = new Set();
+          appearance[term].add(page.id);
+        }
+
+        if (page.total_words > 0) {
+          TF.push({ id: page.id, term, tf: counts / page.total_words });
+        }
+      }
+    }
+
+    const IDF = {};
+    for (const term of terms) {
+      const df = appearance[term] ? appearance[term].size : 0;
+      IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
+    }
+
+    const scores = {};
+    for (const { id, term, tf } of TF) {
+      if (!scores[id]) scores[id] = 0;
+      scores[id] += tf * IDF[term];
+    }
+
+    return scores;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError(
+      `Failed to search content: ${error.message}`,
+      500,
+      "SEARCH_CONTENT_ERROR"
+    );
+  }
+}
+
+
