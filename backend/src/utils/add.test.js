@@ -1,7 +1,8 @@
 import { OptimizedKeywordIndex } from "./OptimizedKeywordIndex.js";
 import { MinHeap } from "./MinHeap.js";
+import { callToChat } from "./openAi/callToChat.js";
 import { retry } from "./retry.js";
-import { describe, jest } from "@jest/globals";
+import { jest } from "@jest/globals";
 import { AppError } from "../middleware/errorHandler.js";
 
 describe("OptimizedKeywordIndex", () => {
@@ -599,5 +600,70 @@ describe("Retry", () => {
 
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(onRetry).toHaveBeenCalledWith(error, 2);
+  });
+});
+
+describe("Call Chat", () => {
+  global.fetch = jest.fn();
+
+  test("returns AI response on successful API call", async () => {
+    const mockResponse = {
+      choices: [{ message: { content: "Hello!" } }],
+    };
+
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    });
+
+    const result = await callToChat("Hi");
+
+    expect(result).toBe("Hello!");
+  });
+
+  test("throws error when API returns error status", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: { message: "Rate limit exceeded" } }),
+    });
+
+    await expect(callToChat("Hi")).rejects.toThrow(
+      "OpenAI API error: 429 - Rate limit exceeded"
+    );
+  });
+
+  test("handles malformed error response without error.message", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      json: async () => ({}),
+    });
+
+    await expect(callToChat("hi")).rejects.toThrow(
+      "OpenAI API error: 500 - Internal Server Error"
+    );
+  });
+
+  test("handles invalid JSON in error response", async () => {
+    fetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: async () => {
+        throw new Error("Invalid JSON");
+      },
+    });
+
+    await expect(callToChat("hi")).rejects.toThrow(
+      "OpenAI API error: 503 - Service Unavailable"
+    );
+  });
+
+  test("handles network error", async () => {
+    fetch.mockRejectedValueOnce(new Error("Network failure"));
+
+    await expect(callToChat("hi")).rejects.toThrow("Network failure");
   });
 });
