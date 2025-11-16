@@ -4,7 +4,7 @@ import routes from "./src/routes/route.js";
 import dotenv from "dotenv";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
-//dotenv.config();
+dotenv.config();
 
 const port = process.env.PORT || 5002;
 
@@ -35,7 +35,7 @@ async function startServer() {
 
     app.use(errorHandler);
 
-    app.listen(port, () => {
+    app.listen(port, "0.0.0.0", () => {
       console.log("Backend server is running");
     });
   } catch (error) {

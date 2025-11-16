@@ -17,15 +17,19 @@ export async function GET(request: Request) {
       const supabase = await createClient();
 
       const { data, error } = await supabase.auth.exchangeCodeForSession(code); //exchange the voucher for a session. voucher given when you open google auth
-      
+
       if (error) {
         console.error("Error exchanging code for session:", error);
-        return NextResponse.redirect(`${origin}/auth/auth-code-error?error=${encodeURIComponent(error.message)}`);
+        return NextResponse.redirect(
+          `${origin}/auth/auth-code-error?error=${encodeURIComponent(
+            error.message
+          )}`
+        );
       }
 
       if (data.session) {
         console.log("Session created successfully");
-        
+
         // Create redirect URL
         const forwardedHost = request.headers.get("x-forwarded-host"); // original origin before load balancer
         const isLocalEnv = process.env.NODE_ENV === "development";
@@ -40,23 +44,27 @@ export async function GET(request: Request) {
         // When we redirect, Next.js should automatically include these cookies
         const cookieStore = await cookies();
         const allCookies = cookieStore.getAll();
-        
+
         // Create redirect response - cookies should be automatically included
         // But we explicitly verify they're set for debugging
         const response = NextResponse.redirect(redirectUrl);
-        
+
         // Log cookies for debugging
         if (allCookies.length > 0) {
-          console.log(`Setting ${allCookies.length} cookies in redirect response`);
+          console.log(
+            `Setting ${allCookies.length} cookies in redirect response`
+          );
         } else {
           console.warn("No cookies found after session exchange");
         }
-        
+
         return response;
       }
     } catch (error) {
       console.error("Unexpected error in auth callback:", error);
-      return NextResponse.redirect(`${origin}/auth/auth-code-error?error=unexpected_error`);
+      return NextResponse.redirect(
+        `${origin}/auth/auth-code-error?error=unexpected_error`
+      );
     }
   }
 
