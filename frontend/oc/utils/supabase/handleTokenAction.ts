@@ -1,18 +1,22 @@
-import { supabase } from "@/supabaseClient";
+import { createClient } from "@/utils/supabase/client";
 
 export async function handleTokenAction() {
-  const { data, error } = await supabase.auth.getSession();
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.getSession();
 
-  if (error) {
-    console.error("Error getting session: ", error);
-    return;
-  }
+    if (error) {
+      console.error("Error getting session: ", error);
+      return null;
+    }
 
-  console.log("Session data: ", data);
+    if (data.session?.access_token) {
+      return data.session.access_token;
+    }
 
-  if (data.session?.access_token) {
-    const jwt = data.session.access_token;
-
-    return jwt;
+    return null;
+  } catch (error) {
+    console.error("Error in handleTokenAction: ", error);
+    return null;
   }
 }
