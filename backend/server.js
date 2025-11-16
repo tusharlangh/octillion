@@ -4,7 +4,7 @@ import routes from "./src/routes/route.js";
 import dotenv from "dotenv";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
-dotenv.config();
+//dotenv.config();
 
 const port = process.env.PORT || 5002;
 
