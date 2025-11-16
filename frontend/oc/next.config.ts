@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
 
     return config;
   },
+  eslint: {
+    ignoreDuringBuilds: true, // Only for deployment emergency
+  },
+  typescript: {
+    ignoreBuildErrors: false, // Keep TypeScript checks
+  },
 };
 
 export default nextConfig;

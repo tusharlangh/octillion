@@ -21,18 +21,22 @@ export async function createClient() {
                 // Only override if not explicitly set by Supabase
                 sameSite: options?.sameSite ?? "lax",
                 // In production, use secure if not set, but respect Supabase's settings
-                secure: options?.secure ?? (process.env.NODE_ENV === "production" ? true : undefined),
+                secure:
+                  options?.secure ??
+                  (process.env.NODE_ENV === "production" ? true : undefined),
                 // Preserve path if set, otherwise default to root
                 path: options?.path ?? "/",
               };
-              
+
               // Remove undefined values to avoid issues
-              Object.keys(cookieOptions).forEach(key => {
+              (
+                Object.keys(cookieOptions) as Array<keyof typeof cookieOptions>
+              ).forEach((key) => {
                 if (cookieOptions[key] === undefined) {
                   delete cookieOptions[key];
                 }
               });
-              
+
               cookieStore.set(name, value, cookieOptions);
             });
           } catch (error) {
