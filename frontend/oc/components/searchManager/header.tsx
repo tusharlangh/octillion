@@ -91,7 +91,7 @@ export default function Header({ id }: Props) {
         setError(errorMessage);
 
         if (res.status === 401 || res.status === 403) {
-          setTimeout(() => router.replace("/login"), 2000);
+          setTimeout(() => router.replace("/login_signin/login"), 2000);
         }
 
         return;
@@ -105,7 +105,7 @@ export default function Header({ id }: Props) {
         setError("Network error. Please check your connection.");
       } else if (error instanceof Error && error.message.includes("token")) {
         setError("Authentication failed. Please log in again.");
-        setTimeout(() => router.replace("/login"), 2000);
+        setTimeout(() => router.replace("/login_signin/login"), 2000);
       } else {
         setError("An unexpected error occurred. Please try again.");
       }
@@ -121,8 +121,8 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <section className="w-full pt-2 px-4 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
-      <div className="px-7 relative w-full mt-20 group">
+    <section className="w-full pt-2 px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
+      <div className="px-2 relative w-full mt-20 group flex border-b border-neutral-200 dark:border-neutral-800">
         <Search
           className={`${
             search.length === 0
@@ -136,9 +136,7 @@ export default function Header({ id }: Props) {
         />
         <input
           placeholder="Search files"
-          className={`${
-            dmSans.className
-          } w-full border-b border-neutral-200 dark:border-neutral-800 
+          className={`${dmSans.className} w-full 
           p-2 pl-7 text-lg outline-none 
           placeholder:text-neutral-400 dark:placeholder:text-neutral-600
           ${
@@ -154,7 +152,7 @@ export default function Header({ id }: Props) {
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleKeyDown}
         />
-        <div className="absolute top-3 right-10 inline-flex items-center p-0.5 shrink-0">
+        <div className="inline-flex items-center p-0.5 shrink-0">
           <button
             onClick={() => {
               setSearchType("keyword");

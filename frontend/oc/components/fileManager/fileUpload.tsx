@@ -39,7 +39,7 @@ export default function FileUpload({
                        group-hover:text-neutral-700 dark:group-hover:text-neutral-200 
                        font-bold text-center transition-colors duration-200`}
           >
-            Drag or Upload files
+            Upload files
           </p>
           <Upload
             height={20}

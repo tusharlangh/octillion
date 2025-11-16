@@ -11,6 +11,17 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        canvas: false,
+        encoding: false,
+      };
+    }
+
+    return config;
+  },
 };
 
 export default nextConfig;

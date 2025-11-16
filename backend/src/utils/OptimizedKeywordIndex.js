@@ -13,12 +13,10 @@ export class OptimizedKeywordIndex {
     const normalizedWord = word.toLowerCase().replace(/[^a-z]/g, "");
     if (normalizedWord.length === 0) return;
 
-    // Deduplication key
     const uniqueKey = `${normalizedWord}:${pageId}:${y}`;
     if (this.seen.has(uniqueKey)) return;
     this.seen.add(uniqueKey);
 
-    // Prefix index (first character only - fixes the bug!)
     const firstChar = normalizedWord[0];
     if (firstChar && /[a-z]/.test(firstChar)) {
       if (!this.prefixIndex[firstChar]) {
@@ -27,7 +25,6 @@ export class OptimizedKeywordIndex {
       this.prefixIndex[firstChar].push([normalizedWord, pageId, y]);
     }
 
-    // Suffix index (last character)
     const lastChar = normalizedWord[normalizedWord.length - 1];
     if (lastChar && /[a-z]/.test(lastChar)) {
       if (!this.suffixIndex[lastChar]) {
@@ -36,7 +33,6 @@ export class OptimizedKeywordIndex {
       this.suffixIndex[lastChar].push([normalizedWord, pageId, y]);
     }
 
-    // N-gram index for infix matching (3-grams)
     if (normalizedWord.length >= 3) {
       for (let i = 0; i <= normalizedWord.length - 3; i++) {
         const ngram = normalizedWord.substring(i, i + 3);
@@ -46,7 +42,6 @@ export class OptimizedKeywordIndex {
         this.ngramIndex.get(ngram).add(uniqueKey);
       }
     } else {
-      // For short words, store directly
       if (!this.wordPositions.has(normalizedWord)) {
         this.wordPositions.set(normalizedWord, new Set());
       }
@@ -55,12 +50,10 @@ export class OptimizedKeywordIndex {
   }
 
   finalize() {
-    // Sort prefix arrays for binary search
     for (const char in this.prefixIndex) {
       this.prefixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
     }
 
-    // Sort suffix arrays
     for (const char in this.suffixIndex) {
       this.suffixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
     }
@@ -72,7 +65,7 @@ export class OptimizedKeywordIndex {
     const normalizedPattern = pattern.toLowerCase().replace(/[^a-z]/g, "");
     if (normalizedPattern.length === 0) return [];
 
-    const results = new Map(); // Deduplicate results
+    const results = new Map();
 
     if (matchType === "all" || matchType === "prefix") {
       const prefixResults = this._searchPrefix(normalizedPattern);
@@ -110,7 +103,6 @@ export class OptimizedKeywordIndex {
     const array = this.prefixIndex[firstChar];
     const results = [];
 
-    // Binary search for first word starting with prefix
     let left = 0;
     let right = array.length - 1;
     let startIdx = -1;
@@ -121,7 +113,7 @@ export class OptimizedKeywordIndex {
 
       if (word.startsWith(prefix)) {
         startIdx = mid;
-        right = mid - 1; // Continue searching left
+        right = mid - 1;
       } else if (word < prefix) {
         left = mid + 1;
       } else {
@@ -131,13 +123,12 @@ export class OptimizedKeywordIndex {
 
     if (startIdx === -1) return [];
 
-    // Collect all words starting with prefix
     for (let i = startIdx; i < array.length; i++) {
       const word = array[i][0];
       if (word.startsWith(prefix)) {
         results.push(array[i]);
       } else {
-        break; // Sorted array, so we can stop
+        break;
       }
     }
 
@@ -224,7 +215,6 @@ export class OptimizedKeywordIndex {
   }
 
   toJSON() {
-    // Convert Sets to Arrays for JSON serialization
     const ngramIndexSerialized = {};
     for (const [ngram, set] of this.ngramIndex.entries()) {
       ngramIndexSerialized[ngram] = Array.from(set);

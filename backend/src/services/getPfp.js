@@ -44,7 +44,7 @@ export async function getPfp(userId) {
 
     console.error("Unexpected error in getPfp:", error);
     throw new AppError(
-      `Failed to retrieve view files: ${error.message || "Unknown error"}`,
+      `Failed to retrieve pfp: ${error.message || "Unknown error"}`,
       500,
       "GET_PFP_ERROR"
     );
