@@ -33,13 +33,11 @@ async function startServer() {
     });
 
     app.use(errorHandler);
-
-    app.listen(port, "0.0.0.0", () => {
-      console.log("Backend server is running");
-    });
   } catch (error) {
     console.log(`${error} has occured.`);
   }
 }
 
 await startServer();
+
+export default app;

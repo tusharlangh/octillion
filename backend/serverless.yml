@@ -1,0 +1,49 @@
+service: octillion-backend
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  memorySize: 512
+  timeout: 30
+  environment:
+    NODE_ENV: production
+    PORT: 5002
+    SUPABASE_URL: https://mhioxkokqrdwaczantad.supabase.co
+    SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oaW94a29rcXJkd2FjemFudGFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzNTM1NzAsImV4cCI6MjA3NDkyOTU3MH0.CP597RMoTXV32J_ojtnN8tcCjHxpGZ4ug3uNyEXmrBg
+    SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oaW94a29rcXJkd2FjemFudGFkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTM1MzU3MCwiZXhwIjoyMDc0OTI5NTcwfQ.BfyLDiX1GgkPOvToBeknoCsP3DVYJLu0jdyFBY6SEkQ
+    SUPABASE_JWT_KEY: fkCAO49CRZIbYAqGi2iUNUJq8Zx/44w60IOpRsKJ+oL7DMNBjJ28KLq5ETRzRHebvUVoxiu15ozP54XCHKil0w==
+    AWS_ACCESS_KEY_ID: AKIAYSVAPBFRTI3IKNGE
+    AWS_SECRET_ACCESS_KEY: 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
+    AWS_REGION: ca-central-1
+    S3_BUCKET_NAME: octillion-s3-bucket
+    QDRANT_URL: https://02ea0368-1068-48eb-99d8-ef38b8f99758.us-east4-0.gcp.cloud.qdrant.io:6333
+    QDRANT_API_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.uWFf8AjHKvSS2_x8ljNDVN0FlPAZQhJZ8OaeqhBb2AE
+    OPENAI_API_KEY: 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
+    FRONTEND_URL: https://octillion.vercel.app
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+        - ssm:GetParameters
+      Resource:
+        - arn:aws:ssm:${self:provider.region}:*:parameter/octillion/*
+    - Effect: Allow
+      Action:
+        - s3:*
+      Resource:
+        - arn:aws:s3:::octillion-s3-bucket
+        - arn:aws:s3:::octillion-s3-bucket/*
+
+functions:
+  app:
+    handler: src/lambda.handler
+    events:
+      - httpApi: "*"
+
+plugins:
+  - serverless-offline
+
+package:
+  exclude:
+    - node_modules/aws-sdk/**
