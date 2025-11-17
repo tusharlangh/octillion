@@ -175,7 +175,9 @@ export async function extractPagesContent(links, files) {
 
   if (errorRate > 0.5) {
     throw new AppError(
-      `Failed to process ${errorPages.length} out of ${totalPages} pages (${Math.round(
+      `Failed to process ${
+        errorPages.length
+      } out of ${totalPages} pages (${Math.round(
         errorRate * 100
       )}% failure rate)`,
       500,
@@ -187,5 +189,3 @@ export async function extractPagesContent(links, files) {
 
   return pagesContent;
 }
-
-
