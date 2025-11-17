@@ -1,6 +1,8 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { AppError } from "../../middleware/errorHandler.js";
 
+pdfjs.GlobalWorkerOptions.workerSrc = "pdfjs-dist/legacy/build/pdf.worker.mjs";
+
 function formatResponse(res) {
   return res
     .toLowerCase()
@@ -9,159 +11,222 @@ function formatResponse(res) {
     .replace(/\s+/g, " ");
 }
 
-export async function extractPagesContent(links, files) {
-  let pagesContent = [];
+async function processSinglePage(pdf, pageNum, fileIndex, fileName) {
+  let page = null;
 
-  for (let i = 0; i < links.length; i++) {
-    const link = links[i];
+  try {
+    page = await pdf.getPage(pageNum);
 
-    let pdf = null;
+    if (!page) {
+      return {
+        id: `${fileIndex + 1}.${pageNum}`,
+        name: fileName,
+        error: "Page not found",
+        site_content: "",
+        total_words: 0,
+        mapping: [],
+      };
+    }
 
-    try {
-      if (!link) {
+    const content = await page.getTextContent();
+
+    if (!content || !content.items) {
+      return {
+        id: `${fileIndex + 1}.${pageNum}`,
+        name: fileName,
+        site_content: "",
+        total_words: 0,
+        mapping: [],
+      };
+    }
+
+    const new_map = new Map();
+
+    for (const item of content.items) {
+      try {
+        if (!item?.str || !item?.transform) continue;
+
+        const words = item.str.split(/\s+/);
+        const [, , , , x, y] = item.transform;
+        const roundedY = Math.round(y);
+
+        for (const word of words) {
+          if (!word || word.trim().length === 0) continue;
+
+          const subWords = word.split(/[ -]+/);
+          for (const text of subWords) {
+            if (text.trim().length === 0) continue;
+
+            if (!new_map.has(roundedY)) {
+              new_map.set(roundedY, []);
+            }
+
+            new_map.get(roundedY).push({
+              word: text.toLowerCase(),
+              x,
+              y: roundedY,
+            });
+          }
+        }
+      } catch (err) {
         continue;
       }
+    }
 
-      let loadingTask;
+    const sortedMapping = Array.from(new_map.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([y, words]) => {
+        const sortedWords = words.sort((a, b) => a.x - b.x);
+        return [y, sortedWords];
+      });
 
+    const orderedText = sortedMapping
+      .map(([, words]) => words.map((w) => w.word).join(" "))
+      .join(" ");
+
+    const site_content = formatResponse(orderedText);
+
+    return {
+      id: `${fileIndex + 1}.${pageNum}`,
+      name: fileName,
+      site_content,
+      total_words: site_content.split(" ").length,
+      mapping: sortedMapping,
+    };
+  } catch (err) {
+    return {
+      id: `${fileIndex + 1}.${pageNum}`,
+      name: fileName,
+      error: `Failed to process page ${pageNum}`,
+      site_content: "",
+      total_words: 0,
+      mapping: [],
+    };
+  } finally {
+    if (page) {
       try {
-        loadingTask = pdfjs.getDocument(link);
-        pdf = await loadingTask.promise;
-      } catch {
-        pagesContent.push({
-          id: `${i + 1}.error`,
-          name: files[i].originalname || `Document ${i + 1}`,
+        if (page.cleanup) page.cleanup();
+      } catch {}
+      try {
+        if (page.destroy) await page.destroy();
+      } catch {}
+      page = null;
+    }
+  }
+}
+
+async function processSinglePDF(link, fileIndex, fileName) {
+  let pdf = null;
+  const results = [];
+
+  try {
+    if (!link) {
+      return [
+        {
+          id: `${fileIndex + 1}.error`,
+          name: fileName,
+          error: "No link provided",
+          site_content: "",
+          total_words: 0,
+          mapping: [],
+        },
+      ];
+    }
+
+    const loadingTask = pdfjs.getDocument({
+      url: link,
+      disableFontFace: true,
+      stopAtErrors: false,
+    });
+
+    try {
+      pdf = await loadingTask.promise;
+    } catch (err) {
+      return [
+        {
+          id: `${fileIndex + 1}.error`,
+          name: fileName,
           error: "Failed to load PDF",
           site_content: "",
           total_words: 0,
           mapping: [],
-        });
-        continue;
-      }
+        },
+      ];
+    }
 
-      if (!pdf || !pdf.numPages) {
-        pagesContent.push({
-          id: `${i + 1}.error`,
-          name: files[i].originalname || `Document ${i + 1}`,
+    if (!pdf || !pdf.numPages) {
+      return [
+        {
+          id: `${fileIndex + 1}.error`,
+          name: fileName,
           error: "Invalid pdf data",
           site_content: "",
           total_words: 0,
           mapping: [],
-        });
-        continue;
+        },
+      ];
+    }
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const pageResult = await processSinglePage(
+        pdf,
+        pageNum,
+        fileIndex,
+        fileName
+      );
+      results.push(pageResult);
+
+      if (global.gc) {
+        global.gc();
       }
+    }
 
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        try {
-          let site_content = "";
-          let new_map = new Map();
+    return results;
+  } finally {
+    if (pdf) {
+      try {
+        if (pdf.cleanup) pdf.cleanup();
+      } catch {}
+      try {
+        if (pdf.destroy) await pdf.destroy();
+      } catch {}
+      pdf = null;
+    }
+  }
+}
 
-          const page = await pdf.getPage(pageNum);
+export async function extractPagesContent(links, files) {
+  let pagesContent = [];
 
-          if (!page) {
-            pagesContent.push({
-              id: `${i + 1}.${pageNum}`,
-              name: files[i]?.originalname || `Document ${i + 1}`,
-              error: "Page not found",
-              site_content: "",
-              total_words: 0,
-              mapping: [],
-            });
-            continue;
-          }
+  for (let i = 0; i < links.length; i += 1) {
+    const batch = links.slice(i, i + 1);
 
-          const content = await page.getTextContent();
+    const batchPromises = batch.map((link, batchIndex) => {
+      const fileIndex = i + batchIndex;
+      const fileName =
+        files[fileIndex]?.originalname || `Document ${fileIndex + 1}`;
+      return processSinglePDF(link, fileIndex, fileName);
+    });
 
-          if (!content || !content.items) {
-            pagesContent.push({
-              id: `${i + 1}.${pageNum}`,
-              name: files[i]?.originalname || `Document ${i + 1}`,
-              site_content: "",
-              total_words: 0,
-              mapping: [],
-            });
-            continue;
-          }
+    try {
+      const batchResults = await Promise.all(batchPromises);
 
-          content.items.forEach((item) => {
-            try {
-              if (!item || !item.str || !item.transform) {
-                return;
-              }
-
-              const words = item.str.split(/\s+/);
-              const [, , , , x, y] = item.transform;
-
-              const roundedY = Math.round(y);
-
-              words.forEach((word) => {
-                if (word && word.trim().length > 0) {
-                  word.split(/[ -]+/).map((text) => {
-                    if (text.trim().length === 0) {
-                      return;
-                    }
-
-                    if (!new_map.has(roundedY)) {
-                      new_map.set(roundedY, []);
-                    }
-
-                    new_map.get(roundedY).push({
-                      word: text.toLowerCase(),
-                      x,
-                      y: roundedY,
-                    });
-                  });
-                }
-              });
-            } catch {}
-          });
-
-          const sortedMapping = Array.from(new_map.entries())
-            .sort((a, b) => b[0] - a[0])
-            .map(([y, words]) => {
-              const sortedWords = words.sort((a, b) => a.x - b.x);
-              return [y, sortedWords];
-            });
-
-          const orderedText = sortedMapping
-            .map(([, words]) => words.map((w) => w.word).join(" "))
-            .join(" ");
-
-          try {
-            site_content = formatResponse(orderedText);
-          } catch {
-            site_content = orderedText;
-          }
-
-          pagesContent.push({
-            id: `${i + 1}.${pageNum}`,
-            name: files[i].originalname,
-            site_content,
-            total_words: site_content.split(" ").length,
-            mapping: sortedMapping,
-          });
-        } catch {
-          pagesContent.push({
-            id: `${i + 1}.${pageNum}`,
-            name: files[i]?.originalname || `Document ${i + 1}`,
-            error: `Failed to process page ${pageNum}`,
-            site_content: "",
-            total_words: 0,
-            mapping: [],
-          });
-        }
+      for (const result of batchResults) {
+        pagesContent.push(...result);
       }
-    } catch {
+    } catch (err) {
       throw new AppError(
         "Failed to process documents",
         500,
         "DOCUMENT_FAILED_ERROR"
       );
     }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
   const errorPages = pagesContent.filter((page) => page.error);
-  const totalPages = files.length + errorPages.length;
+  const totalPages = pagesContent.length;
 
   if (totalPages === 0) {
     throw new AppError(
