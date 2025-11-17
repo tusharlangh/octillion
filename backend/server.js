@@ -10,7 +10,6 @@ const port = process.env.PORT || 5002;
 
 const app = express();
 
-// Configure CORS to allow credentials (cookies)
 const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
   credentials: true,
