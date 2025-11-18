@@ -48,7 +48,11 @@ export function buildOptimizedIndex(pagesContent) {
       throw new AppError(
         "Keyword index is empty",
         500,
-        "EMPTY_KEYWORD_INDEX_ERROR"
+        "EMPTY_KEYWORD_INDEX_ERROR",
+        {
+          pagesContent: pagesContent,
+          index: index.toJSON,
+        }
       );
     }
 
@@ -93,5 +97,3 @@ export async function generateChunks(pagesContent) {
     throw new AppError("Failed generating chunks", 500, "FAILED_CHUNKS_ERROR");
   }
 }
-
-

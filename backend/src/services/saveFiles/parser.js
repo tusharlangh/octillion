@@ -183,5 +183,13 @@ export async function extractPagesContent(links, files) {
     );
   }
   pagesContent = pagesContent.filter((page) => !page.error);
+
+  if (pagesContent.length === 0) {
+    throw new AppError(
+      `Pages content is empty`,
+      500,
+      "EMPTY_PAGE_CONTENT_ERROR"
+    );
+  }
   return pagesContent;
 }
