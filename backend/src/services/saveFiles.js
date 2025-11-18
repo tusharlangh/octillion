@@ -44,7 +44,11 @@ export async function saveFiles(id, files, userId) {
 
   try {
     keywordIndex = buildOptimizedIndex(pagesContent);
-  } catch {
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+
     throw new AppError(
       "Failed to build optimized index",
       500,
@@ -76,4 +80,3 @@ export async function saveFiles(id, files, userId) {
 
   return data;
 }
-
