@@ -1,3 +1,4 @@
 .env
+.serverless
 .serverless/
 .serverless_plugins/
