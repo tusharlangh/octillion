@@ -10,6 +10,7 @@ export async function save_files_controller(req, res, next) {
     const id = req.body.id;
     const files = req.files;
     const userId = req.user;
+    console.log(userId);
 
     if (!userId) {
       throw new UnauthorizedError("Authorization required");

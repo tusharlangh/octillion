@@ -6,8 +6,6 @@ import { errorHandler } from "./src/middleware/errorHandler.js";
 
 dotenv.config();
 
-const port = process.env.PORT || 5002;
-
 const app = express();
 
 const corsOptions = {
@@ -19,25 +17,24 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-async function startServer() {
-  try {
-    app.use("/", routes);
+app.use("/", routes);
 
-    app.use((req, res) => {
-      res.status(404).json({
-        error: {
-          code: "ROUTE_NOT_FOUND",
-          message: `Cannot ${req.method} ${req.path}`,
-        },
-      });
-    });
+app.use((req, res) => {
+  res.status(404).json({
+    error: {
+      code: "ROUTE_NOT_FOUND",
+      message: `Cannot ${req.method} ${req.path}`,
+    },
+  });
+});
 
-    app.use(errorHandler);
-  } catch (error) {
-    console.log(`${error} has occured.`);
-  }
+app.use(errorHandler);
+
+if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  const port = process.env.PORT || 5002;
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
 }
-
-await startServer();
 
 export default app;

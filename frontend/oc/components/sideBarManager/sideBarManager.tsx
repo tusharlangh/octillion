@@ -38,7 +38,7 @@ export default function SideBarManager() {
           {
             method: "GET",
             headers: {
-              method: "application/json",
+              "Content-Type": "application/json",
               Authorization: `Bearer ${jwt}`,
             },
           }
@@ -95,7 +95,7 @@ export default function SideBarManager() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/get-pfp`, {
           method: "GET",
           headers: {
-            method: "application/json",
+            "Content-Type": "application/json",
             Authorization: `Bearer ${jwt}`,
           },
         });

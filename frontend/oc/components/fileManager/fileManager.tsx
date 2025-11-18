@@ -41,7 +41,7 @@ export default function FileManager() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/get-name`, {
           method: "GET",
           headers: {
-            method: "application/json",
+            "Content-Type": "application/json",
             Authorization: `Bearer ${jwt}`,
           },
         });

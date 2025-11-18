@@ -1,7 +1,18 @@
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { AppError } from "../../middleware/errorHandler.js";
 
-pdfjs.GlobalWorkerOptions.workerSrc = "pdfjs-dist/legacy/build/pdf.worker.mjs";
+let _pdfjs = null;
+let _pdfjsInit = false;
+async function getPdfjs() {
+  if (!_pdfjs) {
+    _pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    if (!_pdfjsInit) {
+      _pdfjs.GlobalWorkerOptions.workerSrc =
+        "pdfjs-dist/legacy/build/pdf.worker.mjs";
+      _pdfjsInit = true;
+    }
+  }
+  return _pdfjs;
+}
 
 function formatResponse(res) {
   return res
@@ -133,6 +144,7 @@ async function processSinglePDF(link, fileIndex, fileName) {
       ];
     }
 
+    const pdfjs = await getPdfjs();
     const loadingTask = pdfjs.getDocument({
       url: link,
       disableFontFace: true,
