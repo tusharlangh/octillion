@@ -5,7 +5,16 @@ provider:
   runtime: nodejs18.x
   region: us-east-1
   memorySize: 512
-  timeout: 30
+  timeout: 29
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:PutObject
+        - s3:GetObject
+        - s3:ListBucket
+      Resource:
+        - arn:aws:s3:::octillion-bucket
+        - arn:aws:s3:::octillion-bucket/*
   environment:
     NODE_ENV: production
     PORT: 5002
@@ -18,20 +27,6 @@ provider:
     QDRANT_API_KEY: ${env:QDRANT_API_KEY}
     OPENAI_API_KEY: ${env:OPENAI_API_KEY}
     FRONTEND_URL: https://octillion.vercel.app
-
-  iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - ssm:GetParameter
-        - ssm:GetParameters
-      Resource:
-        - arn:aws:ssm:${self:provider.region}:*:parameter/octillion/*
-    - Effect: Allow
-      Action:
-        - s3:*
-      Resource:
-        - arn:aws:s3:::octillion-s3-bucket
-        - arn:aws:s3:::octillion-s3-bucket/*
 
 functions:
   app:
@@ -78,8 +73,6 @@ build:
 package:
   individually: true
   exclude:
-    - node_modules/pdfjs-dist/**
-    - node_modules/pdfjs-dist/**/*
     - node_modules/onnxruntime-web/**
     - node_modules/@esbuild/**
     - node_modules/@babel/**
