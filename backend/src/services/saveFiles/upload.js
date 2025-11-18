@@ -37,7 +37,19 @@ export async function uploadToS3(id, index, file) {
     }
 
     if (errorCode === 403 || errorCode === "AccessDenied") {
-      throw new AppError("Access denied to S3 bucket", 403, "S3_ACCESS_DENIED");
+      throw new AppError(
+        "Access denied to S3 bucket",
+        403,
+        "S3_ACCESS_DENIED",
+        {
+          key: `${id}-${index}-${file.originalname}`,
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          bucket: process.env.S3_BUCKET_NAME,
+          errorMessage: error.message,
+          errorCode: error.code,
+          requestId: error.$metadata?.requestId,
+        }
+      );
     }
 
     throw new AppError(

@@ -88,5 +88,3 @@ export async function generateAndUploadEmbeddings(id, userId, pagesContent) {
     );
   }
 }
-
-
