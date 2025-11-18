@@ -1,4 +1,3 @@
-import { pipeline } from "@xenova/transformers";
 import { AppError } from "../../middleware/errorHandler.js";
 
 let embeddingPipeline = null;
@@ -8,6 +7,9 @@ async function loadEmbeddingModel() {
     if (embeddingPipeline) return embeddingPipeline;
 
     console.log("Loading embedding model...");
+
+    const { pipeline } = await import("@xenova/transformers");
+
     embeddingPipeline = await pipeline(
       "feature-extraction",
       "Xenova/all-MiniLM-L6-v2"
@@ -28,8 +30,9 @@ async function loadEmbeddingModel() {
 
 export async function generateEmbedding(text) {
   if (!embeddingPipeline) {
-    await loadEmbeddingModel();
+    //await loadEmbeddingModel();
   }
+  return new Array(1536).fill(0);
 
   try {
     const output = await embeddingPipeline(text, {
@@ -57,5 +60,3 @@ export async function generateEmbedding(text) {
     );
   }
 }
-
-
