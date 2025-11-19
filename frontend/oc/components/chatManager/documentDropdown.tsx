@@ -47,7 +47,7 @@ export default function DocumentDropdown({
           {
             method: "GET",
             headers: {
-              method: "application/json",
+              "Content-Type": "application/json",
               Authorization: `Bearer ${jwt}`,
             },
           }
