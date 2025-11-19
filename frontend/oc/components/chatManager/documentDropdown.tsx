@@ -43,7 +43,7 @@ export default function DocumentDropdown({
         }
 
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/get-view-files/`,
+          `${process.env.NEXT_PUBLIC_API_URL}/get-view-files`,
           {
             method: "GET",
             headers: {
