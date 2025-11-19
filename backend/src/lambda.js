@@ -6,7 +6,6 @@ export const handler = async (event, context) => {
     console.log("Event:", JSON.stringify(event, null, 2));
     const serverlessHandler = ServerlessHttp(app, {
       provider: "aws",
-      basePath: "/dev",
     });
     return await serverlessHandler(event, context);
   } catch (error) {
