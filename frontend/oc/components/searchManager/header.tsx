@@ -121,38 +121,40 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <section className="w-full pt-2 px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
-      <div className="px-2 relative w-full mt-20 group flex border-b border-neutral-200 dark:border-neutral-800">
-        <Search
-          className={`${
-            search.length === 0
-              ? "text-neutral-400 dark:text-neutral-600"
-              : "text-neutral-900 dark:text-neutral-200"
-          } absolute top-3 
-          group-hover:text-neutral-700 dark:group-hover:text-neutral-400 
-          transition-colors duration-200`}
-          height={18}
-          width={18}
-        />
-        <input
-          placeholder="Search files"
-          className={`${dmSans.className} w-full 
-          p-2 pl-7 text-lg outline-none 
-          placeholder:text-neutral-400 dark:placeholder:text-neutral-600
-          ${
-            search.length === 0
-              ? "text-neutral-500 dark:text-neutral-400"
-              : "text-neutral-900 dark:text-neutral-200"
-          } 
-          focus:text-neutral-900 dark:focus:text-neutral-100 
-          focus:border-neutral-400 dark:focus:border-neutral-600
-          bg-transparent
-          transition-colors duration-200`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-        <div className="inline-flex items-center p-0.5 shrink-0">
+    <section className="w-full pt-2 px-2 md:px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
+      <div className="px-2 relative w-full mt-20 group flex flex-col md:flex-row border-b border-neutral-200 dark:border-neutral-800">
+        <div className="relative flex-1 flex items-center">
+          <Search
+            className={`${
+              search.length === 0
+                ? "text-neutral-400 dark:text-neutral-600"
+                : "text-neutral-900 dark:text-neutral-200"
+            } absolute top-2.75 md:top-3 left-0
+            group-hover:text-neutral-700 dark:group-hover:text-neutral-400 
+            transition-colors duration-200`}
+            height={18}
+            width={18}
+          />
+          <input
+            placeholder="Search files"
+            className={`${dmSans.className} w-full 
+            p-2 pl-7 text-base md:text-lg outline-none 
+            placeholder:text-neutral-400 dark:placeholder:text-neutral-600
+            ${
+              search.length === 0
+                ? "text-neutral-500 dark:text-neutral-400"
+                : "text-neutral-900 dark:text-neutral-200"
+            } 
+            focus:text-neutral-900 dark:focus:text-neutral-100 
+            focus:border-neutral-400 dark:focus:border-neutral-600
+            bg-transparent
+            transition-colors duration-200`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
+        <div className="inline-flex items-center p-0.5 shrink-0 mb-2 md:mb-0 gap-1">
           <button
             onClick={() => {
               setSearchType("keyword");
@@ -160,7 +162,7 @@ export default function Header({ id }: Props) {
             }}
             className={`${
               dmSans.className
-            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
             transition-all duration-200 ease-out ${
               searchType === "keyword"
                 ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
@@ -176,7 +178,7 @@ export default function Header({ id }: Props) {
             }}
             className={`${
               dmSans.className
-            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
             transition-all duration-200 ease-out ${
               searchType === "enhanced"
                 ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
@@ -192,7 +194,7 @@ export default function Header({ id }: Props) {
             }}
             className={`${
               dmSans.className
-            } relative z-10 px-2 py-0.5 text-[13px] font-medium rounded-[5px] 
+            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
             transition-all duration-200 ease-out ${
               searchType === "hybrid"
                 ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"

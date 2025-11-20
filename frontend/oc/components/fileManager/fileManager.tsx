@@ -90,8 +90,8 @@ export default function FileManager() {
   }, []);
 
   return (
-    <section className="flex flex-col justify-center items-center">
-      <div className="h-[60px] flex items-center justify-center">
+    <section className="flex flex-col justify-center items-center w-full">
+      <div className="h-[50px] md:h-[60px] flex items-center justify-center px-4 pb-4">
         <AnimatePresence>
           {text && (
             <motion.p
@@ -105,7 +105,7 @@ export default function FileManager() {
                 damping: 25,
                 duration: 0.5,
               }}
-              className={`${libreBaskerville.className} text-4xl`}
+              className={`${libreBaskerville.className} text-2xl md:text-3xl lg:text-4xl text-center`}
             >
               Hey {text.split(" ")[0]}! Start uploading files
             </motion.p>

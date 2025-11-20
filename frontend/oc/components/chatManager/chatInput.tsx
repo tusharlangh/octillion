@@ -247,11 +247,11 @@ export default function ChatInput() {
   return (
     <section
       ref={sectionRef}
-      className="w-full flex justify-center pb-10 max-w-[60%] mx-auto relative"
+      className="w-full flex justify-center pb-4 md:pb-10 max-w-full md:max-w-[80%] lg:max-w-[60%] mx-auto relative px-2 md:px-0"
     >
       <div
         ref={containerRef}
-        className="flex items-center pt-4 gap-2 px-4 py-2 w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 transition-colors duration-200 rounded-lg shadow-lg"
+        className="flex items-center pt-4 gap-2 px-3 md:px-4 py-2 w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 transition-colors duration-200 rounded-lg shadow-lg"
       >
         <div className="flex-1 relative">
           <textarea
@@ -259,7 +259,7 @@ export default function ChatInput() {
             placeholder="What can I help you with today? Type @ to mention a document"
             className={`${libreBaskerville.className} w-full
                      border-0 bg-transparent
-                     text-[16px] outline-none 
+                     text-[14px] md:text-[16px] outline-none 
                      placeholder:text-black/40 dark:placeholder:text-white/40
                      text-black/80 dark:text-white/80
                      resize-none overflow-y-auto
@@ -296,7 +296,7 @@ export default function ChatInput() {
           <button
             onClick={handleSend}
             disabled={!search.trim() || isLoading}
-            className={`flex-shrink-0 w-9 h-9 rounded-full
+            className={`flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full
                      flex items-center justify-center
                      transition-all duration-200
                      ${

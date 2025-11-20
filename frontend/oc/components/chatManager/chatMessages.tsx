@@ -68,8 +68,8 @@ export default function ChatMessages() {
                     dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
                     transition-colors duration-200"
     >
-      <div className="flex flex-col items-center w-full py-8 space-y-3">
-        <div className="w-[60%] mx-auto">
+      <div className="flex flex-col items-center w-full py-16 md:py-8 space-y-3">
+        <div className="w-[93%] md:w-[60%] mx-auto">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
 
