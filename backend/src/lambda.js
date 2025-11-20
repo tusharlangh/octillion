@@ -3,10 +3,6 @@ import app from "../server.js";
 
 export const handler = async (event, context) => {
   try {
-    console.log("Event:", JSON.stringify(event, null, 2));
-    console.log("Memory Limit:", context.memoryLimitInMB);
-    console.log("Remaining Time:", context.getRemainingTimeInMillis());
-    
     const serverlessHandler = ServerlessHttp(app, {
       provider: "aws",
       binary: ["multipart/form-data"],

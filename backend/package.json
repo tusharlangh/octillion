@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "build": "babel src --out-dir dist",
     "deploy": "serverless deploy",
     "dev": "serverless offline",
     "start": "node --max-old-space-size=256 --expose-gc server.js",
@@ -36,6 +37,9 @@
     "serverless-http": "^4.0.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
     "@types/jest": "^30.0.0",
     "jest": "^30.2.0",
     "serverless-esbuild": "^1.56.0",
