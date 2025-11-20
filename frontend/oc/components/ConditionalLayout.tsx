@@ -42,7 +42,7 @@ export default function ConditionalLayout({
       <div className="h-[100vh] w-[100vw] bg-[#F5F5F7] dark:bg-[rgb(18,18,18)] md:pt-2 md:pl-4 flex relative overflow-hidden">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="md:hidden fixed top-4 left-3 z-10 cursor-pointer bg-[rgb(242,242,242)] p-1.5 rounded-[4px]"
+          className="md:hidden fixed top-4 left-4 z-10 cursor-pointer bg-[rgb(242,242,242)] p-1.5 rounded-[4px]"
           aria-label="Toggle menu"
         >
           {!isSidebarOpen && (
@@ -82,7 +82,9 @@ export default function ConditionalLayout({
           </div>
         </section>
 
-        <div className="w-full md:pl-4 pt-0 px-0 overflow-auto">{children}</div>
+        <div className="w-full md:pl-4 pt-0 px-0 h-full overflow-hidden">
+          {children}
+        </div>
 
         <div id="modal-root"></div>
       </div>
