@@ -122,7 +122,7 @@ export default function Result() {
   }
 
   return (
-    <div className="pt-2 px-13">
+    <div className="pt-2 px-4 md:px-13">
       <div className="pb-2">
         <div className="flex items-end justify-between">
           {query.length !== 0 && (
@@ -151,7 +151,7 @@ export default function Result() {
             >
               <div className="flex flex-col gap-4">
                 <p
-                  className={`${dmSans.className} text-[17px] sm:text-[18px] leading-[1.8] 
+                  className={`${dmSans.className} text-[16px] md:text-[18px] leading-[1.8] 
                              font-light tracking-[-0.01em]
                              text-neutral-800 dark:text-neutral-200
                              transition-colors duration-200`}

@@ -145,7 +145,7 @@ export default function SideBarManager() {
   }, []);
 
   return (
-    <div className="flex flex-col justify-between h-full pt-2 transition-colors duration-200">
+    <div className="flex flex-col justify-between h-full pt-0 md:pt-2 transition-colors duration-200">
       <div>
         <TopLevel />
         <div className="my-1">
@@ -165,7 +165,7 @@ export default function SideBarManager() {
               width={18}
             />
             <p
-              className={`pt-0.5 text-sm transition-colors duration-200 ${
+              className={`pt-0.5 text-sm md:text-sm transition-colors duration-200 ${
                 isHomeActive
                   ? "text-black/60 dark:text-white/60"
                   : "text-neutral-400 dark:text-neutral-500"
@@ -190,7 +190,7 @@ export default function SideBarManager() {
               width={18}
             />
             <p
-              className={`pt-0.5 text-sm transition-colors duration-200 ${
+              className={`pt-0.5 text-sm md:text-sm transition-colors duration-200 ${
                 isChatsActive
                   ? "text-neutral-700 dark:text-neutral-300"
                   : "text-neutral-400 dark:text-neutral-500"
