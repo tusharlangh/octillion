@@ -53,7 +53,7 @@ export default function SearchManager({
       <div
         className={`${
           isLoading ? "overflow-hidden" : "overflow-y-auto"
-        } max-h-[100vh] md:max-h-[calc(100vh-80px)] relative
+        } h-full relative
            scrollbar-thin scrollbar-track-transparent
            scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300
            dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
