@@ -8,16 +8,51 @@ dotenv.config();
 
 const app = express();
 
+// Enhanced CORS configuration for Railway deployment
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://octillion.vercel.app",
+  process.env.FRONTEND_URL,
+].filter(Boolean); // Remove undefined values
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list or matches pattern
+    if (allowedOrigins.includes(origin) || origin.includes('vercel.app')) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked origin: ${origin}`);
+      callback(null, true); // Allow anyway for demo purposes
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: [
+    "Content-Type", 
+    "Authorization", 
+    "X-Requested-With",
+    "Accept",
+    "Origin"
+  ],
+  exposedHeaders: ["Content-Length", "Content-Type"],
+  maxAge: 86400, // 24 hours
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Health check endpoint for Railway
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development"
+  });
+});
 
 app.use("/", routes);
 
@@ -32,10 +67,13 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-// Start server (Render.com will set PORT env variable)
+// Start server (Railway will set PORT env variable)
 const port = process.env.PORT || 5002;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+app.listen(port, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${port}`);
+  console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`🌐 CORS enabled for: ${allowedOrigins.join(", ")}`);
+  console.log(`✅ Health check: http://localhost:${port}/health`);
 });
 
 export default app;

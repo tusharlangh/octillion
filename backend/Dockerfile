@@ -1,31 +1,43 @@
-# Use Node.js 20 Alpine for smaller image size
-FROM node:20-alpine
+# Multi-stage build for Railway deployment
+FROM node:22-slim AS builder
 
-# Install system dependencies for canvas and native modules
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    cairo-dev \
-    jpeg-dev \
-    pango-dev \
-    giflib-dev \
-    pixman-dev
-
-# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --production
+# Install all dependencies (including dev dependencies for build)
+RUN npm install
 
-# Copy application code
+# Copy source code
 COPY . .
 
-# Expose port (Render will set PORT env variable)
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:22-slim
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm install --omit=dev
+
+# Copy built artifacts from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Copy other necessary files
+COPY server.js ./
+COPY supabaseClient.js ./
+
+# Expose port (Railway will set PORT env variable)
 EXPOSE 5002
 
-# Start the application
+# Set NODE_ENV to production
+ENV NODE_ENV=production
+
+# Start the server
 CMD ["node", "server.js"]
