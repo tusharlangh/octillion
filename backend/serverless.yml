@@ -15,6 +15,9 @@ provider:
       Resource:
         - arn:aws:s3:::octillion-bucket
         - arn:aws:s3:::octillion-bucket/*
+  apiGateway:
+    binaryMediaTypes:
+      - "multipart/form-data"
   environment:
     NODE_ENV: production
     PORT: 5002
