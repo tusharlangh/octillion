@@ -6,6 +6,7 @@ export const handler = async (event, context) => {
     console.log("Event:", JSON.stringify(event, null, 2));
     const serverlessHandler = ServerlessHttp(app, {
       provider: "aws",
+      binary: ["multipart/form-data"],
     });
     return await serverlessHandler(event, context);
   } catch (error) {

@@ -181,7 +181,6 @@ export default function ChatInput() {
         {
           method: "GET",
           headers: {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${jwt}`,
           },
         }

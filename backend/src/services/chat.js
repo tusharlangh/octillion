@@ -200,6 +200,8 @@ export async function chat(id, search, userId) {
       throw new AppError("Invalid AI response", 500, "INVALID_AI_RESPONSE");
     }
 
+    console.log("here is the ai response: ", aiResponse);
+
     return {
       success: true,
       response: aiResponse,
