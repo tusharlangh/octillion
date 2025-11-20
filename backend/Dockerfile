@@ -1,32 +1,31 @@
-# Use AWS Lambda Node.js 20 base image (Amazon Linux 2023)
-FROM public.ecr.aws/lambda/nodejs:20
+# Use Node.js 20 Alpine for smaller image size
+FROM node:20-alpine
 
-# Set workdir
-WORKDIR /var/task
+# Install system dependencies for canvas and native modules
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev
 
-# Copy package files first
+# Set working directory
+WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
 
-# Install system deps + npm install in ONE layer (smaller image)
-RUN dnf install -y \
-      gcc \
-      gcc-c++ \
-      make \
-      cairo \
-      cairo-devel \
-      pango \
-      pango-devel \
-      freetype \
-      freetype-devel \
-      libpng \
-      libpng-devel \
-      fontconfig \
-      libuuid-devel && \
-    npm install --production && \
-    dnf clean all
+# Install dependencies
+RUN npm ci --production
 
-# Copy the rest of the code
+# Copy application code
 COPY . .
 
-# Lambda handler
-CMD ["src/lambda.handler"]
+# Expose port (Render will set PORT env variable)
+EXPOSE 5002
+
+# Start the application
+CMD ["node", "server.js"]

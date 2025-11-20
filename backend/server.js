@@ -12,6 +12,8 @@ const corsOptions = {
   origin: process.env.FRONTEND_URL || "http://localhost:3000",
   credentials: true,
   optionsSuccessStatus: 200,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 app.use(cors(corsOptions));
@@ -30,11 +32,10 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
-  const port = process.env.PORT || 5002;
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-  });
-}
+// Start server (Render.com will set PORT env variable)
+const port = process.env.PORT || 5002;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
 
 export default app;

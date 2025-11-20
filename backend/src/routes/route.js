@@ -11,6 +11,15 @@ import { get_name_controller } from "../controllers/get_name_controller.js";
 
 const router = express.Router();
 
+// Health check endpoint for Render.com
+router.get("/", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Octillion Backend API",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 router.get(`/get-files`, auth, get_files_controller);
 router.post(
   `/save-files`,
