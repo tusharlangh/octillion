@@ -316,14 +316,9 @@ export default function ChatInput() {
           </button>
         </div>
       </div>
-      {isOpenedDropdown && dropdownPosition && (
+      {isOpenedDropdown && (
         <div
-          className="absolute z-50"
-          style={{
-            bottom: `calc(100% - ${dropdownPosition.top}px)`,
-            left: `${dropdownPosition.left}px`,
-            marginBottom: "8px",
-          }}
+          className="absolute z-50 left-0 right-0 bottom-full mb-2"
         >
           <DocumentDropdown
             setSelectedDoc={setSelectedDoc}
