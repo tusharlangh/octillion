@@ -317,9 +317,7 @@ export default function ChatInput() {
         </div>
       </div>
       {isOpenedDropdown && (
-        <div
-          className="absolute z-50 left-0 right-0 bottom-full mb-2"
-        >
+        <div className="absolute z-50 left-0 bottom-full mb-2 w-max max-w-full">
           <DocumentDropdown
             setSelectedDoc={setSelectedDoc}
             onClose={() => {
