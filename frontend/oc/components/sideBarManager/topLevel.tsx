@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Search, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose } from "lucide-react";
 import Logo from "../logo";
 import { useContext } from "react";
 import { SidebarContext } from "../ConditionalLayout";
@@ -13,10 +13,10 @@ export default function TopLevel() {
   const { open, setIsSidebarOpen } = context;
 
   return (
-    <div className="flex justify-between items-center px-2">
+    <div className="flex justify-between items-center pl-2">
       <Logo />
       <div className="flex gap-3" onClick={() => setIsSidebarOpen(false)}>
-        <PanelLeftOpen
+        <PanelLeftClose
           className="text-neutral-400 dark:text-neutral-500 cursor-pointer 
                      hover:text-neutral-900 dark:hover:text-white 
                      transition-colors duration-200"
