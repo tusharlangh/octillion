@@ -259,7 +259,7 @@ export default function ChatInput() {
             placeholder="What can I help you with today? Type @ to mention a document"
             className={`${libreBaskerville.className} w-full
                      border-0 bg-transparent
-                     text-[14px] md:text-[16px] outline-none 
+                     text-[16px] outline-none 
                      placeholder:text-black/40 dark:placeholder:text-white/40
                      text-black/80 dark:text-white/80
                      resize-none overflow-y-auto
@@ -320,10 +320,9 @@ export default function ChatInput() {
         <div
           className="absolute z-50"
           style={{
-            top: `${dropdownPosition.top}px`,
+            bottom: `calc(100% - ${dropdownPosition.top}px)`,
             left: `${dropdownPosition.left}px`,
-            transform: "translateY(-100%)",
-            marginTop: "-8px",
+            marginBottom: "8px",
           }}
         >
           <DocumentDropdown
