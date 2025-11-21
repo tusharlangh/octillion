@@ -10,7 +10,7 @@ const dmSans = DM_Sans({
 
 export default function SearchLoading() {
   return (
-    <div className="pt-2 px-13 overflow-y-hidden">
+    <div className="pt-2 px-4 md:px-13 overflow-y-hidden">
       <div className="pt-5 pb-16">
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => (
