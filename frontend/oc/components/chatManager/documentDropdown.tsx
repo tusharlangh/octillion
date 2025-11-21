@@ -159,7 +159,7 @@ export default function DocumentDropdown({
   return (
     <motion.div
       ref={dropdownRef}
-      className="min-w-[200px] w-64 max-h-60 overflow-y-auto rounded-lg bg-[rgb(242,242,242)] dark:bg-white/5 border border-[rgb(218,218,218)] dark:border-white/10 transition-colors duration-200 shadow-lg p-1"
+      className="w-64 max-w-[90vw] max-h-60 overflow-y-auto rounded-lg bg-[rgb(242,242,242)] dark:bg-white/5 border border-[rgb(218,218,218)] dark:border-white/10 transition-colors duration-200 shadow-lg p-1"
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}

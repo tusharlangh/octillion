@@ -26,6 +26,20 @@ export default function ConditionalLayout({
     setIsSidebarOpen(false);
   }, [pathname]);
 
+  // Disable scrolling when sidebar is open on mobile
+  useEffect(() => {
+    if (isSidebarOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isSidebarOpen]);
+
   if (isAuthPage) {
     return (
       <div className="h-[100vh] w-[100vw] bg-[#F5F5F7] dark:bg-[rgb(18,18,18)]">
@@ -53,6 +67,14 @@ export default function ConditionalLayout({
             />
           )}
         </button>
+
+        {isSidebarOpen && (
+          <div
+            className="md:hidden fixed inset-0 z-30 transition-opacity duration-300"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close sidebar"
+          />
+        )}
 
         <section
           className={`
