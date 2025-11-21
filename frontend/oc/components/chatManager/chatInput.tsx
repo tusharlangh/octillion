@@ -78,7 +78,7 @@ export default function ChatInput() {
     text-transform: ${style.textTransform};
     margin: 0;
     overflow: hidden;
-  `;
+    `;
 
     const textBeforeCursor = textarea.value.substring(0, cursorPos);
     mirror.textContent = textBeforeCursor;
@@ -317,7 +317,10 @@ export default function ChatInput() {
         </div>
       </div>
       {isOpenedDropdown && (
-        <div className="absolute z-50 left-0 bottom-full mb-2 w-max max-w-full">
+        <div
+          className="absolute z-50 bottom-full mb-2 w-max max-w-full"
+          style={{ left: `${dropdownPosition?.left}px` }}
+        >
           <DocumentDropdown
             setSelectedDoc={setSelectedDoc}
             onClose={() => {
