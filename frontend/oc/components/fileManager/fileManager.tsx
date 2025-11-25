@@ -11,6 +11,7 @@ import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByS
 import { motion, AnimatePresence } from "framer-motion";
 import { DM_Sans } from "next/font/google";
 import { Info } from "lucide-react";
+import ErrorPopUp from "../popUp/errorPopUp";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -37,10 +38,13 @@ export default function FileManager() {
 
   useEffect(() => {
     async function get() {
+      console.log("🔵 Starting fetch...");
       setLoading(true);
       setError(null);
       try {
         const jwt = await handleTokenAction();
+        console.log("🔵 JWT obtained:", jwt ? "Yes" : "No");
+
         if (!jwt) {
           throw new Error("Failed to get authentication token");
         }
@@ -53,7 +57,11 @@ export default function FileManager() {
           },
         });
 
+        console.log("🔵 Response status:", res.status);
+        console.log("🔵 Response ok:", res.ok);
+
         const data = await res.json();
+        console.log("🔵 Parsed data:", data);
 
         if (!res.ok) {
           const errorMessage =
@@ -76,19 +84,13 @@ export default function FileManager() {
           return;
         }
 
+        console.log("🟢 About to call setText with:", data.data);
         setText(data.data);
+        console.log("🟢 setText called successfully");
       } catch (error) {
-        console.error("Getting name error: ", error);
-
-        if (error instanceof TypeError && error.message.includes("fetch")) {
-          setError("Network error. Please check your connection.");
-        } else if (error instanceof Error && error.message.includes("token")) {
-          setError("Authentication failed. Please log in again.");
-          setTimeout(() => router.replace("/login_signin/login"), 2000);
-        } else {
-          setError("An unexpected error occurred. Please try again.");
-        }
+        console.error("🔴 Getting name error: ", error);
       } finally {
+        console.log("🔵 Finally block - setting loading to false");
         setLoading(false);
       }
     }
@@ -143,6 +145,13 @@ export default function FileManager() {
           Only PDFs are allowed. Max 10 files, total size up to 100 MB
         </p>
       </div>
+      {error && (
+        <ErrorPopUp
+          errorMessage={error}
+          onDismiss={() => setError(null)}
+          isHome={true}
+        />
+      )}
     </section>
   );
 }
