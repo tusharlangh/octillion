@@ -125,12 +125,14 @@ async function processSinglePDF(link, fileIndex, fileName, file) {
   );
   const pageResults = await Promise.all(pagePromises);
   results.push(...pageResults);
+
+  pdfBuffer = null;
   return results;
 }
 
 export async function extractPagesContent(links, files) {
   let pagesContent = [];
-  let BATCH_SIZE = 10;
+  let BATCH_SIZE = 2;
   for (let i = 0; i < links.length; i += BATCH_SIZE) {
     const batch = links.slice(i, i + BATCH_SIZE);
     const batchPromises = batch.map((link, batchIndex) => {

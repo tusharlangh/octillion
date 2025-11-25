@@ -99,7 +99,12 @@ export async function ensureCollection(parseId, userId) {
   }
 }
 
-export async function uploadChunksToQdrant(parseId, userId, chunksData) {
+export async function uploadChunksToQdrant(
+  parseId,
+  userId,
+  chunksData,
+  offset = 0
+) {
   try {
     if (!parseId) {
       throw new ValidationError("Parse ID is required");
@@ -158,7 +163,7 @@ export async function uploadChunksToQdrant(parseId, userId, chunksData) {
       }
 
       points.push({
-        id: i + 1,
+        id: offset + i + 1,
         vector: embedding,
         payload: {
           pageId,
