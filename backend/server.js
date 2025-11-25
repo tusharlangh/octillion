@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 
 const allowedOrigins = [
-  "http://localhost:3001",
+  "http://localhost:3000",
   "https://octillion.vercel.app",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
@@ -40,7 +40,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: "100mb" }));
 
 app.use("/", routes);
 
@@ -61,5 +61,3 @@ app.listen(port, "0.0.0.0", () => {
   console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🌐 CORS enabled for: ${allowedOrigins.join(", ")}`);
 });
-
-export default app;

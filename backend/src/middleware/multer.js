@@ -24,7 +24,7 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 100 * 1024 * 1024,
     files: 10,
   },
 });
@@ -34,7 +34,7 @@ export const handleMulterError = (err, req, res, next) => {
     if (err.code === "LIMIT_FILE_SIZE") {
       return next(
         new AppError(
-          "File size exceeds the limit which is 10MB",
+          "File size exceeds the limit of 100MB",
           400,
           "FILE_TOO_LARGE"
         )
@@ -60,6 +60,27 @@ export const handleMulterError = (err, req, res, next) => {
   }
 
   next(err);
+};
+
+export const validateTotalFileSize = (req, res, next) => {
+  if (!req.files || req.files.length === 0) {
+    return next();
+  }
+
+  const totalSize = req.files.reduce((acc, file) => acc + file.size, 0);
+  const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+
+  if (totalSize > MAX_TOTAL_SIZE) {
+    return next(
+      new AppError(
+        "Total file size exceeds the limit of 100MB",
+        400,
+        "TOTAL_SIZE_TOO_LARGE"
+      )
+    );
+  }
+
+  next();
 };
 
 export default upload;

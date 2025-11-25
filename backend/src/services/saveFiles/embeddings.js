@@ -8,47 +8,49 @@ export async function generateAndUploadEmbeddings(id, userId, pagesContent) {
     const BATCH_SIZE = 10;
     const embedErrors = [];
 
-    for (const page of pagesContent) {
-      if (page.chunks && page.chunks.length > 0) {
-        for (let i = 0; i < page.chunks.length; i += BATCH_SIZE) {
-          const batch = page.chunks.slice(i, i + BATCH_SIZE);
-          let batchEmbeddings;
+    await Promise.all(
+      pagesContent.map(async (page) => {
+        if (page.chunks && page.chunks.length > 0) {
+          for (let i = 0; i < page.chunks.length; i += BATCH_SIZE) {
+            const batch = page.chunks.slice(i, i + BATCH_SIZE);
+            let batchEmbeddings;
 
-          batchEmbeddings = await Promise.all(
-            batch.map(async (chunk) => {
-              try {
-                return await generateEmbedding(chunk.text);
-              } catch {
-                embedErrors.push({
-                  pageId: page.id,
-                  error: `Chunk embeddings failed for page: ${page.id}`,
-                });
-                return null;
+            batchEmbeddings = await Promise.all(
+              batch.map(async (chunk) => {
+                try {
+                  return await generateEmbedding(chunk.text);
+                } catch {
+                  embedErrors.push({
+                    pageId: page.id,
+                    error: `Chunk embeddings failed for page: ${page.id}`,
+                  });
+                  return null;
+                }
+              })
+            );
+
+            for (let j = 0; j < batch.length; j++) {
+              const embedding = batchEmbeddings[j];
+              const chunk = batch[j];
+
+              if (!embedding || !chunk) {
+                continue;
               }
-            })
-          );
 
-          for (let j = 0; j < batch.length; j++) {
-            const embedding = batchEmbeddings[j];
-            const chunk = batch[j];
-
-            if (!embedding || !chunk) {
-              continue;
+              chunksData.push({
+                embedding,
+                pageId: page.id,
+                file_name: page.name,
+                startY: chunk.startY,
+                endY: chunk.endY,
+                text: chunk.text,
+                wordCount: chunk.wordCount,
+              });
             }
-
-            chunksData.push({
-              embedding,
-              pageId: page.id,
-              file_name: page.name,
-              startY: chunk.startY,
-              endY: chunk.endY,
-              text: chunk.text,
-              wordCount: chunk.wordCount,
-            });
           }
         }
-      }
-    }
+      })
+    );
 
     if (chunksData.length === 0) {
       throw new AppError("Empty chunks data", 500, "EMPTY_CHUNKS_FAILED");

@@ -9,6 +9,13 @@ import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { useRouter } from "next/navigation";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 import { motion, AnimatePresence } from "framer-motion";
+import { DM_Sans } from "next/font/google";
+import { Info } from "lucide-react";
+
+const dmSans = DM_Sans({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
 
 const libreBaskerville = Libre_Baskerville({
   weight: ["400", "700"],
@@ -124,6 +131,18 @@ export default function FileManager() {
           removeFile={removeFile}
         />
       )}
+      <div className={`pt-2 flex items-center gap-2`}>
+        <Info
+          className="text-black/60 dark:text-white/60"
+          height={18}
+          width={18}
+        />
+        <p
+          className={`${dmSans.className} text-sm text-black/60 dark:text-white/60 pt-0.5`}
+        >
+          Only PDFs are allowed. Max 10 files, total size up to 100 MB
+        </p>
+      </div>
     </section>
   );
 }

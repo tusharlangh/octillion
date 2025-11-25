@@ -59,7 +59,7 @@ async function processSinglePage(page, pageNum, fileIndex, fileName) {
   }
 }
 
-async function processSinglePDF(link, fileIndex, fileName) {
+async function processSinglePDF(link, fileIndex, fileName, file) {
   const results = [];
   if (!link) {
     return [
@@ -76,7 +76,9 @@ async function processSinglePDF(link, fileIndex, fileName) {
 
   let pdfBuffer;
   try {
-    if (link.startsWith("http://") || link.startsWith("https://")) {
+    if (file && file.buffer) {
+      pdfBuffer = file.buffer;
+    } else if (link.startsWith("http://") || link.startsWith("https://")) {
       const res = await fetch(link);
       pdfBuffer = Buffer.from(await res.arrayBuffer());
     } else {
@@ -117,29 +119,26 @@ async function processSinglePDF(link, fileIndex, fileName) {
       },
     ];
   }
-  // For each page
-  for (let i = 0; i < data.pages.length; i++) {
-    const page = data.pages[i];
-    const pageResult = await processSinglePage(
-      page,
-      i + 1,
-      fileIndex,
-      fileName
-    );
-    results.push(pageResult);
-  }
+
+  const pagePromises = data.pages.map((page, i) =>
+    processSinglePage(page, i + 1, fileIndex, fileName)
+  );
+  const pageResults = await Promise.all(pagePromises);
+  results.push(...pageResults);
   return results;
 }
 
 export async function extractPagesContent(links, files) {
   let pagesContent = [];
-  for (let i = 0; i < links.length; i += 1) {
-    const batch = links.slice(i, i + 1);
+  let BATCH_SIZE = 10;
+  for (let i = 0; i < links.length; i += BATCH_SIZE) {
+    const batch = links.slice(i, i + BATCH_SIZE);
     const batchPromises = batch.map((link, batchIndex) => {
       const fileIndex = i + batchIndex;
       const fileName =
         files[fileIndex]?.originalname || `Document ${fileIndex + 1}`;
-      return processSinglePDF(link, fileIndex, fileName);
+      const file = files[fileIndex];
+      return processSinglePDF(link, fileIndex, fileName, file);
     });
     try {
       const batchResults = await Promise.all(batchPromises);
@@ -159,7 +158,6 @@ export async function extractPagesContent(links, files) {
         }
       );
     }
-    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   const errorPages = pagesContent.filter((page) => page.error);
   const totalPages = pagesContent.length;

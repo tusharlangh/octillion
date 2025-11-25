@@ -31,7 +31,6 @@ jest.unstable_mockModule("./chat/systemPrompt.js", () => ({
   createSystemPrompt: jest.fn(),
 }));
 
-// Import after mocking
 const supabase = (await import("../utils/supabase/client.js")).default;
 const { parse } = await import("./parse.js");
 const { classifyQuery } = await import("./chat/queryClassifier.js");

@@ -5,6 +5,7 @@ import { AppError, ValidationError } from "../middleware/errorHandler.js";
 import { classifyQuery } from "./chat/queryClassifier.js";
 import { buildContext, buildFullContext } from "./chat/contextBuilder.js";
 import { createSystemPrompt } from "./chat/systemPrompt.js";
+import { getJsonFromS3 } from "./saveFiles/upload.js";
 
 export async function chat(id, search, userId) {
   try {
@@ -48,7 +49,11 @@ export async function chat(id, search, userId) {
       throw new AppError("Invalid file data", 500, "INVALID_FILE_DATA");
     }
 
-    const pagesContent = fileData.pages_metadata;
+    let pagesContent = fileData.pages_metadata;
+
+    if (pagesContent && pagesContent.s3Key) {
+      pagesContent = await getJsonFromS3(pagesContent.s3Key);
+    }
 
     if (!pagesContent || pagesContent.length === 0) {
       throw new AppError(
