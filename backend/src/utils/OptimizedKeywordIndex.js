@@ -1,10 +1,12 @@
 export class OptimizedKeywordIndex {
   constructor() {
-    this.prefixIndex = {};
-    this.suffixIndex = {};
+    this.dictionary = [];
+    this.wordToId = new Map();
+    this.postings = new Map();
+
     this.ngramIndex = new Map();
-    this.wordPositions = new Map();
-    this.seen = new Set();
+    this.prefixIndex = new Map();
+    this.suffixIndex = new Map();
   }
 
   add(word, pageId, y) {
@@ -13,49 +15,66 @@ export class OptimizedKeywordIndex {
     const normalizedWord = word.toLowerCase().replace(/[^a-z]/g, "");
     if (normalizedWord.length === 0) return;
 
-    const uniqueKey = `${normalizedWord}:${pageId}:${y}`;
-    if (this.seen.has(uniqueKey)) return;
-    this.seen.add(uniqueKey);
-
-    const firstChar = normalizedWord[0];
-    if (firstChar && /[a-z]/.test(firstChar)) {
-      if (!this.prefixIndex[firstChar]) {
-        this.prefixIndex[firstChar] = [];
-      }
-      this.prefixIndex[firstChar].push([normalizedWord, pageId, y]);
-    }
-
-    const lastChar = normalizedWord[normalizedWord.length - 1];
-    if (lastChar && /[a-z]/.test(lastChar)) {
-      if (!this.suffixIndex[lastChar]) {
-        this.suffixIndex[lastChar] = [];
-      }
-      this.suffixIndex[lastChar].push([normalizedWord, pageId, y]);
-    }
-
-    if (normalizedWord.length >= 3) {
-      for (let i = 0; i <= normalizedWord.length - 3; i++) {
-        const ngram = normalizedWord.substring(i, i + 3);
-        if (!this.ngramIndex.has(ngram)) {
-          this.ngramIndex.set(ngram, new Set());
-        }
-        this.ngramIndex.get(ngram).add(uniqueKey);
-      }
+    let wordId;
+    if (this.wordToId.has(normalizedWord)) {
+      wordId = this.wordToId.get(normalizedWord);
     } else {
-      if (!this.wordPositions.has(normalizedWord)) {
-        this.wordPositions.set(normalizedWord, new Set());
-      }
-      this.wordPositions.get(normalizedWord).add(`${pageId}:${y}`);
+      wordId = this.dictionary.length;
+      this.dictionary.push(normalizedWord);
+      this.wordToId.set(normalizedWord, wordId);
+      this.postings.set(wordId, []);
     }
+
+    this.postings.get(wordId).push([pageId, y]);
   }
 
   finalize() {
-    for (const char in this.prefixIndex) {
-      this.prefixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
+    for (let wordId = 0; wordId < this.dictionary.length; wordId++) {
+      const word = this.dictionary[wordId];
+
+      // Prefix Index
+      const firstChar = word[0];
+      if (firstChar) {
+        if (!this.prefixIndex.has(firstChar)) {
+          this.prefixIndex.set(firstChar, []);
+        }
+        this.prefixIndex.get(firstChar).push(wordId);
+      }
+
+      // Suffix Index
+      const lastChar = word[word.length - 1];
+      if (lastChar) {
+        if (!this.suffixIndex.has(lastChar)) {
+          this.suffixIndex.set(lastChar, []);
+        }
+        this.suffixIndex.get(lastChar).push(wordId);
+      }
+
+      // N-gram Index
+      if (word.length >= 3) {
+        const seenNgrams = new Set();
+        for (let i = 0; i <= word.length - 3; i++) {
+          const ngram = word.substring(i, i + 3);
+          if (!seenNgrams.has(ngram)) {
+            seenNgrams.add(ngram);
+            if (!this.ngramIndex.has(ngram)) {
+              this.ngramIndex.set(ngram, []);
+            }
+            this.ngramIndex.get(ngram).push(wordId);
+          }
+        }
+      }
     }
 
-    for (const char in this.suffixIndex) {
-      this.suffixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [char, wordIds] of this.prefixIndex) {
+      wordIds.sort((a, b) =>
+        this.dictionary[a].localeCompare(this.dictionary[b])
+      );
+    }
+    for (const [char, wordIds] of this.suffixIndex) {
+      wordIds.sort((a, b) =>
+        this.dictionary[a].localeCompare(this.dictionary[b])
+      );
     }
   }
 
@@ -65,51 +84,57 @@ export class OptimizedKeywordIndex {
     const normalizedPattern = pattern.toLowerCase().replace(/[^a-z]/g, "");
     if (normalizedPattern.length === 0) return [];
 
-    const results = new Map();
+    const results = new Map(); // Key: "word:pageId:y", Value: [word, pageId, y]
 
     if (matchType === "all" || matchType === "prefix") {
-      const prefixResults = this._searchPrefix(normalizedPattern);
-      for (const result of prefixResults) {
-        const key = `${result[0]}:${result[1]}:${result[2]}`;
-        results.set(key, result);
-      }
+      const prefixMatches = this._searchPrefix(normalizedPattern);
+      this._collectResults(prefixMatches, results);
     }
 
     if (matchType === "all" || matchType === "suffix") {
-      const suffixResults = this._searchSuffix(normalizedPattern);
-      for (const result of suffixResults) {
-        const key = `${result[0]}:${result[1]}:${result[2]}`;
-        results.set(key, result);
-      }
+      const suffixMatches = this._searchSuffix(normalizedPattern);
+      this._collectResults(suffixMatches, results);
     }
 
     if (matchType === "all" || matchType === "infix") {
-      const infixResults = this._searchInfix(normalizedPattern);
-      for (const result of infixResults) {
-        const key = `${result[0]}:${result[1]}:${result[2]}`;
-        results.set(key, result);
-      }
+      const infixMatches = this._searchInfix(normalizedPattern);
+      this._collectResults(infixMatches, results);
     }
 
     return Array.from(results.values());
   }
 
+  _collectResults(wordIds, resultsMap) {
+    for (const wordId of wordIds) {
+      const word = this.dictionary[wordId];
+      const positions = this.postings.get(wordId);
+      if (positions) {
+        for (const [pageId, y] of positions) {
+          const key = `${word}:${pageId}:${y}`;
+          if (!resultsMap.has(key)) {
+            resultsMap.set(key, [word, pageId, y]);
+          }
+        }
+      }
+    }
+  }
+
   _searchPrefix(prefix) {
     const firstChar = prefix[0];
-    if (!firstChar || !this.prefixIndex[firstChar]) {
+    if (!firstChar || !this.prefixIndex.has(firstChar)) {
       return [];
     }
 
-    const array = this.prefixIndex[firstChar];
+    const wordIds = this.prefixIndex.get(firstChar);
     const results = [];
 
     let left = 0;
-    let right = array.length - 1;
+    let right = wordIds.length - 1;
     let startIdx = -1;
 
     while (left <= right) {
       const mid = Math.floor((left + right) / 2);
-      const word = array[mid][0];
+      const word = this.dictionary[wordIds[mid]];
 
       if (word.startsWith(prefix)) {
         startIdx = mid;
@@ -123,10 +148,10 @@ export class OptimizedKeywordIndex {
 
     if (startIdx === -1) return [];
 
-    for (let i = startIdx; i < array.length; i++) {
-      const word = array[i][0];
+    for (let i = startIdx; i < wordIds.length; i++) {
+      const word = this.dictionary[wordIds[i]];
       if (word.startsWith(prefix)) {
-        results.push(array[i]);
+        results.push(wordIds[i]);
       } else {
         break;
       }
@@ -137,17 +162,16 @@ export class OptimizedKeywordIndex {
 
   _searchSuffix(suffix) {
     const lastChar = suffix[suffix.length - 1];
-    if (!lastChar || !this.suffixIndex[lastChar]) {
+    if (!lastChar || !this.suffixIndex.has(lastChar)) {
       return [];
     }
 
-    const array = this.suffixIndex[lastChar];
+    const wordIds = this.suffixIndex.get(lastChar);
     const results = [];
 
-    // Linear scan (could be optimized with reverse trie, but this is simpler)
-    for (const entry of array) {
-      if (entry[0].endsWith(suffix)) {
-        results.push(entry);
+    for (const wordId of wordIds) {
+      if (this.dictionary[wordId].endsWith(suffix)) {
+        results.push(wordId);
       }
     }
 
@@ -156,20 +180,15 @@ export class OptimizedKeywordIndex {
 
   _searchInfix(pattern) {
     if (pattern.length < 3) {
-      // For short patterns, check word positions directly
       const results = [];
-      for (const [word, positions] of this.wordPositions.entries()) {
-        if (word.includes(pattern)) {
-          for (const pos of positions) {
-            const [pageId, y] = pos.split(":");
-            results.push([word, pageId, parseInt(y, 10)]);
-          }
+      for (let i = 0; i < this.dictionary.length; i++) {
+        if (this.dictionary[i].includes(pattern)) {
+          results.push(i);
         }
       }
       return results;
     }
 
-    // Extract 3-grams from pattern
     const patternNGrams = [];
     for (let i = 0; i <= pattern.length - 3; i++) {
       patternNGrams.push(pattern.substring(i, i + 3));
@@ -177,37 +196,33 @@ export class OptimizedKeywordIndex {
 
     if (patternNGrams.length === 0) return [];
 
-    // Find intersection of n-gram sets
-    let candidateKeys = null;
+    let candidateWordIds = null;
 
     for (const ngram of patternNGrams) {
       if (!this.ngramIndex.has(ngram)) {
-        return []; // Pattern doesn't exist
+        return [];
       }
 
-      const ngramSet = this.ngramIndex.get(ngram);
+      const ids = this.ngramIndex.get(ngram);
+      const idSet = new Set(ids);
 
-      if (candidateKeys === null) {
-        candidateKeys = new Set(ngramSet);
+      if (candidateWordIds === null) {
+        candidateWordIds = idSet;
       } else {
-        // Intersection
-        candidateKeys = new Set(
-          [...candidateKeys].filter((x) => ngramSet.has(x))
+        candidateWordIds = new Set(
+          [...candidateWordIds].filter((x) => idSet.has(x))
         );
       }
 
-      if (candidateKeys.size === 0) {
+      if (candidateWordIds.size === 0) {
         return [];
       }
     }
 
-    // Convert keys back to [word, pageId, y] format
     const results = [];
-    for (const key of candidateKeys) {
-      const [word, pageId, y] = key.split(":");
-      // Verify word actually contains pattern (n-gram intersection might have false positives)
-      if (word.includes(pattern)) {
-        results.push([word, pageId, parseInt(y, 10)]);
+    for (const wordId of candidateWordIds) {
+      if (this.dictionary[wordId].includes(pattern)) {
+        results.push(wordId);
       }
     }
 
@@ -215,53 +230,67 @@ export class OptimizedKeywordIndex {
   }
 
   toJSON() {
-    const ngramIndexSerialized = {};
-    for (const [ngram, set] of this.ngramIndex.entries()) {
-      ngramIndexSerialized[ngram] = Array.from(set);
+    const postingsObj = {};
+    for (const [wordId, positions] of this.postings) {
+      postingsObj[wordId] = positions;
     }
 
-    const wordPositionsSerialized = {};
-    for (const [word, set] of this.wordPositions.entries()) {
-      wordPositionsSerialized[word] = Array.from(set);
+    const ngramObj = {};
+    for (const [ngram, ids] of this.ngramIndex) {
+      ngramObj[ngram] = ids;
+    }
+
+    const prefixObj = {};
+    for (const [char, ids] of this.prefixIndex) {
+      prefixObj[char] = ids;
+    }
+
+    const suffixObj = {};
+    for (const [char, ids] of this.suffixIndex) {
+      suffixObj[char] = ids;
     }
 
     return {
-      prefixIndex: this.prefixIndex,
-      suffixIndex: this.suffixIndex,
-      ngramIndex: ngramIndexSerialized,
-      wordPositions: wordPositionsSerialized,
+      dictionary: this.dictionary,
+      postings: postingsObj,
+      ngramIndex: ngramObj,
+      prefixIndex: prefixObj,
+      suffixIndex: suffixObj,
     };
   }
 
   static fromJSON(data) {
     const index = new OptimizedKeywordIndex();
-    index.prefixIndex = data.prefixIndex || {};
-    index.suffixIndex = data.suffixIndex || {};
 
-    for (const char in index.prefixIndex) {
-      index.prefixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
-    }
-    for (const char in index.suffixIndex) {
-      index.suffixIndex[char].sort((a, b) => a[0].localeCompare(b[0]));
+    if (data.dictionary) {
+      index.dictionary = data.dictionary;
+
+      for (let i = 0; i < data.dictionary.length; i++) {
+        index.wordToId.set(data.dictionary[i], i);
+      }
     }
 
-    index.ngramIndex = new Map();
+    if (data.postings) {
+      for (const [wordId, positions] of Object.entries(data.postings)) {
+        index.postings.set(parseInt(wordId, 10), positions);
+      }
+    }
+
     if (data.ngramIndex) {
-      for (const [ngram, array] of Object.entries(data.ngramIndex)) {
-        index.ngramIndex.set(ngram, new Set(array));
+      for (const [ngram, ids] of Object.entries(data.ngramIndex)) {
+        index.ngramIndex.set(ngram, ids);
       }
     }
 
-    index.wordPositions = new Map();
-    if (data.wordPositions) {
-      for (const [word, array] of Object.entries(data.wordPositions)) {
-        index.wordPositions.set(word, new Set(array));
+    if (data.prefixIndex) {
+      for (const [char, ids] of Object.entries(data.prefixIndex)) {
+        index.prefixIndex.set(char, ids);
       }
     }
 
-    for (const char in index.prefixIndex) {
-      for (const entry of index.prefixIndex[char]) {
-        index.seen.add(`${entry[0]}:${entry[1]}:${entry[2]}`);
+    if (data.suffixIndex) {
+      for (const [char, ids] of Object.entries(data.suffixIndex)) {
+        index.suffixIndex.set(char, ids);
       }
     }
 
@@ -270,14 +299,13 @@ export class OptimizedKeywordIndex {
 
   getStorageSize() {
     let size = 0;
-    for (const char in this.prefixIndex) {
-      size += this.prefixIndex[char].length;
+
+    size += this.dictionary.length;
+    for (const positions of this.postings.values()) {
+      size += positions.length;
     }
-    for (const char in this.suffixIndex) {
-      size += this.suffixIndex[char].length;
-    }
-    for (const set of this.ngramIndex.values()) {
-      size += set.size;
+    for (const ids of this.ngramIndex.values()) {
+      size += ids.length;
     }
     return size;
   }

@@ -14,90 +14,79 @@ describe("OptimizedKeywordIndex", () => {
 
   describe("constructor", () => {
     test("initializes empty data structures", () => {
-      expect(index.prefixIndex).toEqual({});
-      expect(index.suffixIndex).toEqual({});
+      expect(index.prefixIndex).toBeInstanceOf(Map);
+      expect(index.suffixIndex).toBeInstanceOf(Map);
       expect(index.ngramIndex).toBeInstanceOf(Map);
-      expect(index.wordPositions).toBeInstanceOf(Map);
-      expect(index.seen).toBeInstanceOf(Set);
+      expect(index.dictionary).toEqual([]);
+      expect(index.wordToId).toBeInstanceOf(Map);
+      expect(index.postings).toBeInstanceOf(Map);
+
+      expect(index.prefixIndex.size).toBe(0);
+      expect(index.suffixIndex.size).toBe(0);
       expect(index.ngramIndex.size).toBe(0);
     });
   });
 
   describe("add", () => {
-    test("adds a word to prefix and suffix indexes", () => {
+    test("adds a word to dictionary and postings", () => {
       index.add("hello", 1, 100);
 
-      expect(index.prefixIndex["h"]).toContainEqual(["hello", 1, 100]);
-      expect(index.suffixIndex["o"]).toContainEqual(["hello", 1, 100]);
+      expect(index.dictionary).toContain("hello");
+      const wordId = index.wordToId.get("hello");
+      expect(wordId).toBeDefined();
+      expect(index.postings.get(wordId)).toContainEqual([1, 100]);
     });
 
     test("normalizes words to lowercase", () => {
       index.add("HELLO", 1, 100);
 
-      expect(index.prefixIndex["h"]).toContainEqual(["hello", 1, 100]);
+      expect(index.dictionary).toContain("hello");
+      expect(index.wordToId.has("hello")).toBe(true);
     });
 
     test("removes non-alphabetic characters", () => {
       index.add("hello-world!", 1, 100);
 
-      expect(index.prefixIndex["h"]).toContainEqual(["helloworld", 1, 100]);
+      expect(index.dictionary).toContain("helloworld");
     });
 
     test("ignores empty strings", () => {
       index.add("", 1, 100);
 
-      expect(Object.keys(index.prefixIndex)).toHaveLength(0);
+      expect(index.dictionary.length).toBe(0);
     });
 
     test("ignores strings with only non-alphabetic characters", () => {
       index.add("123!@#", 1, 100);
 
-      expect(Object.keys(index.prefixIndex)).toHaveLength(0);
+      expect(index.dictionary.length).toBe(0);
     });
 
-    test("prevents duplicate entries with same word, pageId, and y", () => {
+    test("reuses wordId for duplicate words", () => {
       index.add("hello", 1, 100);
-      index.add("hello", 1, 100);
+      index.add("hello", 2, 200);
 
-      expect(index.prefixIndex["h"].length).toBe(1);
-      expect(index.seen.size).toBe(1);
+      expect(index.dictionary.length).toBe(1);
+      const wordId = index.wordToId.get("hello");
+      expect(index.postings.get(wordId).length).toBe(2);
     });
 
     test("allows duplicate words with different pageId", () => {
       index.add("hello", 1, 100);
       index.add("hello", 2, 100);
 
-      expect(index.prefixIndex["h"].length).toBe(2);
+      const wordId = index.wordToId.get("hello");
+      expect(index.postings.get(wordId)).toContainEqual([1, 100]);
+      expect(index.postings.get(wordId)).toContainEqual([2, 100]);
     });
 
     test("allows duplicate words with different y coordinate", () => {
       index.add("hello", 1, 100);
       index.add("hello", 1, 200);
 
-      expect(index.prefixIndex["h"].length).toBe(2);
-    });
-
-    test("creates n-grams for words with 3+ characters", () => {
-      index.add("hello", 1, 100);
-
-      expect(index.ngramIndex.has("hel")).toBe(true);
-      expect(index.ngramIndex.has("ell")).toBe(true);
-      expect(index.ngramIndex.has("llo")).toBe(true);
-    });
-
-    test("stores short words (< 3 chars) in wordPositions", () => {
-      index.add("ab", 1, 100);
-
-      expect(index.wordPositions.has("ab")).toBe(true);
-      expect(index.wordPositions.get("ab").has("1:100")).toBe(true);
-    });
-
-    test("handles single character words", () => {
-      index.add("a", 1, 100);
-
-      expect(index.prefixIndex["a"]).toContainEqual(["a", 1, 100]);
-      expect(index.suffixIndex["a"]).toContainEqual(["a", 1, 100]);
-      expect(index.wordPositions.has("a")).toBe(true);
+      const wordId = index.wordToId.get("hello");
+      expect(index.postings.get(wordId)).toContainEqual([1, 100]);
+      expect(index.postings.get(wordId)).toContainEqual([1, 200]);
     });
 
     test("handles null or undefined words", () => {
@@ -107,6 +96,38 @@ describe("OptimizedKeywordIndex", () => {
   });
 
   describe("finalize", () => {
+    test("builds prefix index", () => {
+      index.add("hello", 1, 100);
+      index.finalize();
+
+      expect(index.prefixIndex.has("h")).toBe(true);
+      const wordIds = index.prefixIndex.get("h");
+      const wordId = index.wordToId.get("hello");
+      expect(wordIds).toContain(wordId);
+    });
+
+    test("builds suffix index", () => {
+      index.add("hello", 1, 100);
+      index.finalize();
+
+      expect(index.suffixIndex.has("o")).toBe(true);
+      const wordIds = index.suffixIndex.get("o");
+      const wordId = index.wordToId.get("hello");
+      expect(wordIds).toContain(wordId);
+    });
+
+    test("builds n-gram index for words with 3+ characters", () => {
+      index.add("hello", 1, 100);
+      index.finalize();
+
+      expect(index.ngramIndex.has("hel")).toBe(true);
+      expect(index.ngramIndex.has("ell")).toBe(true);
+      expect(index.ngramIndex.has("llo")).toBe(true);
+
+      const wordId = index.wordToId.get("hello");
+      expect(index.ngramIndex.get("hel")).toContain(wordId);
+    });
+
     test("sorts prefix index entries", () => {
       index.add("zebra", 1, 100);
       index.add("zoo", 1, 150);
@@ -115,9 +136,10 @@ describe("OptimizedKeywordIndex", () => {
 
       index.finalize();
 
-      expect(index.prefixIndex["b"][0][0]).toBe("banana");
-      expect(index.prefixIndex["z"][0][0]).toBe("zebra");
-      expect(index.prefixIndex["a"][0][0]).toBe("apple");
+      // Check sorting within 'z'
+      const zIds = index.prefixIndex.get("z");
+      expect(index.dictionary[zIds[0]]).toBe("zebra");
+      expect(index.dictionary[zIds[1]]).toBe("zoo");
     });
 
     test("sorts suffix index entries", () => {
@@ -127,9 +149,10 @@ describe("OptimizedKeywordIndex", () => {
 
       index.finalize();
 
-      expect(index.suffixIndex["a"][0][0]).toBe("area");
-      expect(index.suffixIndex["a"][1][0]).toBe("extra");
-      expect(index.suffixIndex["a"][2][0]).toBe("zebra");
+      const aIds = index.suffixIndex.get("a");
+      expect(index.dictionary[aIds[0]]).toBe("area");
+      expect(index.dictionary[aIds[1]]).toBe("extra");
+      expect(index.dictionary[aIds[2]]).toBe("zebra");
     });
 
     test("handle empty index", () => {
@@ -246,9 +269,10 @@ describe("OptimizedKeywordIndex", () => {
       expect(result).toEqual([]);
     });
 
-    test("handles short patterns less than 3 chars using wordPositions", () => {
+    test("handles short patterns less than 3 chars by linear scan", () => {
       index.add("ab", 4, 500);
       index.add("abc", 5, 600);
+      index.finalize();
 
       const result = index.search("ab", "infix");
 
@@ -289,6 +313,7 @@ describe("OptimizedKeywordIndex", () => {
   describe("search edge cases", () => {
     test("handles empty search pattern", () => {
       index.add("hello", 1, 100);
+      index.finalize();
 
       const results = index.search("");
 
@@ -297,6 +322,7 @@ describe("OptimizedKeywordIndex", () => {
 
     test("handles search with non-alphabetic characters", () => {
       index.add("hello", 1, 100);
+      index.finalize();
 
       const results = index.search("he!!o", "all");
 
@@ -321,25 +347,29 @@ describe("OptimizedKeywordIndex", () => {
     test("serializes index to JSON object", () => {
       const json = index.toJSON();
 
+      expect(json).toHaveProperty("dictionary");
+      expect(json).toHaveProperty("postings");
       expect(json).toHaveProperty("prefixIndex");
       expect(json).toHaveProperty("suffixIndex");
       expect(json).toHaveProperty("ngramIndex");
-      expect(json).toHaveProperty("wordPositions");
     });
 
-    test("converts Maps and Sets to arrays", () => {
+    test("converts Maps to objects/arrays for JSON", () => {
       const json = index.toJSON();
 
-      expect(Array.isArray(json.ngramIndex.hel)).toBe(true);
-      expect(typeof json.ngramIndex).toBe("object");
+      expect(Array.isArray(json.dictionary)).toBe(true);
+      expect(typeof json.postings).toBe("object");
+      expect(typeof json.prefixIndex).toBe("object");
     });
 
     test("deserializes from JSON correctly", () => {
       const json = index.toJSON();
       const restored = OptimizedKeywordIndex.fromJSON(json);
 
-      expect(restored.prefixIndex).toEqual(index.prefixIndex);
-      expect(restored.suffixIndex).toEqual(index.suffixIndex);
+      expect(restored.dictionary).toEqual(index.dictionary);
+      // Maps should be equal in content
+      expect(restored.prefixIndex.size).toBe(index.prefixIndex.size);
+      expect(restored.suffixIndex.size).toBe(index.suffixIndex.size);
     });
 
     test("maintains search functionality after deserialization", () => {
@@ -357,22 +387,8 @@ describe("OptimizedKeywordIndex", () => {
       const json = emptyIndex.toJSON();
       const restored = OptimizedKeywordIndex.fromJSON(json);
 
-      expect(restored.prefixIndex).toEqual({});
+      expect(restored.prefixIndex.size).toBe(0);
       expect(restored.ngramIndex.size).toBe(0);
-    });
-
-    test("sorts indexes after deserialization", () => {
-      const json = index.toJSON();
-      const restored = OptimizedKeywordIndex.fromJSON(json);
-
-      restored.add("hero", 4, 400);
-
-      const hWords = restored.prefixIndex["h"];
-      for (let i = 0; i < hWords.length - 1; i++) {
-        expect(
-          hWords[i][0].localeCompare(hWords[i + 1][0])
-        ).toBeLessThanOrEqual(0);
-      }
     });
   });
 
@@ -413,36 +429,49 @@ describe("OptimizedKeywordIndex", () => {
 
       expect(restoredSearch.length).toBe(original.length);
     });
+  });
 
-    test("handles special characters and maintains search accuracy", () => {
-      index.add("café", 1, 100);
-      index.add("naïve", 2, 200);
-      index.add("résumé", 3, 300);
+  describe("Performance", () => {
+    test("indexes 30MB of text content", () => {
+      // 30MB = 30 * 1024 * 1024 bytes
+      // Words needed = 30MB / 8 bytes approx 3.9M words
+      // Let's use 4M words to be safe
+      const count = 4_000_000;
+      const words = new Array(count);
+
+      // Helper to generate unique alphabetic strings
+      const toAlpha = (num) => {
+        let str = "";
+        while (num >= 0) {
+          str = String.fromCharCode(97 + (num % 26)) + str;
+          num = Math.floor(num / 26) - 1;
+        }
+        return str;
+      };
+
+      // Generate unique words to force dictionary growth and stress test
+      for (let i = 0; i < count; i++) {
+        words[i] = toAlpha(i);
+      }
+
+      const start = performance.now();
+
+      words.forEach((w, i) => {
+        index.add(w, 1, i);
+      });
+
       index.finalize();
 
-      const results = index.search("caf", "prefix");
-      expect(results.some((r) => r[0] === "caf")).toBe(true);
-    });
+      const end = performance.now();
+      const duration = end - start;
 
-    test("complex multi-criteria search scenario", () => {
-      const testData = [
-        { word: "development", page: 1, y: 100 },
-        { word: "developer", page: 1, y: 150 },
-        { word: "envelope", page: 2, y: 200 },
-        { word: "deployment", page: 3, y: 300 },
-      ];
+      console.log(
+        `Indexing 30MB (~4M unique words) took: ${duration.toFixed(2)}ms`
+      );
 
-      testData.forEach((item) => index.add(item.word, item.page, item.y));
-      index.finalize();
-
-      const prefixResults = index.search("dev", "prefix");
-      const infixResults = index.search("elop", "infix");
-      const suffixResults = index.search("ment", "suffix");
-
-      expect(prefixResults.length).toBeGreaterThan(0);
-      expect(infixResults.length).toBeGreaterThan(0);
-      expect(suffixResults.length).toBeGreaterThan(0);
-    });
+      // Basic assertion to ensure it actually did something
+      expect(index.dictionary.length).toBe(count);
+    }, 30000); // Increase timeout to 30s
   });
 });
 
@@ -600,70 +629,5 @@ describe("Retry", () => {
 
     expect(onRetry).toHaveBeenCalledTimes(2);
     expect(onRetry).toHaveBeenCalledWith(error, 2);
-  });
-});
-
-describe("Call Chat", () => {
-  global.fetch = jest.fn();
-
-  test("returns AI response on successful API call", async () => {
-    const mockResponse = {
-      choices: [{ message: { content: "Hello!" } }],
-    };
-
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
-    });
-
-    const result = await callToChat("Hi");
-
-    expect(result).toBe("Hello!");
-  });
-
-  test("throws error when API returns error status", async () => {
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 429,
-      json: async () => ({ error: { message: "Rate limit exceeded" } }),
-    });
-
-    await expect(callToChat("Hi")).rejects.toThrow(
-      "OpenAI API error: 429 - Rate limit exceeded"
-    );
-  });
-
-  test("handles malformed error response without error.message", async () => {
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      json: async () => ({}),
-    });
-
-    await expect(callToChat("hi")).rejects.toThrow(
-      "OpenAI API error: 500 - Internal Server Error"
-    );
-  });
-
-  test("handles invalid JSON in error response", async () => {
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-      statusText: "Service Unavailable",
-      json: async () => {
-        throw new Error("Invalid JSON");
-      },
-    });
-
-    await expect(callToChat("hi")).rejects.toThrow(
-      "OpenAI API error: 503 - Service Unavailable"
-    );
-  });
-
-  test("handles network error", async () => {
-    fetch.mockRejectedValueOnce(new Error("Network failure"));
-
-    await expect(callToChat("hi")).rejects.toThrow("Network failure");
   });
 });

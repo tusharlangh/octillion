@@ -1,10 +1,10 @@
 "use client";
 
-import { useContext, useEffect } from "react";
+import { useContext } from "react";
 import { queryContext } from "./searchManger";
-import { DM_Sans } from "next/font/google";
 import SearchLoading from "../animations/searchLoading";
 import { File } from "lucide-react";
+import { DM_Sans } from "next/font/google";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],

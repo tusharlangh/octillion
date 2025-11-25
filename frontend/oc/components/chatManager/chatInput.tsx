@@ -9,6 +9,7 @@ import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import DocumentDropdown from "./documentDropdown";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 import { useRouter } from "next/navigation";
+import ErrorPopUp from "../popUp/errorPopUp";
 
 const libreBaskerville = Libre_Baskerville({
   weight: ["400", "700"],
@@ -30,10 +31,6 @@ export default function ChatInput() {
     name: string;
     parse_id: string;
   } | null>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -53,78 +50,33 @@ export default function ChatInput() {
   const { search, setSearch, isLoading, setIsLoading, setMessages, messages } =
     context;
 
-  const getCursorPosition = () => {
-    if (!textareaRef.current || !sectionRef.current) return null;
-
-    const textarea = textareaRef.current;
-    const cursorPos = textarea.selectionStart;
-    const style = window.getComputedStyle(textarea);
-    const textareaRect = textarea.getBoundingClientRect();
-
-    const mirror = document.createElement("div");
-    mirror.style.cssText = `
-    position: fixed;
-    visibility: hidden;
-    top: ${textareaRect.top}px;
-    left: ${textareaRect.left}px;
-    width: ${textareaRect.width}px;
-    white-space: ${style.whiteSpace};
-    word-break: ${style.wordBreak};
-    font: ${style.font};
-    padding: ${style.padding};
-    border: ${style.border};
-    box-sizing: ${style.boxSizing};
-    letter-spacing: ${style.letterSpacing};
-    text-transform: ${style.textTransform};
-    margin: 0;
-    overflow: hidden;
-    `;
-
-    const textBeforeCursor = textarea.value.substring(0, cursorPos);
-    mirror.textContent = textBeforeCursor;
-
-    const span = document.createElement("span");
-    span.textContent = textarea.value[cursorPos] || "";
-    mirror.appendChild(span); //adds temp elements into the dom for measurement
-
-    document.body.appendChild(mirror); //adds temp elements into the dom for measurement
-    const spanRect = span.getBoundingClientRect(); //inside box
-    const sectionRect = sectionRef.current.getBoundingClientRect(); //outer box
-    document.body.removeChild(mirror);
-
-    return {
-      left: spanRect.left - sectionRect.left, //left is relative to the outside box
-      top: spanRect.top - sectionRect.top, //top is relative to the outside box
-    };
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
+
+    if (newValue.length > 0 && !newValue.startsWith("@")) {
+      return;
+    }
+
+    if (selectedDoc) {
+      const expectedStart = `@${selectedDoc.name} `;
+      if (!newValue.startsWith(expectedStart)) {
+        setSelectedDoc(null);
+      }
+    }
+
     const cursorPos = textareaRef.current?.selectionStart || newValue.length;
     const textBeforeCursor = newValue.substring(0, cursorPos);
 
     const lastAtIndex = textBeforeCursor.lastIndexOf("@");
-
-    const charBeforeAt =
-      lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : null;
-    const isValidPosition =
-      !charBeforeAt || charBeforeAt === " " || charBeforeAt === "\n";
-
-    const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-    const isTypingMention =
-      !textAfterAt.includes(" ") && !textAfterAt.includes("\n");
-
-    const shouldShow = lastAtIndex !== -1 && isValidPosition && isTypingMention;
+    const shouldShow =
+      lastAtIndex === 0 &&
+      !textBeforeCursor.includes(" ", 1) &&
+      !textBeforeCursor.includes("\n");
 
     if (shouldShow) {
-      const position = getCursorPosition();
-      if (position) {
-        setDropdownPosition(position);
-        setIsOpenedDropdown(true);
-      }
+      setIsOpenedDropdown(true);
     } else if (isOpenedDropdown) {
       setIsOpenedDropdown(false);
-      setDropdownPosition(null);
     }
 
     setSearch(newValue);
@@ -145,7 +97,7 @@ export default function ChatInput() {
     }
 
     if (!selectedDoc || !selectedDoc.name || !selectedDoc.parse_id) {
-      setError("Selected doc is empty");
+      setError("Please select a doc by typing @");
       return;
     }
 
@@ -256,7 +208,7 @@ export default function ChatInput() {
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
-            placeholder="What can I help you with today? Type @ to mention a document"
+            placeholder="Type @ to select a document..."
             className={`${libreBaskerville.className} w-full
                      border-0 bg-transparent
                      text-[16px] outline-none 
@@ -271,22 +223,6 @@ export default function ChatInput() {
             value={search}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            onClick={() => {
-              if (isOpenedDropdown) {
-                const position = getCursorPosition();
-                if (position) {
-                  setDropdownPosition(position);
-                }
-              }
-            }}
-            onKeyUp={() => {
-              if (isOpenedDropdown) {
-                const position = getCursorPosition();
-                if (position) {
-                  setDropdownPosition(position);
-                }
-              }
-            }}
             rows={1}
             disabled={isLoading}
           />
@@ -317,18 +253,22 @@ export default function ChatInput() {
         </div>
       </div>
       {isOpenedDropdown && (
-        <div
-          className="absolute z-50 bottom-full mb-2 w-max max-w-full"
-          style={{ left: `${dropdownPosition?.left}px` }}
-        >
+        <div className="absolute z-50 left-0 bottom-full mb-2 w-max max-w-full">
           <DocumentDropdown
             setSelectedDoc={setSelectedDoc}
             onClose={() => {
               setIsOpenedDropdown(false);
-              setDropdownPosition(null);
             }}
           />
         </div>
+      )}
+
+      {error && (
+        <ErrorPopUp
+          errorMessage={error}
+          onDismiss={() => setError(null)}
+          isHome={true}
+        />
       )}
     </section>
   );

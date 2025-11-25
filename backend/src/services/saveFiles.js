@@ -1,6 +1,10 @@
 import dotenv from "dotenv";
 import { AppError } from "../middleware/errorHandler.js";
-import { uploadFilesToS3, createPresignedUrls } from "./saveFiles/upload.js";
+import {
+  uploadFilesToS3,
+  createPresignedUrls,
+  uploadJsonToS3,
+} from "./saveFiles/upload.js";
 import { extractPagesContent } from "./saveFiles/parser.js";
 import {
   createInvertedSearch,
@@ -69,13 +73,19 @@ export async function saveFiles(id, files, userId) {
 
   await generateAndUploadEmbeddings(id, userId, pagesContent);
 
+  const [pagesContentRef, invertedIndexRef, buildIndexRef] = await Promise.all([
+    uploadJsonToS3(id, "pages_content", pagesContent),
+    uploadJsonToS3(id, "inverted_index", invertedIndex),
+    uploadJsonToS3(id, "build_index", buildIndex),
+  ]);
+
   const data = await saveFilesRecord({
     id,
     userId,
     keys,
-    buildIndex,
-    invertedIndex,
-    pagesContent,
+    buildIndex: buildIndexRef,
+    invertedIndex: invertedIndexRef,
+    pagesContent: pagesContentRef,
   });
 
   return data;

@@ -1,6 +1,7 @@
 import supabase from "../utils/supabase/client.js";
 import dotenv from "dotenv";
 import { searchQdrant } from "./qdrantService.js";
+import { getJsonFromS3 } from "./saveFiles/upload.js";
 import { MinHeap } from "../utils/MinHeap.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { SearchRewrite } from "./searchRewrite.js";
@@ -59,9 +60,21 @@ export async function parse(id, search, userId, options = {}) {
       );
     }
 
-    const pagesContent = d.pages_metadata;
-    const inverted = d.inverted_index;
-    const buildIndex = d.build_index;
+    let pagesContent = d.pages_metadata;
+    let inverted = d.inverted_index;
+    let buildIndex = d.build_index;
+
+    if (pagesContent && pagesContent.s3Key) {
+      pagesContent = await getJsonFromS3(pagesContent.s3Key);
+    }
+
+    if (inverted && inverted.s3Key) {
+      inverted = await getJsonFromS3(inverted.s3Key);
+    }
+
+    if (buildIndex && buildIndex.s3Key) {
+      buildIndex = await getJsonFromS3(buildIndex.s3Key);
+    }
 
     if (!pagesContent || pagesContent.length === 0) {
       throw new AppError("Pages content is empty", 500, "EMPTY_PAGES_CONTENT");

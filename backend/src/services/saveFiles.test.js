@@ -3,6 +3,7 @@ import { jest } from "@jest/globals";
 jest.unstable_mockModule("./saveFiles/upload.js", () => ({
   uploadFilesToS3: jest.fn(),
   createPresignedUrls: jest.fn(),
+  uploadJsonToS3: jest.fn(),
 }));
 
 jest.unstable_mockModule("./saveFiles/parser.js", () => ({
@@ -23,7 +24,7 @@ jest.unstable_mockModule("./saveFiles/persist.js", () => ({
   saveFilesRecord: jest.fn(),
 }));
 
-const { uploadFilesToS3, createPresignedUrls } = await import(
+const { uploadFilesToS3, createPresignedUrls, uploadJsonToS3 } = await import(
   "./saveFiles/upload.js"
 );
 const { extractPagesContent } = await import("./saveFiles/parser.js");
@@ -107,9 +108,18 @@ describe("saveFiles", () => {
 
   const mockOptimizedIndex = {
     toJSON: () => ({
-      keywords: ["hello", "world"],
-      frequencies: { hello: 1, world: 1 },
+      dictionary: ["hello", "world"],
+      postings: { 0: [[1, 100]], 1: [[1, 200]] },
+      ngramIndex: {},
+      prefixIndex: {},
+      suffixIndex: {},
     }),
+  };
+
+  const mockS3JsonKeys = {
+    pagesContent: "parse-id-123-pages_content.json",
+    invertedIndex: "parse-id-123-inverted_index.json",
+    buildIndex: "parse-id-123-build_index.json",
   };
 
   beforeEach(() => {
@@ -124,6 +134,16 @@ describe("saveFiles", () => {
     buildOptimizedIndex.mockReturnValue(mockOptimizedIndex);
     generateChunks.mockResolvedValue(mockPagesWithChunks);
     generateAndUploadEmbeddings.mockResolvedValue(true);
+
+    uploadJsonToS3.mockImplementation((id, name) => {
+      const keyMap = {
+        pages_content: mockS3JsonKeys.pagesContent,
+        inverted_index: mockS3JsonKeys.invertedIndex,
+        build_index: mockS3JsonKeys.buildIndex,
+      };
+      return Promise.resolve({ s3Key: keyMap[name] });
+    });
+
     saveFilesRecord.mockResolvedValue([{ id: 1, parse_id: mockId }]);
   };
 
@@ -151,13 +171,29 @@ describe("saveFiles", () => {
         mockPagesWithChunks
       );
 
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "pages_content",
+        mockPagesWithChunks
+      );
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "inverted_index",
+        mockInvertedIndex
+      );
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "build_index",
+        mockOptimizedIndex.toJSON()
+      );
+
       expect(saveFilesRecord).toHaveBeenCalledWith({
         id: mockId,
         userId: mockUserId,
         keys: mockS3Keys,
-        buildIndex: mockOptimizedIndex.toJSON(),
-        invertedIndex: mockInvertedIndex,
-        pagesContent: mockPagesWithChunks,
+        buildIndex: { s3Key: mockS3JsonKeys.buildIndex },
+        invertedIndex: { s3Key: mockS3JsonKeys.invertedIndex },
+        pagesContent: { s3Key: mockS3JsonKeys.pagesContent },
       });
 
       expect(result).toEqual([{ id: 1, parse_id: mockId }]);
@@ -236,6 +272,74 @@ describe("saveFiles", () => {
       await expect(
         saveFiles(mockId, mockFiles, mockUserId)
       ).rejects.toBeInstanceOf(AppError);
+    });
+  });
+
+  describe("high mb files timing", () => {
+    const highMbMockFiles = [
+      {
+        originalname: "file1.pdf",
+        buffer: Buffer.alloc(15 * 1024 * 1024, "a"),
+      },
+      {
+        originalname: "file2.pdf",
+        buffer: Buffer.alloc(15 * 1024 * 1024, "b"),
+      },
+    ];
+
+    test("30mb timing", async () => {
+      setupHappyPathMocks();
+
+      const start = performance.now();
+      const result = await saveFiles(mockId, highMbMockFiles, mockUserId);
+      const end = performance.now();
+
+      console.log("saveFiles 30MB test took:", (end - start).toFixed(2), "ms");
+
+      expect(uploadFilesToS3).toHaveBeenCalledWith(mockId, highMbMockFiles);
+      expect(createPresignedUrls).toHaveBeenCalledWith(mockS3Keys);
+
+      expect(extractPagesContent).toHaveBeenCalledWith(
+        mockPresignedUrls.map((u) => u.presignedUrl),
+        highMbMockFiles
+      );
+
+      expect(createInvertedSearch).toHaveBeenCalledWith(mockPagesContent);
+      expect(buildOptimizedIndex).toHaveBeenCalledWith(mockPagesContent);
+      expect(generateChunks).toHaveBeenCalledWith(mockPagesContent);
+
+      expect(generateAndUploadEmbeddings).toHaveBeenCalledWith(
+        mockId,
+        mockUserId,
+        mockPagesWithChunks
+      );
+
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "pages_content",
+        mockPagesWithChunks
+      );
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "inverted_index",
+        mockInvertedIndex
+      );
+      expect(uploadJsonToS3).toHaveBeenCalledWith(
+        mockId,
+        "build_index",
+        mockOptimizedIndex.toJSON()
+      );
+
+      expect(saveFilesRecord).toHaveBeenCalledWith({
+        id: mockId,
+        userId: mockUserId,
+        keys: mockS3Keys,
+        buildIndex: { s3Key: mockS3JsonKeys.buildIndex },
+        invertedIndex: { s3Key: mockS3JsonKeys.invertedIndex },
+        pagesContent: { s3Key: mockS3JsonKeys.pagesContent },
+      });
+
+      expect(result).toEqual([{ id: 1, parse_id: mockId }]);
     });
   });
 });

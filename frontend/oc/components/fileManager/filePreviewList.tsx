@@ -50,6 +50,14 @@ export default function FilePreviewList({
       return;
     }
 
+    const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
+    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+
+    if (totalSize > MAX_TOTAL_SIZE) {
+      setError("Total file size exceeds 100MB.");
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
