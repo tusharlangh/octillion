@@ -81,6 +81,9 @@ async function processSinglePDF(link, fileIndex, fileName, file) {
     } else if (link.startsWith("http://") || link.startsWith("https://")) {
       const res = await fetch(link);
       pdfBuffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      const fs = await import("fs/promises");
+      pdfBuffer = await fs.readFile(link);
     }
   } catch (err) {
     return [
@@ -122,14 +125,12 @@ async function processSinglePDF(link, fileIndex, fileName, file) {
   );
   const pageResults = await Promise.all(pagePromises);
   results.push(...pageResults);
-
-  pdfBuffer = null;
   return results;
 }
 
 export async function extractPagesContent(links, files) {
   let pagesContent = [];
-  let BATCH_SIZE = 2;
+  let BATCH_SIZE = 10;
   for (let i = 0; i < links.length; i += BATCH_SIZE) {
     const batch = links.slice(i, i + BATCH_SIZE);
     const batchPromises = batch.map((link, batchIndex) => {

@@ -131,14 +131,14 @@ export default function FileManager() {
           removeFile={removeFile}
         />
       )}
-      <div className={`pt-2 flex items-center gap-2`}>
+      <div className={`pt-2 flex items-center gap-2 px-3`}>
         <Info
           className="text-black/60 dark:text-white/60"
           height={18}
           width={18}
         />
         <p
-          className={`${dmSans.className} text-sm text-black/60 dark:text-white/60 pt-0.5`}
+          className={`${dmSans.className} text-xs md:text-sm text-black/60 dark:text-white/60 pt-0.5`}
         >
           Only PDFs are allowed. Max 10 files, total size up to 100 MB
         </p>
