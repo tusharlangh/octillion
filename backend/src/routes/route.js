@@ -11,10 +11,10 @@ import { get_view_files_controller } from "../controllers/get_view_files_control
 import { get_pfp_controller } from "../controllers/get_pfp_controller.js";
 import { get_chat_controller } from "../controllers/get_chat_controller.js";
 import { get_name_controller } from "../controllers/get_name_controller.js";
+import { get_upload_urls_controller } from "../controllers/get_upload_urls_controller.js";
 
 const router = express.Router();
 
-// Health check endpoint for Render.com
 router.get("/", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -37,5 +37,6 @@ router.get(`/get-view-files`, auth, get_view_files_controller);
 router.get("/get-pfp", auth, get_pfp_controller);
 router.get("/get-name", auth, get_name_controller);
 router.get("/get-chats", auth, get_chat_controller);
+router.get("/get-upload-urls", auth, get_upload_urls_controller);
 
 export default router;
