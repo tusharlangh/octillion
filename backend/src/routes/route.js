@@ -24,19 +24,12 @@ router.get("/", (req, res) => {
 });
 
 router.get(`/get-files`, auth, get_files_controller);
-router.post(
-  `/save-files`,
-  upload.array("files", 10),
-  handleMulterError,
-  validateTotalFileSize,
-  auth,
-  save_files_controller
-);
+router.post(`/save-files`, auth, save_files_controller);
 router.get(`/parse-files`, auth, file_parse_controller);
 router.get(`/get-view-files`, auth, get_view_files_controller);
 router.get("/get-pfp", auth, get_pfp_controller);
 router.get("/get-name", auth, get_name_controller);
 router.get("/get-chats", auth, get_chat_controller);
-router.get("/get-upload-urls", auth, get_upload_urls_controller);
+router.post("/get-upload-urls", auth, get_upload_urls_controller);
 
 export default router;

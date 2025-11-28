@@ -1,6 +1,7 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { s3 } from "../utils/aws/s3Client";
+import { s3 } from "../utils/aws/s3Client.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { AppError } from "../middleware/errorHandler.js";
 
 async function getUploadUrl(filename, filetype, id, index) {
   try {
@@ -20,7 +21,7 @@ async function getUploadUrl(filename, filetype, id, index) {
       expiresIn: 300,
     });
 
-    return uploadUrl;
+    return { uploadUrl, key };
   } catch (error) {
     if (error.isOperational) {
       throw error;
@@ -61,7 +62,12 @@ async function getUploadUrl(filename, filetype, id, index) {
 }
 
 export async function getUploadUrls(files, id) {
-  return Promise.all(
+  const urls = await Promise.all(
     files.map((file, index) => getUploadUrl(file.name, file.type, id, index))
   );
+
+  return {
+    success: true,
+    data: urls,
+  };
 }
