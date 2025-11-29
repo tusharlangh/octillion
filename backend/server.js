@@ -56,8 +56,13 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 const port = process.env.PORT || 5002;
-app.listen(port, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${port}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(`🌐 CORS enabled for: ${allowedOrigins.join(", ")}`);
-});
+
+if (process.env.NODE_ENV === "development") {
+  app.listen(port, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${port}`);
+    console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
+    console.log(`🌐 CORS enabled for: ${allowedOrigins.join(", ")}`);
+  });
+}
+
+export default app;

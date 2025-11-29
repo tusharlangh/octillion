@@ -1,0 +1,66 @@
+service: octillion-backend
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-1
+  architecture: arm64
+  ecr:
+    images:
+      appimage:
+        path: ./
+  iam:
+    role:
+      statements:
+        # S3 Permissions for Uploads/Downloads/Presigned URLs
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:ListBucket
+          Resource:
+            - "arn:aws:s3:::${env:S3_BUCKET_NAME}"
+            - "arn:aws:s3:::${env:S3_BUCKET_NAME}/*"
+        # Permission to invoke the worker Lambda
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource: "*"
+  environment:
+    PORT: ${env:PORT, '5002'}
+    SUPABASE_URL: ${env:SUPABASE_URL}
+    SUPABASE_ANON_KEY: ${env:SUPABASE_ANON_KEY}
+    SUPABASE_SERVICE_KEY: ${env:SUPABASE_SERVICE_KEY}
+    SUPABASE_JWT_KEY: ${env:SUPABASE_JWT_KEY}
+    S3_BUCKET_NAME: ${env:S3_BUCKET_NAME}
+    QDRANT_URL: ${env:QDRANT_URL}
+    QDRANT_API_KEY: ${env:QDRANT_API_KEY}
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY}
+    WORKER_FUNCTION_NAME: octillion-backend-dev-processor
+
+functions:
+  # 1. API (Ingestion) - Fast, handles HTTP requests
+  api:
+    image:
+      name: appimage
+      command:
+        - serverless_handler.handler
+    timeout: 29
+    memorySize: 2048
+    events:
+      - http:
+          path: /
+          method: ANY
+      - http:
+          path: /{proxy+}
+          method: ANY
+
+  # 2. Processor (Worker) - Slow, handles heavy ML tasks
+  processor:
+    image:
+      name: appimage
+      command:
+        - src/handlers/processor.handler
+    timeout: 900 # 15 minutes max
+    memorySize: 3008

@@ -16,10 +16,24 @@ import { saveFilesRecord } from "./saveFiles/persist.js";
 
 dotenv.config();
 
-export async function processFiles(id, files, userId) {
-  const keys = await uploadFilesToS3(id, files);
+export async function processFiles(id, keys, userId) {
+  // 1. Skip uploadFilesToS3 (files are already in S3)
+  // 2. Construct file objects from keys for downstream compatibility
+  const fileObjects = keys.map((key) => {
+    // Key format: id-index-filename
+    // We try to extract the original filename for better logging/metadata
+    const parts = key.split("-");
+    const originalname = parts.slice(2).join("-") || key; 
+    return {
+      key,
+      originalname,
+      // mimetype is not strictly needed for download/parsing as we use the URL
+    };
+  });
 
-  const urls = await createPresignedUrls(keys);
+  // 3. Generate Presigned URLs for the Worker to Download/Read
+  // createPresignedUrls expects objects with a 'key' property
+  const urls = await createPresignedUrls(fileObjects);
 
   const links = urls.map((url) => url.presignedUrl);
 
@@ -31,7 +45,9 @@ export async function processFiles(id, files, userId) {
     );
   }
 
-  let pagesContent = await extractPagesContent(links, files);
+  // 4. Extract Content (Parser uses links to download)
+  // We pass fileObjects so parser can get 'originalname'
+  let pagesContent = await extractPagesContent(links, fileObjects);
 
   let invertedIndex;
   try {

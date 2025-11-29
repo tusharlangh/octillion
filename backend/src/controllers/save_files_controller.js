@@ -23,9 +23,9 @@ export async function save_files_controller(req, res, next) {
 
     const uploadedUrls = await saveFiles(id, keys, userId);
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "Files uploaded successfully",
+      message: "Files queued for processing",
     });
   } catch (error) {
     next(error);
