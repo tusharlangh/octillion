@@ -2,40 +2,30 @@ import { saveFiles } from "../services/saveFiles.js";
 import {
   ValidationError,
   UnauthorizedError,
-  AppError,
 } from "../middleware/errorHandler.js";
 
 export async function save_files_controller(req, res, next) {
   try {
-    const id = req.body.id;
-    const files = req.files;
+    const { id, keys } = req.body;
     const userId = req.user;
 
     if (!userId) {
       throw new UnauthorizedError("Authorization required");
     }
 
+    if (!keys) {
+      throw new ValidationError("Keys are required");
+    }
+
     if (!id) {
       throw new ValidationError("Id is required");
     }
 
-    if (!files) {
-      throw new ValidationError("No files uploaded");
-    }
+    const uploadedUrls = await saveFiles(id, keys, userId);
 
-    if (files.length > 10) {
-      throw new ValidationError("Too many files uploaded", {
-        maxFiles: 10,
-        uploadedFiles: files.length,
-      });
-    }
-
-    const uploadedUrls = await saveFiles(id, files, userId);
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      data: null,
-      message: "Files uploaded successfully",
+      message: "Files queued for processing",
     });
   } catch (error) {
     next(error);

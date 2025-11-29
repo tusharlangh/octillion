@@ -39,6 +39,43 @@ export default function FilePreviewList({
     setIsOpen(true);
   };
 
+  const sendPdfToS3 = async (uploadUrl: string, file: File) => {
+    try {
+      const res = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type,
+        },
+      });
+
+      if (!res.ok) {
+        const errorMessage = getErrorMessageByStatus(res.status);
+
+        console.error("Upload failed:", {
+          status: res.status,
+          error: errorMessage,
+          details: null,
+        });
+
+        setError(errorMessage);
+
+        if (res.status === 401 || res.status === 403) {
+          setTimeout(() => router.replace("/login_signin/login"), 2000);
+        }
+
+        return {
+          success: false,
+          error: { status: res.status, message: errorMessage },
+          fileName: file.name,
+        };
+      }
+      return { success: true, error: null, filename: fileName };
+    } catch (error) {
+      return { success: false, error: error, filename: fileName };
+    }
+  };
+
   const sendPdf = async () => {
     if (selectedFiles.length === 0) {
       setError("Please select at least one file to upload.");
@@ -61,29 +98,116 @@ export default function FilePreviewList({
     setError(null);
     setLoading(true);
 
+    let keys: any;
+    const jwt = await handleTokenAction();
+    const id = crypto.randomUUID();
+
+    try {
+      if (!jwt) {
+        throw new Error("Failed to get authentication token");
+      }
+
+      const files_metadata = selectedFiles.map((file, index) => ({
+        name: file.name,
+        type: file.type,
+      }));
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/get-upload-urls`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({
+            id: id,
+            files: files_metadata,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errorMessage =
+          data.error?.message ||
+          data.error ||
+          getErrorMessageByStatus(res.status);
+
+        console.error("Upload failed:", {
+          status: res.status,
+          error: errorMessage,
+          details: data.error?.details,
+        });
+
+        setError(errorMessage);
+
+        if (res.status === 401 || res.status === 403) {
+          setTimeout(() => router.replace("/login_signin/login"), 2000);
+        }
+
+        return;
+      }
+
+      const urls = data.data;
+      keys = urls;
+
+      const uploadRes = await Promise.allSettled(
+        urls.map((url: { uploadUrl: string; key: string }, index: number) =>
+          sendPdfToS3(url.uploadUrl, selectedFiles[index])
+        )
+      );
+
+      const n = uploadRes.length;
+      const failure = uploadRes.filter((item) => item.status === "rejected");
+
+      const threshold = 0.5;
+
+      const diff = failure.length / n;
+
+      if (diff > threshold) {
+        setError("More than half of the files failed to upload. Try again");
+        return;
+      } else if (diff !== 0) {
+        setError(`Following files have failed: ${failure}`);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        setError("Network error. Please check your connection.");
+      } else if (error instanceof Error && error.message.includes("token")) {
+        setError("Authentication failed. Please log in again.");
+        setTimeout(() => router.replace("/login_signin/login"), 2000);
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    }
+
     try {
       const jwt = await handleTokenAction();
       if (!jwt) {
         throw new Error("Failed to get authentication token");
       }
 
-      const formData = new FormData();
-      const id = crypto.randomUUID();
-
-      formData.append("id", id);
-      selectedFiles.forEach((file) => formData.append("files", file));
-
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/save-files`, {
         method: "POST",
-        body: formData,
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${jwt}`,
         },
+        body: JSON.stringify({
+          id: id,
+          keys: keys.map(
+            (url: { uploadUrl: string; key: string }, index: number) => url.key
+          ),
+        }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || !data.success) {
         const errorMessage =
           data.error?.message ||
           data.error ||

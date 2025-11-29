@@ -38,12 +38,10 @@ export default function FileManager() {
 
   useEffect(() => {
     async function get() {
-      console.log("🔵 Starting fetch...");
       setLoading(true);
       setError(null);
       try {
         const jwt = await handleTokenAction();
-        console.log("🔵 JWT obtained:", jwt ? "Yes" : "No");
 
         if (!jwt) {
           throw new Error("Failed to get authentication token");
@@ -57,11 +55,7 @@ export default function FileManager() {
           },
         });
 
-        console.log("🔵 Response status:", res.status);
-        console.log("🔵 Response ok:", res.ok);
-
         const data = await res.json();
-        console.log("🔵 Parsed data:", data);
 
         if (!res.ok) {
           const errorMessage =
@@ -84,13 +78,10 @@ export default function FileManager() {
           return;
         }
 
-        console.log("🟢 About to call setText with:", data.data);
         setText(data.data);
-        console.log("🟢 setText called successfully");
       } catch (error) {
-        console.error("🔴 Getting name error: ", error);
+        console.error("Getting name error: ", error);
       } finally {
-        console.log("🔵 Finally block - setting loading to false");
         setLoading(false);
       }
     }

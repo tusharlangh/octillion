@@ -80,7 +80,7 @@ export async function createPresignedUrl(link) {
     });
 
     return {
-      file_name: link.file_name,
+      file_name: link.file_name || link.originalname, // Handle both formats
       file_type: link.file_type,
       presignedUrl: url,
     };
