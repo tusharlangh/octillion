@@ -15,7 +15,7 @@ dotenv.config();
 export async function processFiles(id, keys, userId) {
   const fileObjects = keys.map((key) => {
     const parts = key.split("-");
-    const originalname = parts.slice(2).join("-") || key;
+    const originalname = parts.slice(6).join("-") || key;
     return {
       key,
       file_name: originalname,

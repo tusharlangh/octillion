@@ -31,7 +31,6 @@ export default function SideBarManager() {
     async function GET() {
       setLoading(true);
 
-
       try {
         const jwt = await handleTokenAction();
         if (!jwt) {
@@ -169,7 +168,7 @@ export default function SideBarManager() {
 
   return (
     <div className="flex flex-col justify-between h-full pt-0 md:pt-2 transition-colors duration-200">
-      <div>
+      <div className="flex flex-col flex-1 min-h-0 mb-2">
         <TopLevel />
         <div className="my-1">
           <div
@@ -225,13 +224,15 @@ export default function SideBarManager() {
         </div>
 
         <div className="bg-neutral-200/80 dark:bg-white/10 w-full h-[1px] my-2 transition-colors duration-200"></div>
-        {loading ? (
-          <SideBarLoading />
-        ) : (
-          <div className="w-full">
-            <AnimatedFileTree fileStructure={data} />
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          {loading ? (
+            <SideBarLoading />
+          ) : (
+            <div className="w-full">
+              <AnimatedFileTree fileStructure={data} />
+            </div>
+          )}
+        </div>
       </div>
 
       <div
@@ -251,8 +252,6 @@ export default function SideBarManager() {
           />
         )}
       </div>
-
-
     </div>
   );
 }

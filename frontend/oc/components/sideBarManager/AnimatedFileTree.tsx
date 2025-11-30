@@ -4,9 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
 import {
   ChevronRight,
-  Folder,
-  File,
-  FolderOpen,
   LoaderCircle,
 } from "lucide-react";
 import FileOpener from "../fileManager/fileOpener";
@@ -29,6 +26,14 @@ interface FileNode {
 interface FileTreeProps {
   fileStructure: FileNode[];
 }
+
+const truncateMiddle = (folderName: string) => {
+  return folderName.length > 26
+    ? folderName.slice(0, 10) +
+        "..." +
+        folderName.slice(folderName.length - 14, folderName.length)
+    : folderName;
+};
 
 export default function AnimatedFileTree({ fileStructure }: FileTreeProps) {
   if (!fileStructure || fileStructure.length === 0) {
@@ -91,6 +96,7 @@ function TreeNode({ node }: TreeNodeProps) {
                 e.stopPropagation();
                 setOpen(!open);
               }}
+              className="flex items-center justify-center w-[14px]"
             >
               <ChevronRight
                 size={14}
@@ -102,41 +108,14 @@ function TreeNode({ node }: TreeNodeProps) {
           ) : (
             <div className="w-[14px]" />
           )}
-
-          {status && node.type === "folder" ? (
-            open ? (
-              <FolderOpen size={16} className="text-black dark:text-white" />
-            ) : (
-              <Folder
-                size={16}
-                className="group-hover:text-black dark:group-hover:text-white"
-              />
-            )
-          ) : (
-            status && <File size={14} className="" />
-          )}
-
           <span
-            className={`${font} group-hover:text-black dark:group-hover:text-white transition-colors pr-4 truncate max-w-[140px] text-[14px] ${
+            className={`${font} group-hover:text-black dark:group-hover:text-white transition-colors text-[14px] ${
               open ? "text-black dark:text-white" : ""
             }`}
           >
-            {node.name}
+            {truncateMiddle(node.name)}
           </span>
         </div>
-
-        {status && node.type === "folder" && (
-          <span
-            className={`${font} shrink-0 text-[12px] group-hover:text-black dark:group-hover:text-white ${
-              open ? "text-black dark:text-white" : ""
-            }`}
-          >
-            {new Date(node.created_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}
-          </span>
-        )}
 
         {!status && (
           <motion.div

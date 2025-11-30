@@ -133,7 +133,18 @@ export async function getViewFiles(userId) {
 
       data[i].files = urls;
       data[i].type = "folder";
-      data[i].name = processing ? `Untitled` : `Documents ${data.length - i}`;
+
+      let folderName = `Documents ${data.length - i}`;
+      if (urls.length > 0) {
+        const firstFileName = urls[0].name;
+        if (urls.length === 1) {
+          folderName = firstFileName;
+        } else {
+          folderName = `${firstFileName} + ${urls.length - 1}`;
+        }
+      }
+
+      data[i].name = folderName;
       data[i].status = processing ? "PROCESSING" : "PROCESSED";
     }
 

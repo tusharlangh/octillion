@@ -86,15 +86,6 @@ export default function ConditionalLayout({
       }}
     >
       <div className="h-[100vh] w-[100vw] bg-[#F5F5F7] dark:bg-[rgb(18,18,18)] md:pt-2 md:pl-4 flex relative overflow-hidden">
-        {notis.message !== "" && (
-          <NotisManager
-            message={notis.message}
-            type={notis.type}
-            duration={5000}
-            onDismiss={() => setNotis({ message: "", type: "info" })}
-          />
-        )}
-
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="md:hidden fixed top-4 left-4 z-10 cursor-pointer bg-[rgb(242,242,242)] dark:bg-[rgb(18,18,18)] p-1.5 rounded-[4px]"
@@ -138,7 +129,18 @@ export default function ConditionalLayout({
           </div>
         </section>
 
-        <div className="w-full h-full overflow-hidden md:pl-4">{children}</div>
+        <div className="w-full h-full overflow-hidden md:pl-4 relative">
+          {notis.message !== "" && (
+            <NotisManager
+              message={notis.message}
+              type={notis.type}
+              duration={5000}
+              onDismiss={() => setNotis({ message: "", type: "info" })}
+            />
+          )}
+
+          {children}
+        </div>
       </div>
     </SidebarContext.Provider>
   );

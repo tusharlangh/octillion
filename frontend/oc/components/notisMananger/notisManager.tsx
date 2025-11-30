@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface NotisManagerProps {
   message: string;
@@ -60,26 +61,31 @@ export default function NotisManager({
 
   return (
     <div>
-      {show && (
-        <div className="w-full flex items-center justify-center absolute top-6 z-100 transform animate-in fade-in slide-in-from-top-4">
-          <div
-            className={`
-            flex items-center justify-center 
-            rounded-lg px-6 py-4
-            border shadow-lg gap-2
-            ${styles.bg}
-          `}
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="w-full flex items-center justify-center absolute top-6 z-100"
           >
-            <p className={`text-md font-medium ${styles.text}`}>{message}</p>
-            <X
-              className={`cursor-pointer transition-colors duration-200 ${styles.icon}`}
-              height={14}
-              width={14}
-              onClick={handleDismiss}
-            />
-          </div>
-        </div>
-      )}
+            <div
+              className={`max-w-5/6 flex items-center justify-center rounded-lg px-6 py-4 border shadow-lg gap-2 ${styles.bg}`}
+            >
+              <p
+                className={`text-md font-medium ${styles.text} truncate md:max-w-full`}
+              >
+                {message}
+              </p>
+              <X
+                className={`cursor-pointer transition-colors duration-200 ${styles.icon} w-10 h-10 sm:w-4 sm:h-4`}
+                onClick={handleDismiss}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

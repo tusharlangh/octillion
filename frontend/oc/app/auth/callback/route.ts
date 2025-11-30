@@ -3,12 +3,11 @@ import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url); //searchParams is everything after ? in url. like http://localhost:3000/auth/callback?code=ABC123&next=/dashboard, it will return code, next
-  const code = searchParams.get("code"); //gets code
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get("code");
 
-  let next = searchParams.get("next") ?? "/"; //the callback url if it exists otherwise /
+  let next = searchParams.get("next") ?? "/";
   if (!next.startsWith("/")) {
-    //redirects only on /... and not full urls
     next = "/";
   }
 
@@ -16,7 +15,7 @@ export async function GET(request: Request) {
     try {
       const supabase = await createClient();
 
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code); //exchange the voucher for a session. voucher given when you open google auth
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (error) {
         console.error("Error exchanging code for session:", error);
@@ -30,26 +29,20 @@ export async function GET(request: Request) {
       if (data.session) {
         console.log("Session created successfully");
 
-        // Create redirect URL
-        const forwardedHost = request.headers.get("x-forwarded-host"); // original origin before load balancer
+        const forwardedHost = request.headers.get("x-forwarded-host");
         const isLocalEnv = process.env.NODE_ENV === "development";
+
         const redirectUrl = isLocalEnv
           ? `${origin}${next}`
           : forwardedHost
           ? `https://${forwardedHost}${next}`
           : `${origin}${next}`;
 
-        // Get cookies that were set by Supabase client
-        // The cookies() function returns cookies that will be included in the response
-        // When we redirect, Next.js should automatically include these cookies
         const cookieStore = await cookies();
         const allCookies = cookieStore.getAll();
 
-        // Create redirect response - cookies should be automatically included
-        // But we explicitly verify they're set for debugging
         const response = NextResponse.redirect(redirectUrl);
 
-        // Log cookies for debugging
         if (allCookies.length > 0) {
           console.log(
             `Setting ${allCookies.length} cookies in redirect response`
