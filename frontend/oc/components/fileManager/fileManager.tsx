@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
+import { SidebarContext } from "../ConditionalLayout";
 import { useFileUpload } from "../../hooks/useFileUpload";
 import FilePreviewList from "./filePreviewList";
 import FileUpload from "./fileUpload";
@@ -11,7 +12,6 @@ import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByS
 import { motion, AnimatePresence } from "framer-motion";
 import { DM_Sans } from "next/font/google";
 import { Info } from "lucide-react";
-import ErrorPopUp from "../popUp/errorPopUp";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -30,8 +30,11 @@ export default function FileManager() {
     handleButtonClick,
     handleFileChange,
     removeFile,
+    setSelectedFiles,
   } = useFileUpload();
-  const [error, setError] = useState<string | null>(null);
+  const context = useContext(SidebarContext);
+  if (!context) throw new Error("SidebarContext is not working");
+  const { setNotis } = context;
   const [loading, setLoading] = useState<boolean>(false);
   const [text, setText] = useState<string>("");
   const router = useRouter();
@@ -39,7 +42,6 @@ export default function FileManager() {
   useEffect(() => {
     async function get() {
       setLoading(true);
-      setError(null);
       try {
         const jwt = await handleTokenAction();
 
@@ -69,7 +71,7 @@ export default function FileManager() {
             details: data.error?.details,
           });
 
-          setError(errorMessage);
+          setNotis({ message: errorMessage, type: "error" });
 
           if (res.status === 401 || res.status === 403) {
             setTimeout(() => router.replace("/login"), 2000);
@@ -122,6 +124,7 @@ export default function FileManager() {
         <FilePreviewList
           selectedFiles={selectedFiles}
           removeFile={removeFile}
+          setSelectedFiles={setSelectedFiles}
         />
       )}
       <div className={`pt-2 flex items-center gap-2 px-3`}>
@@ -136,13 +139,6 @@ export default function FileManager() {
           Only PDFs are allowed. Max 10 files, total size up to 100 MB
         </p>
       </div>
-      {error && (
-        <ErrorPopUp
-          errorMessage={error}
-          onDismiss={() => setError(null)}
-          isHome={true}
-        />
-      )}
     </section>
   );
 }

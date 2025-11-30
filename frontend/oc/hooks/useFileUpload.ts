@@ -29,5 +29,6 @@ export function useFileUpload() {
     handleButtonClick,
     handleFileChange,
     removeFile,
+    setSelectedFiles,
   };
 }

@@ -6,7 +6,7 @@ import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { queryContext } from "./searchManger";
 import { Search, Home } from "lucide-react";
 import { DM_Sans } from "next/font/google";
-import ErrorPopUp from "../popUp/errorPopUp";
+import { SidebarContext } from "../ConditionalLayout";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 
 const dmSans = DM_Sans({
@@ -24,7 +24,9 @@ export default function Header({ id }: Props) {
   const [searchType, setSearchType] = useState<
     "enhanced" | "keyword" | "hybrid"
   >("keyword");
-  const [error, setError] = useState<string | null>(null);
+  const sidebarContext = useContext(SidebarContext);
+  if (!sidebarContext) throw new Error("SidebarContext is not working");
+  const { setNotis } = sidebarContext;
 
   if (!context)
     throw new Error("queryContext in Header component is not working");
@@ -34,22 +36,21 @@ export default function Header({ id }: Props) {
 
   const handleSearch = async () => {
     if (!search?.trim()) {
-      setError("Search is empty");
+      setNotis({ message: "Search is empty", type: "error" });
       return;
     }
 
     if (!id) {
-      setError("Id not found");
+      setNotis({ message: "Id not found", type: "error" });
       return;
     }
 
     if (!searchType) {
-      setError("Search type not selected");
+      setNotis({ message: "Search type not selected", type: "error" });
       return;
     }
 
     setIsLoading(true);
-    setError(null);
 
     try {
       const jwt = await handleTokenAction();
@@ -88,7 +89,7 @@ export default function Header({ id }: Props) {
           details: data.error?.details,
         });
 
-        setError(errorMessage);
+        setNotis({ message: errorMessage, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login_signin/login"), 2000);
@@ -102,12 +103,21 @@ export default function Header({ id }: Props) {
       console.error("Search error: ", error);
 
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        setError("Network error. Please check your connection.");
+        setNotis({
+          message: "Network error. Please check your connection.",
+          type: "error",
+        });
       } else if (error instanceof Error && error.message.includes("token")) {
-        setError("Authentication failed. Please log in again.");
+        setNotis({
+          message: "Authentication failed. Please log in again.",
+          type: "error",
+        });
         setTimeout(() => router.replace("/login_signin/login"), 2000);
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setNotis({
+          message: "An unexpected error occurred. Please try again.",
+          type: "error",
+        });
       }
     } finally {
       setIsLoading(false);
@@ -205,14 +215,7 @@ export default function Header({ id }: Props) {
           </button>
         </div>
       </div>
-      {error && (
-        <ErrorPopUp
-          errorMessage={error}
-          onDismiss={() => setError(null)}
-          duration={3000}
-          isHome={true}
-        />
-      )}
+
     </section>
   );
 }
