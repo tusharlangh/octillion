@@ -1,8 +1,11 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
-import { ChevronRight, Folder, File, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ChevronRight,
+  LoaderCircle,
+} from "lucide-react";
 import FileOpener from "../fileManager/fileOpener";
 import { useRouter } from "next/navigation";
 
@@ -17,11 +20,20 @@ interface FileNode {
   type: "folder" | "file";
   name: string;
   presignedUrl?: string;
+  status: "PROCESSING" | "PROCESSED";
 }
 
 interface FileTreeProps {
   fileStructure: FileNode[];
 }
+
+const truncateMiddle = (folderName: string) => {
+  return folderName.length > 26
+    ? folderName.slice(0, 10) +
+        "..." +
+        folderName.slice(folderName.length - 14, folderName.length)
+    : folderName;
+};
 
 export default function AnimatedFileTree({ fileStructure }: FileTreeProps) {
   if (!fileStructure || fileStructure.length === 0) {
@@ -56,6 +68,7 @@ function TreeNode({ node }: TreeNodeProps) {
   const [open, setOpen] = useState(false);
   const hasChildren = node.type === "folder" && node.files?.length;
   const [openFile, setOpenFile] = useState(false);
+  const status = node.status === "PROCESSED";
 
   const router = useRouter();
 
@@ -63,10 +76,10 @@ function TreeNode({ node }: TreeNodeProps) {
     <div className="select-none">
       <motion.div
         className={`w-full flex items-center justify-between py-1 cursor-pointer rounded-lg px-2 hover:bg-black/2 dark:hover:bg-white/8 transition-colors text-black/50 dark:text-white/70 text-black dark:hover:text-white group`}
-        whileHover={{ x: node.type === "folder" ? 3 : 0 }}
+        whileHover={{ x: node.type === "folder" ? (status ? 3 : 0) : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
         onClick={(e) => {
-          if (hasChildren && !e.defaultPrevented) {
+          if (status && hasChildren && !e.defaultPrevented) {
             router.push(`/search/${node.parse_id}`);
           } else if (node.type === "file" && node.presignedUrl) {
             setOpenFile(true);
@@ -74,7 +87,7 @@ function TreeNode({ node }: TreeNodeProps) {
         }}
       >
         <div className="flex items-center space-x-2">
-          {hasChildren ? (
+          {status && hasChildren ? (
             <motion.div
               animate={{ rotate: open ? 90 : 0 }}
               transition={{ duration: 0.2 }}
@@ -83,6 +96,7 @@ function TreeNode({ node }: TreeNodeProps) {
                 e.stopPropagation();
                 setOpen(!open);
               }}
+              className="flex items-center justify-center w-[14px]"
             >
               <ChevronRight
                 size={14}
@@ -94,45 +108,31 @@ function TreeNode({ node }: TreeNodeProps) {
           ) : (
             <div className="w-[14px]" />
           )}
-
-          {node.type === "folder" ? (
-            open ? (
-              <FolderOpen size={16} className="text-black dark:text-white" />
-            ) : (
-              <Folder
-                size={16}
-                className="group-hover:text-black dark:group-hover:text-white"
-              />
-            )
-          ) : (
-            <File size={14} className="" />
-          )}
-
           <span
-            className={`${font} group-hover:text-black dark:group-hover:text-white transition-colors pr-4 truncate max-w-[140px] text-[14px] ${
+            className={`${font} group-hover:text-black dark:group-hover:text-white transition-colors text-[14px] ${
               open ? "text-black dark:text-white" : ""
             }`}
           >
-            {node.name}
+            {truncateMiddle(node.name)}
           </span>
         </div>
 
-        {node.type === "folder" && (
-          <span
-            className={`${font} shrink-0 text-[12px] group-hover:text-black dark:group-hover:text-white ${
-              open ? "text-black dark:text-white" : ""
-            }`}
+        {!status && (
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              ease: "linear",
+            }}
           >
-            {new Date(node.created_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}
-          </span>
+            <LoaderCircle className="" height={16} width={16} />
+          </motion.div>
         )}
       </motion.div>
 
       <AnimatePresence initial={false}>
-        {open && hasChildren && (
+        {status && open && hasChildren && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -146,7 +146,8 @@ function TreeNode({ node }: TreeNodeProps) {
           </motion.div>
         )}
       </AnimatePresence>
-      {node.type === "file" && node.presignedUrl && (
+
+      {status && node.type === "file" && node.presignedUrl && (
         <FileOpener
           isOpen={openFile}
           setIsOpen={setOpenFile}

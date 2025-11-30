@@ -1,24 +1,45 @@
 import supabase from "../../utils/supabase/client.js";
 import { AppError } from "../../middleware/errorHandler.js";
 
-export async function saveFilesRecord({
+export async function saveFilesRecord(
   id,
   userId,
   keys,
   buildIndex,
   invertedIndex,
-  pagesContent,
-}) {
-  const { data, error } = await supabase.from("files").insert([
-    {
-      user_id: userId,
-      parse_id: id,
+  pagesContent
+) {
+  const { data, error } = await supabase
+    .from("files")
+    .update({
       files: keys,
       build_index: buildIndex,
       inverted_index: invertedIndex,
       pages_metadata: pagesContent,
-    },
-  ]);
+    })
+    .eq("parse_id", id)
+    .eq("user_id", userId);
+
+  const { data1, error1 } = await supabase
+    .from("files_job")
+    .update({
+      file_jobs: [
+        {
+          status: "PROCESSED",
+          keys: keys,
+        },
+      ],
+    })
+    .eq("parse_id", id)
+    .eq("user_id", userId);
+
+  if (error || error1) {
+    throw new AppError(
+      `Failed to save files: ${error.message}`,
+      500,
+      "SUPABASE_ERROR"
+    );
+  }
 
   if (error) {
     throw new AppError(

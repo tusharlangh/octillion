@@ -61,6 +61,7 @@ export async function getViewFiles(userId) {
       }
 
       const urls = [];
+      let processing = false;
 
       for (let j = 0; j < links.length; j++) {
         const link = links[j];
@@ -68,6 +69,10 @@ export async function getViewFiles(userId) {
         if (!link || !link.key) {
           console.warn(`Skipping invalid link ${link} for file ${links}`);
           continue;
+        }
+
+        if (link.status === "PROCESSING") {
+          processing = true;
         }
 
         try {
@@ -83,10 +88,11 @@ export async function getViewFiles(userId) {
               });
 
               return {
-                name: link.file_name || "Unknown",
+                name: link.file_name,
                 type: "file",
-                file_type: link.mimetype || "PDF",
+                file_type: "PDF",
                 presignedUrl: url,
+                status: link.status,
               };
             },
             {
@@ -127,7 +133,19 @@ export async function getViewFiles(userId) {
 
       data[i].files = urls;
       data[i].type = "folder";
-      data[i].name = `Documents ${data.length - i}`;
+
+      let folderName = `Documents ${data.length - i}`;
+      if (urls.length > 0) {
+        const firstFileName = urls[0].name;
+        if (urls.length === 1) {
+          folderName = firstFileName;
+        } else {
+          folderName = `${firstFileName} + ${urls.length - 1}`;
+        }
+      }
+
+      data[i].name = folderName;
+      data[i].status = processing ? "PROCESSING" : "PROCESSED";
     }
 
     return { data: data, success: true };

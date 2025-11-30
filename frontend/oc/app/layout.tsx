@@ -35,6 +35,7 @@ export default function RootLayout({
   return (
     <html>
       <body className={`${dmSans.variable} ${doHyeon.variable}`}>
+        <div id="modal-root"></div>
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>

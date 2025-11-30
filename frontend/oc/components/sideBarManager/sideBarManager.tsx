@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import AnimatedFileTree from "./AnimatedFileTree";
 import TopLevel from "./topLevel";
@@ -9,15 +9,20 @@ import { SideBarLoading } from "./sideBarLoading";
 import Image from "next/image";
 import { Home, MessageCircle } from "lucide-react";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
-import ErrorPopUp from "../popUp/errorPopUp";
+import { SidebarContext } from "../ConditionalLayout";
 
 export default function SideBarManager() {
+  const context = useContext(SidebarContext);
+
+  if (!context) throw new Error("queryContext is not working");
+
+  const { isRefreshing, sidebarKey, setNotis } = context;
+
   const router = useRouter();
   const pathname = usePathname();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [pfp, setPfp] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
 
   const isHomeActive = pathname === "/";
   const isChatsActive = pathname === "/chats";
@@ -25,7 +30,6 @@ export default function SideBarManager() {
   useEffect(() => {
     async function GET() {
       setLoading(true);
-      setError(null);
 
       try {
         const jwt = await handleTokenAction();
@@ -58,7 +62,7 @@ export default function SideBarManager() {
             details: data.error?.details,
           });
 
-          setError(errorMessage);
+          setNotis({ message: errorMessage, type: "error" });
 
           if (res.status === 401 || res.status === 403) {
             setTimeout(() => router.replace("/login"), 2000);
@@ -72,12 +76,21 @@ export default function SideBarManager() {
         console.error("File structure error: ", error);
 
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          setError("Network error. Please check your connection.");
+          setNotis({
+            message: "Network error. Please check your connection.",
+            type: "error",
+          });
         } else if (error instanceof Error && error.message.includes("token")) {
-          setError("Authentication failed. Please log in again.");
+          setNotis({
+            message: "Authentication failed. Please log in again.",
+            type: "error",
+          });
           setTimeout(() => router.replace("/login"), 2000);
         } else {
-          setError("An unexpected error occurred. Please try again.");
+          setNotis({
+            message: "An unexpected error occurred. Please try again.",
+            type: "error",
+          });
         }
       } finally {
         setLoading(false);
@@ -114,7 +127,7 @@ export default function SideBarManager() {
             details: data.error?.details,
           });
 
-          setError(errorMessage);
+          setNotis({ message: errorMessage, type: "error" });
 
           if (res.status === 401 || res.status === 403) {
             setTimeout(() => router.replace("/login"), 2000);
@@ -128,12 +141,21 @@ export default function SideBarManager() {
         console.error("PFP error: ", error);
 
         if (error instanceof TypeError && error.message.includes("fetch")) {
-          setError("Network error. Please check your connection.");
+          setNotis({
+            message: "Network error. Please check your connection.",
+            type: "error",
+          });
         } else if (error instanceof Error && error.message.includes("token")) {
-          setError("Authentication failed. Please log in again.");
+          setNotis({
+            message: "Authentication failed. Please log in again.",
+            type: "error",
+          });
           setTimeout(() => router.replace("/login"), 2000);
         } else {
-          setError("An unexpected error occurred. Please try again.");
+          setNotis({
+            message: "An unexpected error occurred. Please try again.",
+            type: "error",
+          });
         }
       } finally {
         setLoading(false);
@@ -142,11 +164,11 @@ export default function SideBarManager() {
 
     GET();
     GETPFP();
-  }, []);
+  }, [sidebarKey, isRefreshing]);
 
   return (
     <div className="flex flex-col justify-between h-full pt-0 md:pt-2 transition-colors duration-200">
-      <div>
+      <div className="flex flex-col flex-1 min-h-0 mb-2">
         <TopLevel />
         <div className="my-1">
           <div
@@ -202,13 +224,15 @@ export default function SideBarManager() {
         </div>
 
         <div className="bg-neutral-200/80 dark:bg-white/10 w-full h-[1px] my-2 transition-colors duration-200"></div>
-        {loading ? (
-          <SideBarLoading />
-        ) : (
-          <div className="w-full">
-            <AnimatedFileTree fileStructure={data} />
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          {loading ? (
+            <SideBarLoading />
+          ) : (
+            <div className="w-full">
+              <AnimatedFileTree fileStructure={data} />
+            </div>
+          )}
+        </div>
       </div>
 
       <div
@@ -228,15 +252,6 @@ export default function SideBarManager() {
           />
         )}
       </div>
-
-      {error && (
-        <ErrorPopUp
-          errorMessage={error}
-          onDismiss={() => setError(null)}
-          duration={3000}
-          isHome={true}
-        />
-      )}
     </div>
   );
 }

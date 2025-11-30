@@ -20,20 +20,20 @@ export const handler = async (event) => {
       );
     }
 
-    await supabase
-      .from("files")
-      .update({ status: "COMPLETED" })
-      .eq("parse_id", id);
-
     return { success: true };
   } catch (error) {
     await supabase
-      .from("files")
+      .from("files_job")
       .update({
-        status: "FAILED",
-        error_message: error.message,
+        file_jobs: [
+          {
+            status: "failed",
+            keys: keys,
+          },
+        ],
       })
-      .eq("parse_id", id);
+      .eq("parse_id", id)
+      .eq("user_id", userId);
 
     if (error.isOperational) {
       throw error;

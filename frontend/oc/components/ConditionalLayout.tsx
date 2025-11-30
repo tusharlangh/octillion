@@ -4,9 +4,24 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect, createContext } from "react";
 import SideBarManager from "./sideBarManager/sideBarManager";
 import { PanelLeftOpen } from "lucide-react";
+import NotisManager from "./notisMananger/notisManager";
 
 export const SidebarContext = createContext<
-  { open: boolean; setIsSidebarOpen: (v: boolean) => void } | undefined
+  | {
+      open: boolean;
+      setIsSidebarOpen: (v: boolean) => void;
+      sidebarKey: number;
+      setSidebarKey: (v: number | ((prev: number) => number)) => void;
+      isRefreshing: boolean;
+      setIsRefreshing: (v: boolean) => void;
+      setNotisMessage: (v: string) => void;
+      setNotisType: (v: string) => void;
+      setNotis: (v: {
+        message: string;
+        type: "success" | "info" | "error";
+      }) => void;
+    }
+  | undefined
 >(undefined);
 
 export default function ConditionalLayout({
@@ -15,7 +30,16 @@ export default function ConditionalLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [sidebarKey, setSidebarKey] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [notis, setNotis] = useState<{
+    message: string;
+    type: "success" | "info" | "error";
+  }>({ message: "", type: "info" });
+
+  const [notisMessage, setNotisMessage] = useState<string>("");
+  const [notisType, setNotisType] = useState<string>("");
 
   const isAuthPage =
     pathname?.startsWith("/login_signin/login") ||
@@ -26,7 +50,6 @@ export default function ConditionalLayout({
     setIsSidebarOpen(false);
   }, [pathname]);
 
-  // Disable scrolling when sidebar is open on mobile
   useEffect(() => {
     if (isSidebarOpen) {
       document.body.style.overflow = "hidden";
@@ -34,7 +57,6 @@ export default function ConditionalLayout({
       document.body.style.overflow = "";
     }
 
-    // Cleanup on unmount
     return () => {
       document.body.style.overflow = "";
     };
@@ -51,7 +73,17 @@ export default function ConditionalLayout({
 
   return (
     <SidebarContext.Provider
-      value={{ open: isSidebarOpen, setIsSidebarOpen: setIsSidebarOpen }}
+      value={{
+        open: isSidebarOpen,
+        setIsSidebarOpen: setIsSidebarOpen,
+        sidebarKey,
+        setSidebarKey,
+        isRefreshing,
+        setIsRefreshing,
+        setNotisMessage,
+        setNotisType,
+        setNotis,
+      }}
     >
       <div className="h-[100vh] w-[100vw] bg-[#F5F5F7] dark:bg-[rgb(18,18,18)] md:pt-2 md:pl-4 flex relative overflow-hidden">
         <button
@@ -97,9 +129,18 @@ export default function ConditionalLayout({
           </div>
         </section>
 
-        <div className="w-full h-full overflow-hidden md:pl-4">{children}</div>
+        <div className="w-full h-full overflow-hidden md:pl-4 relative">
+          {notis.message !== "" && (
+            <NotisManager
+              message={notis.message}
+              type={notis.type}
+              duration={5000}
+              onDismiss={() => setNotis({ message: "", type: "info" })}
+            />
+          )}
 
-        <div id="modal-root"></div>
+          {children}
+        </div>
       </div>
     </SidebarContext.Provider>
   );

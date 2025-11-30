@@ -9,7 +9,7 @@ import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import DocumentDropdown from "./documentDropdown";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 import { useRouter } from "next/navigation";
-import ErrorPopUp from "../popUp/errorPopUp";
+import { SidebarContext } from "../ConditionalLayout";
 
 const libreBaskerville = Libre_Baskerville({
   weight: ["400", "700"],
@@ -32,7 +32,9 @@ export default function ChatInput() {
     parse_id: string;
   } | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
+  const sidebarContext = useContext(SidebarContext);
+  if (!sidebarContext) throw new Error("SidebarContext is not working");
+  const { setNotis } = sidebarContext;
   const router = useRouter();
 
   useEffect(() => {
@@ -92,12 +94,12 @@ export default function ChatInput() {
 
   const handleSend = async () => {
     if (!search.trim()) {
-      setError("Search is empty");
+      setNotis({ message: "Search is empty", type: "error" });
       return;
     }
 
     if (!selectedDoc || !selectedDoc.name || !selectedDoc.parse_id) {
-      setError("Please select a doc by typing @");
+      setNotis({ message: "Please select a doc by typing @", type: "error" });
       return;
     }
 
@@ -105,7 +107,7 @@ export default function ChatInput() {
     const userMessage = search.trim();
 
     if (!parseId) {
-      setError("Parse id not found");
+      setNotis({ message: "Parse id not found", type: "error" });
       return;
     }
 
@@ -152,7 +154,7 @@ export default function ChatInput() {
           details: data.error?.details,
         });
 
-        setError(errorMessage);
+        setNotis({ message: errorMessage, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login"), 2000);
@@ -177,12 +179,21 @@ export default function ChatInput() {
       ]);
 
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        setError("Network error. Please check your connection.");
+        setNotis({
+          message: "Network error. Please check your connection.",
+          type: "error",
+        });
       } else if (error instanceof Error && error.message.includes("token")) {
-        setError("Authentication failed. Please log in again.");
+        setNotis({
+          message: "Authentication failed. Please log in again.",
+          type: "error",
+        });
         setTimeout(() => router.replace("/login"), 2000);
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setNotis({
+          message: "An unexpected error occurred. Please try again.",
+          type: "error",
+        });
       }
     } finally {
       setIsLoading(false);
@@ -263,13 +274,7 @@ export default function ChatInput() {
         </div>
       )}
 
-      {error && (
-        <ErrorPopUp
-          errorMessage={error}
-          onDismiss={() => setError(null)}
-          isHome={true}
-        />
-      )}
+
     </section>
   );
 }

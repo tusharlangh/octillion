@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { AppError } from "../middleware/errorHandler.js";
 import supabase from "../utils/supabase/client.js";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { processFiles } from "./processFiles.js";
 
 dotenv.config();
 
@@ -15,14 +16,29 @@ export async function saveFiles(id, keys, userId) {
         parse_id: id,
         file_jobs: [
           {
-            status: "processing",
+            status: "PROCESSING",
             keys: keys,
           },
         ],
       },
     ]);
 
-    if (error) {
+    const { data1, error1 } = await supabase.from("files").insert([
+      {
+        user_id: userId,
+        parse_id: id,
+        files: [
+          {
+            key: "testing",
+            file_name: "Untitled",
+            file_type: "PDF",
+            status: "PROCESSING",
+          },
+        ],
+      },
+    ]);
+
+    if (error || error1) {
       throw new AppError(
         `Failed to save files: ${error.message}`,
         500,
@@ -47,6 +63,18 @@ export async function saveFiles(id, keys, userId) {
 }
 
 async function triggerAsyncProcessing(id, keys, userId) {
+  if (process.env.NODE_ENV === "development") {
+    setImmediate(async () => {
+      try {
+        await processFiles(id, keys, userId);
+      } catch (error) {
+        console.error("Background processing error:", error);
+      }
+    });
+
+    return { status: "queued" };
+  }
+
   const params = {
     FunctionName: process.env.WORKER_FUNCTION_NAME,
     InvocationType: "Event",

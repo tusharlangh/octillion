@@ -1,26 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import FileItem from "./fileItem";
 import FileOpener from "./fileOpener";
 import { useRouter } from "next/navigation";
 import FileUploadLoading from "./fileUploadLoading";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
-import ErrorPopUp from "../popUp/errorPopUp";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import { SidebarContext } from "../ConditionalLayout";
 
 interface FilePreviewListProps {
   selectedFiles: File[];
   removeFile: (i: number) => void;
+  setSelectedFiles: (v: File[]) => void;
 }
 
 export default function FilePreviewList({
   selectedFiles,
   removeFile,
+  setSelectedFiles,
 }: FilePreviewListProps) {
   if (selectedFiles.length === 0) {
     return <FileUploadLoading isOpen={true} />;
   }
+
+  const context = useContext(SidebarContext);
+
+  if (!context) throw new Error("queryContext is not working");
+
+  const { setNotis, setSidebarKey } = context;
 
   const font: string = "font-(family-name:--font-dm-sans)";
   const [previewUrl, setPreviewUrl] = useState<string>("");
@@ -29,8 +37,6 @@ export default function FilePreviewList({
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [fileName, setFileName] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-
-  const [error, setError] = useState<string | null>(null);
 
   const openPDF = (file: File) => {
     const url = URL.createObjectURL(file);
@@ -58,7 +64,7 @@ export default function FilePreviewList({
           details: null,
         });
 
-        setError(errorMessage);
+        setNotis({ message: errorMessage, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login_signin/login"), 2000);
@@ -78,12 +84,15 @@ export default function FilePreviewList({
 
   const sendPdf = async () => {
     if (selectedFiles.length === 0) {
-      setError("Please select at least one file to upload.");
+      setNotis({
+        message: "Please select at least one file to upload.",
+        type: "error",
+      });
       return;
     }
 
     if (selectedFiles.length > 10) {
-      setError("Maximum 10 files allowed.");
+      setNotis({ message: "Maximum 10 files allowed.", type: "error" });
       return;
     }
 
@@ -91,11 +100,14 @@ export default function FilePreviewList({
     const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
 
     if (totalSize > MAX_TOTAL_SIZE) {
-      setError("Total file size exceeds 100MB.");
+      setNotis({ message: "Total file size exceeds 100MB.", type: "error" });
       return;
     }
 
-    setError(null);
+    setNotis({
+      message: "",
+      type: "info",
+    });
     setLoading(true);
 
     let keys: any;
@@ -141,7 +153,7 @@ export default function FilePreviewList({
           details: data.error?.details,
         });
 
-        setError(errorMessage);
+        setNotis({ message: errorMessage, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login_signin/login"), 2000);
@@ -167,21 +179,36 @@ export default function FilePreviewList({
       const diff = failure.length / n;
 
       if (diff > threshold) {
-        setError("More than half of the files failed to upload. Try again");
+        setNotis({
+          message: "More than half of the files failed to upload. Try again",
+          type: "error",
+        });
         return;
       } else if (diff !== 0) {
-        setError(`Following files have failed: ${failure}`);
+        setNotis({
+          message: `Following files have failed: ${failure}`,
+          type: "error",
+        });
       }
     } catch (error) {
       console.error("Upload error:", error);
 
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        setError("Network error. Please check your connection.");
+        setNotis({
+          message: "Network error. Please check your connection.",
+          type: "error",
+        });
       } else if (error instanceof Error && error.message.includes("token")) {
-        setError("Authentication failed. Please log in again.");
+        setNotis({
+          message: "Authentication failed. Please log in again.",
+          type: "error",
+        });
         setTimeout(() => router.replace("/login_signin/login"), 2000);
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setNotis({
+          message: "An unexpected error occurred. Please try again.",
+          type: "error",
+        });
       }
     }
 
@@ -219,7 +246,7 @@ export default function FilePreviewList({
           details: data.error?.details,
         });
 
-        setError(errorMessage);
+        setNotis({ message: errorMessage, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login_signin/login"), 2000);
@@ -228,21 +255,106 @@ export default function FilePreviewList({
         return;
       }
 
-      router.push(`/search/${id}`);
+      setNotis({
+        message:
+          "The requested files are parsing. We will notify when the parsing finishes.",
+        type: "info",
+      });
+      setSelectedFiles([]);
+
+      setSidebarKey((prev: number) => prev + 1);
     } catch (error) {
       console.error("Upload error:", error);
 
       if (error instanceof TypeError && error.message.includes("fetch")) {
-        setError("Network error. Please check your connection.");
+        setNotis({
+          message: "Network error. Please check your connection.",
+          type: "error",
+        });
       } else if (error instanceof Error && error.message.includes("token")) {
-        setError("Authentication failed. Please log in again.");
+        setNotis({
+          message: "Authentication failed. Please log in again.",
+          type: "error",
+        });
         setTimeout(() => router.replace("/login_signin/login"), 2000);
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        setNotis({
+          message: "An unexpected error occurred. Please try again.",
+          type: "error",
+        });
       }
     } finally {
       setLoading(false);
     }
+
+    pollProcessingStatus(id, jwt!);
+  };
+
+  const pollProcessingStatus = async (id: string, token: string) => {
+    const maxAttempts = 60;
+    let attempts = 0;
+
+    const checkStatus = async () => {
+      try {
+        attempts++;
+        const query = new URLSearchParams({
+          id: id,
+        });
+
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/parse-status/?${query}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          console.error("Failed to check status:", res.status);
+          return;
+        }
+
+        const d = await res.json();
+        const data = d.data;
+
+        if (data.status === "PROCESSED") {
+          setNotis({
+            message: "Files have been successfully processed!",
+            type: "success",
+          });
+
+          setSidebarKey((prev: number) => prev + 1);
+          setTimeout(() => router.push(`/search/${id}`), 1000);
+
+          return;
+        } else if (data.status === "FAILED") {
+          setNotis({
+            message: "File processing failed. Please try again.",
+            type: "error",
+          });
+
+          return;
+        } else if (data.status === "PROCESSING") {
+          if (attempts < maxAttempts) {
+            setTimeout(checkStatus, 3000);
+          } else {
+            setNotis({
+              message:
+                "Processing is taking longer than expected. Check back later.",
+              type: "info",
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Polling error:", error);
+        if (attempts < maxAttempts) {
+          setTimeout(checkStatus, 3000);
+        }
+      }
+    };
+
+    checkStatus();
   };
 
   return (
@@ -301,13 +413,6 @@ export default function FilePreviewList({
         </div>
       </div>
       <FileUploadLoading isOpen={loading} />
-      {error && (
-        <ErrorPopUp
-          errorMessage={error}
-          onDismiss={() => setError(null)}
-          isHome={true}
-        />
-      )}
     </section>
   );
 }

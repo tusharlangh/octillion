@@ -1,10 +1,6 @@
 import dotenv from "dotenv";
 import { AppError } from "../middleware/errorHandler.js";
-import {
-  uploadFilesToS3,
-  createPresignedUrls,
-  uploadJsonToS3,
-} from "./saveFiles/upload.js";
+import { createPresignedUrls, uploadJsonToS3 } from "./saveFiles/upload.js";
 import { extractPagesContent } from "./saveFiles/parser.js";
 import {
   createInvertedSearch,
@@ -17,22 +13,17 @@ import { saveFilesRecord } from "./saveFiles/persist.js";
 dotenv.config();
 
 export async function processFiles(id, keys, userId) {
-  // 1. Skip uploadFilesToS3 (files are already in S3)
-  // 2. Construct file objects from keys for downstream compatibility
   const fileObjects = keys.map((key) => {
-    // Key format: id-index-filename
-    // We try to extract the original filename for better logging/metadata
     const parts = key.split("-");
-    const originalname = parts.slice(2).join("-") || key; 
+    const originalname = parts.slice(6).join("-") || key;
     return {
       key,
-      originalname,
-      // mimetype is not strictly needed for download/parsing as we use the URL
+      file_name: originalname,
+      file_type: "PDF",
+      status: "PROCESSED",
     };
   });
 
-  // 3. Generate Presigned URLs for the Worker to Download/Read
-  // createPresignedUrls expects objects with a 'key' property
   const urls = await createPresignedUrls(fileObjects);
 
   const links = urls.map((url) => url.presignedUrl);
@@ -45,8 +36,6 @@ export async function processFiles(id, keys, userId) {
     );
   }
 
-  // 4. Extract Content (Parser uses links to download)
-  // We pass fileObjects so parser can get 'originalname'
   let pagesContent = await extractPagesContent(links, fileObjects);
 
   let invertedIndex;
@@ -95,14 +84,14 @@ export async function processFiles(id, keys, userId) {
     uploadJsonToS3(id, "build_index", buildIndex),
   ]);
 
-  const data = await saveFilesRecord({
+  const data = await saveFilesRecord(
     id,
     userId,
-    keys,
-    buildIndex: buildIndexRef,
-    invertedIndex: invertedIndexRef,
-    pagesContent: pagesContentRef,
-  });
+    fileObjects,
+    buildIndexRef,
+    invertedIndexRef,
+    pagesContentRef
+  );
 
   return data;
 }

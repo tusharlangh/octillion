@@ -8,10 +8,10 @@ export async function signInWithGoogle() {
 
   // Get the redirect URL from environment or use localhost for development
   const redirectUrl =
-    process.env.NEXT_PUBLIC_AUTH_CALLBACK_URL ||
-    (process.env.NODE_ENV === "production"
-      ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
-      : "http://localhost:3000/auth/callback");
+    process.env.NODE_ENV === "development"
+      ? "http://localhost:3000/auth/callback"
+      : process.env.NEXT_PUBLIC_AUTH_CALLBACK_URL ||
+        `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",

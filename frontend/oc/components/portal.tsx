@@ -11,7 +11,7 @@ export default function Portal({ children }: PortalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true); // ensures code runs only on client
+    setMounted(true);
   }, []);
 
   if (!mounted) return null;
