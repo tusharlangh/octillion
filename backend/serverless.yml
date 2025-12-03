@@ -38,7 +38,7 @@ provider:
 
 functions:
   api:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:8e0719e713daf426703a88f9d9ebc70f59be98b98f932d50061d83e1640e74b2
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:658d8101666a9e65918053e0d8e1ea638a36af0aecf6078c0c6a149f0b8294db
     timeout: 29
     memorySize: 2048
     events:
@@ -50,6 +50,5 @@ functions:
           method: ANY
 
   processor:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:8e0719e713daf426703a88f9d9ebc70f59be98b98f932d50061d83e1640e74b2
-    timeout: 900
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:658d8101666a9e65918053e0d8e1ea638a36af0aecf6078c0c6a149f0b8294db
     memorySize: 3008
