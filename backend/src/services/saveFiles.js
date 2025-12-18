@@ -45,6 +45,7 @@ export async function saveFiles(id, keys, userId) {
         "SUPABASE_ERROR"
       );
     }
+    console.log(process.env.NODE_ENV);
 
     await triggerAsyncProcessing(id, keys, userId);
 
@@ -83,6 +84,8 @@ async function triggerAsyncProcessing(id, keys, userId) {
   const command = new InvokeCommand(params);
 
   await lambda.send(command);
+  
+  console.log(`✅ Lambda worker invoked successfully for parse_id: ${id} - Processing ${keys.length} files`);
 
   return { status: "queued" };
 }
