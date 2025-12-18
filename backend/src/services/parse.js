@@ -7,8 +7,6 @@ import { AppError } from "../middleware/errorHandler.js";
 import { SearchRewrite } from "./searchRewrite.js";
 import { generateEmbedding } from "./parse/embedding.js";
 import { searchBuildIndex, searchContent } from "./parse/searchIndex.js";
-import { createContextualChunks } from "./parse/chunks.js";
-
 dotenv.config();
 
 export { generateEmbedding } from "./parse/embedding.js";
