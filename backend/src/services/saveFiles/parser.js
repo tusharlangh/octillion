@@ -22,19 +22,42 @@ async function processSinglePage(page, pageNum, fileIndex, fileName) {
       const words = content.str.split(/\s+/);
       const x = content.x;
       const y = Math.round(content.y);
+      const height = content.height || 0;
+      const totalWidth = content.width;
+      const totalLength = content.str.length;
+
+      const safeWidth =
+        typeof totalWidth === "number" && totalWidth > 0
+          ? totalWidth
+          : totalLength * 5;
+      const avgCharWidth = safeWidth / (totalLength || 1);
+
+      let currentXOffset = 0;
 
       for (const word of words) {
         if (!word || word.trim().length === 0) continue;
+
         const subWords = word.split(/[ -]+/);
+        let positionInWord = 0;
+
         for (const text of subWords) {
           if (text.trim().length === 0) continue;
+
+          const segmentX = x + (positionInWord + currentXOffset) * avgCharWidth;
+
           if (!new_map.has(y)) new_map.set(y, []);
-          new_map.get(y).push({ word: text.toLowerCase(), x, y });
+          new_map
+            .get(y)
+            .push({ word: text.toLowerCase(), x: segmentX, y, height });
+
+          positionInWord += text.length + 1;
         }
+
+        currentXOffset += word.length + 1;
       }
     }
     const sortedMapping = Array.from(new_map.entries())
-      .sort((a, b) => b[0] - a[0])
+      .sort((a, b) => a[0] - b[0])
       .map(([y, words]) => [y, words.sort((a, b) => a.x - b.x)]);
     const orderedText = sortedMapping
       .map(([, words]) => words.map((w) => w.word).join(" "))

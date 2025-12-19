@@ -150,8 +150,7 @@ export async function parse(id, search, userId, options = {}) {
                   return [];
                 }
                 const topPages = Object.entries(scores)
-                  .sort(([, a], [, b]) => b - a)
-                  .slice(0, topK * 2)
+                  .filter(([, score]) => score > 0)
                   .map(([id]) => id);
 
                 const results = searchBuildIndex(
@@ -323,10 +322,6 @@ export async function parse(id, search, userId, options = {}) {
       } else if (searchMode === "tfidf") {
         try {
           const scores = await searchContent(pagesContent, inverted, search);
-          topPages = Object.entries(scores)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, topK)
-            .map(([id]) => id);
 
           if (Object.keys(scores || {}).length === 0) {
             return {
@@ -334,6 +329,10 @@ export async function parse(id, search, userId, options = {}) {
               searchResults: [],
             };
           }
+
+          topPages = Object.entries(scores)
+            .filter(([, score]) => score > 0)
+            .map(([id]) => id);
 
           searchResults = searchBuildIndex(
             buildIndex,
