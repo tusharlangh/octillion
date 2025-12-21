@@ -93,7 +93,9 @@ export async function processFiles(id, keys, userId) {
     pagesContentRef
   );
 
-  console.log(`🎉 Lambda processing completed successfully for parse_id: ${id} - All files processed, indexed, and saved to database`);
+  console.log(
+    `🎉 Lambda processing completed successfully for parse_id: ${id} - All files processed, indexed, and saved to database`
+  );
 
   return data;
 }

@@ -175,8 +175,8 @@ describe("parse()", () => {
   test("hybrid: both semantic + keyword empty → empty results", async () => {
     generateEmbedding.mockResolvedValue([0.2]);
     searchQdrant.mockResolvedValue([]);
-    searchContent.mockResolvedValue({}); //returns promise due to async
-    searchBuildIndex.mockReturnValue([]); //returns actual value
+    searchContent.mockResolvedValue({});
+    searchBuildIndex.mockReturnValue([]);
 
     const res = await parse(mockId, mockSearchText, mockUser, {
       searchMode: "hybrid",

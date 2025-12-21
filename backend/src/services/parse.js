@@ -2,7 +2,6 @@ import supabase from "../utils/supabase/client.js";
 import dotenv from "dotenv";
 import { searchQdrant } from "./qdrantService.js";
 import { getJsonFromS3 } from "./saveFiles/upload.js";
-import { MinHeap } from "../utils/MinHeap.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { SearchRewrite } from "./searchRewrite.js";
 import { generateEmbedding } from "./parse/embedding.js";
@@ -11,6 +10,30 @@ dotenv.config();
 
 export { generateEmbedding } from "./parse/embedding.js";
 export { createContextualChunks } from "./parse/chunks.js";
+
+function performRRF(semanticResults, keywordResults, k = 60) {
+  const fusedScores = new Map();
+
+  const processList = (results) => {
+    results.forEach((item, index) => {
+      const key = `${item.pageId}-${item.startY}-${item.endY}`;
+      const rank = index + 1;
+      const score = 1 / (k + rank);
+
+      if (fusedScores.has(key)) {
+        const existing = fusedScores.get(key);
+        existing.score += score;
+      } else {
+        fusedScores.set(key, { ...item, score });
+      }
+    });
+  };
+
+  processList(semanticResults);
+  processList(keywordResults);
+
+  return Array.from(fusedScores.values()).sort((a, b) => b.score - a.score);
+}
 
 export async function parse(id, search, userId, options = {}) {
   const { searchMode, topK = 10 } = options;
@@ -150,8 +173,7 @@ export async function parse(id, search, userId, options = {}) {
                   return [];
                 }
                 const topPages = Object.entries(scores)
-                  .sort(([, a], [, b]) => b - a)
-                  .slice(0, topK * 2)
+                  .filter(([, score]) => score > 0)
                   .map(([id]) => id);
 
                 const results = searchBuildIndex(
@@ -191,76 +213,12 @@ export async function parse(id, search, userId, options = {}) {
             };
           }
 
-          const normalize = (x, min, max) => {
-            const range = max - min;
-            if (range === 0) return 0.5;
-            return (x - min) / range;
-          };
+          semanticResults.sort((a, b) => b.score - a.score);
+          keywordResults.sort((a, b) => b.score - a.score);
 
-          const getMinMax = (arr) => {
-            if (arr.length === 0) return { min: 0, max: 1 };
-            const scores = arr.map((item) => item.score || 0);
-            return {
-              min: Math.min(...scores),
-              max: Math.max(...scores),
-            };
-          };
+          const finalResults = performRRF(semanticResults, keywordResults);
 
-          const semanticRange = getMinMax(semanticResults);
-          const keywordRange = getMinMax(keywordResults);
-
-          semanticResults.forEach((item) => {
-            item.score = normalize(
-              item.score || 0,
-              semanticRange.min,
-              semanticRange.max
-            );
-            item.source = "semantic";
-          });
-
-          keywordResults.forEach((item) => {
-            item.score = normalize(
-              item.score || 0,
-              keywordRange.min,
-              keywordRange.max
-            );
-            item.source = "keyword";
-          });
-
-          const resultMap = new Map();
-
-          for (const result of semanticResults) {
-            const key = `${result.pageId}-${result.startY}-${result.endY}`;
-            resultMap.set(key, result);
-          }
-
-          for (const result of keywordResults) {
-            const key = `${result.pageId}-${result.startY}-${result.endY}`;
-
-            if (resultMap.has(key)) {
-              const existing = resultMap.get(key);
-              existing.score = (existing.score + result.score) / 2;
-            } else {
-              resultMap.set(key, result);
-            }
-          }
-
-          const heap = new MinHeap(topK);
-          for (const result of resultMap.values()) {
-            heap.push(result);
-          }
-
-          if (!heap) {
-            throw new AppError(
-              "Failed to create heap",
-              500,
-              "HEAP_CREATION_ERROR"
-            );
-          }
-
-          searchResults = heap.toArray();
-
-          if (!searchResults || searchResults.length === 0) {
+          if (!finalResults || finalResults.length === 0) {
             return {
               success: true,
               searchResults: [],
@@ -269,13 +227,10 @@ export async function parse(id, search, userId, options = {}) {
 
           return {
             success: true,
-            searchResults,
+            searchResults: finalResults.slice(0, topK),
             metadata: {
               searchMode,
-              totalResults: searchResults.length,
-              semanticCount: semanticResults.length,
-              keywordCount: keywordResults.length,
-              uniqueResults: resultMap.size,
+              totalResults: finalResults.length,
             },
           };
         } catch (error) {
@@ -323,10 +278,6 @@ export async function parse(id, search, userId, options = {}) {
       } else if (searchMode === "tfidf") {
         try {
           const scores = await searchContent(pagesContent, inverted, search);
-          topPages = Object.entries(scores)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, topK)
-            .map(([id]) => id);
 
           if (Object.keys(scores || {}).length === 0) {
             return {
@@ -334,6 +285,10 @@ export async function parse(id, search, userId, options = {}) {
               searchResults: [],
             };
           }
+
+          topPages = Object.entries(scores)
+            .filter(([, score]) => score > 0)
+            .map(([id]) => id);
 
           searchResults = searchBuildIndex(
             buildIndex,

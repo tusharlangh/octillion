@@ -1,8 +1,6 @@
 import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
-import {
-  AppError,
-  ValidationError,
-} from "../../middleware/errorHandler.js";
+import { AppError, ValidationError } from "../../middleware/errorHandler.js";
+import { identifyBlocks } from "./layoutEngine.js";
 
 export function searchBuildIndex(
   buildIndex,
@@ -33,8 +31,9 @@ export function searchBuildIndex(
       buildIndex.suffixIndex !== undefined ||
       buildIndex.ngramIndex !== undefined;
 
-    function getSentences(y, mapping, sentenceSeen, pageId) {
+    function getSentences(y, mapping) {
       const keys = Array.from(mapping.keys()).sort((a, b) => b - a);
+      console.log(keys);
 
       const pos = keys.indexOf(y);
       if (pos === -1) return null;
@@ -50,8 +49,6 @@ export function searchBuildIndex(
       const parts = [];
 
       for (let key of needed) {
-        if (sentenceSeen.has(`${pageId}-${key}`)) continue;
-        sentenceSeen.add(`${pageId}-${key}`);
         const row = mapping.get(key);
         if (!row) continue;
 
@@ -63,7 +60,15 @@ export function searchBuildIndex(
         parts.push(text);
       }
 
-      return parts.join(" ").trim();
+      const sentence = parts.join(" ").trim();
+      const startY = needed[needed.length - 1];
+      const endY = needed[0];
+      console.log(`startY: ${startY}, endY: ${endY}`);
+
+      return {
+        sentence,
+        range: { start: startY, end: endY },
+      };
     }
 
     if (isOptimizedFormat) {
@@ -78,53 +83,71 @@ export function searchBuildIndex(
         );
       }
 
+      const processedRanges = new Map();
+
       for (const term of terms) {
-        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        const normalizedTerm = term.replace(/[.,;:!?'\"()[\]{}]+/g, "");
         if (!normalizedTerm) continue;
 
         let matches;
 
         try {
           matches = index.search(normalizedTerm, "all");
-          console.log(matches.length);
         } catch (error) {
           continue;
         }
-
-        let sentenceSeen = new Set();
 
         for (const [word, pageId, y] of matches) {
           if (!pageSet.has(pageId)) continue;
 
           const mapping = pageMappings.get(pageId);
+
           if (!mapping) continue;
 
-          if (sentenceSeen.has(`${pageId}-${y}`)) continue;
+          if (!processedRanges.has(pageId)) {
+            processedRanges.set(pageId, []);
+          }
 
-          const sentence = getSentences(y, mapping, sentenceSeen, pageId);
+          const ranges = processedRanges.get(pageId);
+
+          const isAlreadyCovered = ranges.some(
+            (range) => y >= range.start && y <= range.end
+          );
+          if (isAlreadyCovered) continue;
 
           const key = `${pageId}-${y}`;
+          if (sentenceMap.has(key)) continue;
 
-          if (!sentenceMap.has(key)) {
-            sentenceMap.set(key, {
-              file_name:
-                pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
-              pageId: pageId,
-              y: y,
-              sentence:
-                sentence ||
-                mapping
-                  .get(y)
-                  .filter((w) => w && w.word)
-                  .map((w) => w.word)
-                  .join(" "),
-            });
-          }
+          const result = getSentences(y, mapping);
+
+          if (!result) continue;
+
+          const { sentence, range } = result;
+
+          ranges.push(range);
+
+          const fallbackSentence = mapping.has(y)
+            ? mapping
+                .get(y)
+                .filter((w) => w && w.word)
+                .map((w) => w.word)
+                .join(" ")
+            : "";
+
+          sentenceMap.set(key, {
+            file_name:
+              pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
+            pageId: pageId,
+            y: y,
+            sentence: sentence || fallbackSentence,
+          });
         }
       }
     } else {
+      const processedRanges = new Map();
+
       for (const term of terms) {
-        const normalizedTerm = term.replace(/[.,;:!?'"()[\]{}]+/g, "");
+        const normalizedTerm = term.replace(/[.,;:!?'\"()[\]{}]+/g, "");
         const firstChar = normalizedTerm[0]?.toLowerCase();
         if (!firstChar) continue;
 
@@ -153,14 +176,35 @@ export function searchBuildIndex(
             word.endsWith(normalizedTerm) ||
             word.includes(normalizedTerm)
           ) {
+            if (!processedRanges.has(pageId)) {
+              processedRanges.set(pageId, []);
+            }
+
+            const ranges = processedRanges.get(pageId);
+
+            const isAlreadyCovered = ranges.some(
+              (range) => y >= range.start && y <= range.end
+            );
+
+            if (isAlreadyCovered) continue;
+
             const key = `${pageId}-${y}`;
             if (!sentenceMap.has(key)) {
+              const result = getSentences(y, mapping);
+
+              const sentenceText = result ? result.sentence : "";
+              const range = result ? result.range : null;
+
+              if (range) {
+                ranges.push(range);
+              }
+
               sentenceMap.set(key, {
                 file_name:
                   pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
                 pageId: pageId,
                 y: y,
-                sentence: getSentences(y, mapping),
+                sentence: sentenceText,
               });
             }
           }
@@ -217,42 +261,55 @@ export async function searchContent(sitesContent, inverted, search) {
       return {};
     }
 
-    const N = sitesContent.length;
-    const appearance = {};
-    const TF = [];
+    const k1 = 1.2;
+    const b = 0.75;
+    let totalWords = 0;
+    let docCount = 0;
+    const docLengths = {};
 
     for (const page of sitesContent) {
-      if (!page || !page.id || typeof page.total_words !== "number") {
-        continue;
-      }
+      const wordCount =
+        typeof page.total_words === "number" ? page.total_words : 0;
 
-      for (const term of terms) {
-        const counts =
-          inverted[term] && inverted[term][page.id]
-            ? inverted[term][page.id]
-            : 0;
-
-        if (counts > 0) {
-          if (!appearance[term]) appearance[term] = new Set();
-          appearance[term].add(page.id);
-        }
-
-        if (page.total_words > 0) {
-          TF.push({ id: page.id, term, tf: counts / page.total_words });
-        }
+      if (wordCount > 0) {
+        totalWords += wordCount;
+        docCount++;
+        docLengths[page.id] = wordCount;
       }
     }
 
+    const avgdl = docCount > 0 ? totalWords / docCount : 0;
+    const N = sitesContent.length;
     const IDF = {};
+
     for (const term of terms) {
-      const df = appearance[term] ? appearance[term].size : 0;
-      IDF[term] = df === 0 ? 0 : Math.log((N + 1) / (df + 1)) + 1;
+      const termEntry = inverted[term];
+      const n_q = termEntry ? Object.keys(termEntry).length : 0;
+
+      IDF[term] = Math.log(1 + (N - n_q + 0.5) / (n_q + 0.5));
     }
 
     const scores = {};
-    for (const { id, term, tf } of TF) {
-      if (!scores[id]) scores[id] = 0;
-      scores[id] += tf * IDF[term];
+
+    for (const term of terms) {
+      const termDocs = inverted[term] || {};
+      const idf = IDF[term];
+
+      if (!termDocs) continue;
+
+      for (const [pageId, freq] of Object.entries(termDocs)) {
+        const docLen = docLengths[pageId] || 0;
+
+        if (docLen === 0) continue;
+
+        const number = freq * (k1 + 1);
+        const denom = freq + k1 * (1 - b + b * (docLen / avgdl));
+
+        const score = idf * (number / denom);
+
+        if (!scores[pageId]) scores[pageId] = 0;
+        scores[pageId] += score;
+      }
     }
 
     return scores;
@@ -267,5 +324,3 @@ export async function searchContent(sitesContent, inverted, search) {
     );
   }
 }
-
-
