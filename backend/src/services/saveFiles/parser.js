@@ -46,9 +46,13 @@ async function processSinglePage(page, pageNum, fileIndex, fileName) {
           const segmentX = x + (positionInWord + currentXOffset) * avgCharWidth;
 
           if (!new_map.has(y)) new_map.set(y, []);
-          new_map
-            .get(y)
-            .push({ word: text.toLowerCase(), x: segmentX, y, height });
+          new_map.get(y).push({
+            word: text.toLowerCase(),
+            x: segmentX,
+            y,
+            height,
+            width: text.length * avgCharWidth,
+          });
 
           positionInWord += text.length + 1;
         }
@@ -121,7 +125,9 @@ async function processSinglePDF(link, fileIndex, fileName, file) {
     ];
   }
   const pdfExtract = new PDFExtract();
-  const options = {};
+  const options = {
+    disableCombineTextItems: true,
+  };
   let data;
   try {
     data = await new Promise((resolve, reject) => {
