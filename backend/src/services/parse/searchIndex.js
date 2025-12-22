@@ -11,19 +11,17 @@ export function searchBuildIndex(
   try {
     const terms = searchTerms.toLowerCase().split(/\s+/);
     const pageSet = new Set(topPageIds);
-    const sentenceMap = new Map();
+
+    const termStats = {};
+
+    const pageById = new Map();
     const pageMappings = new Map();
 
-    for (let page of pagesContent) {
-      if (!page || !page.id) {
-        continue;
-      }
-      if (pageSet.has(page.id)) {
-        if (!page.mapping) {
-          continue;
-        }
-        pageMappings.set(page.id, new Map(page.mapping));
-      }
+    for (const page of pagesContent) {
+      if (!page?.id || !pageSet.has(page.id) || !page.mapping) continue;
+
+      pageById.set(page.id, page);
+      pageMappings.set(page.id, new Map(page.mapping));
     }
 
     const isOptimizedFormat =
@@ -31,192 +29,89 @@ export function searchBuildIndex(
       buildIndex.suffixIndex !== undefined ||
       buildIndex.ngramIndex !== undefined;
 
-    function getSentences(y, mapping) {
-      const keys = Array.from(mapping.keys()).sort((a, b) => b - a);
-      console.log(keys);
+    if (!isOptimizedFormat) return {};
 
-      const pos = keys.indexOf(y);
-      if (pos === -1) return null;
+    let index;
+    try {
+      index = OptimizedKeywordIndex.fromJSON(buildIndex);
+    } catch (error) {
+      throw new AppError(
+        `Failed to parse optimized index: ${error.message}`,
+        500,
+        "INDEX_PARSE_ERROR"
+      );
+    }
 
-      const startIndex = Math.max(0, pos - 2);
-      const endIndex = Math.min(keys.length - 1, pos + 2);
-      const needed = keys.slice(startIndex, endIndex + 1);
+    for (const rawTerm of terms) {
+      const term = rawTerm.replace(/[^\w]/g, "");
+      if (!term) continue;
 
-      if (needed.length === 0) {
-        return null;
+      let matches;
+      try {
+        matches = index.search(term, "all");
+      } catch {
+        continue;
       }
 
-      const parts = [];
+      for (const [word, pageId, y] of matches) {
+        if (!pageSet.has(pageId)) continue;
 
-      for (let key of needed) {
-        const row = mapping.get(key);
+        const page = pageById.get(pageId);
+        const mapping = pageMappings.get(pageId);
+        if (!page || !mapping) continue;
+
+        const row = mapping.get(y);
         if (!row) continue;
 
-        const text = row
-          .filter((w) => w && w.word)
-          .map((w) => w.word)
-          .join(" ");
+        const coord = row.find((w) => w.word === word);
+        if (!coord) continue;
 
-        parts.push(text);
+        const fileName = page.name;
+        const pageNo = page.pageNumber ?? pageId;
+
+        if (!termStats[term]) {
+          termStats[term] = {
+            global: { fileCount: 0 },
+            files: {},
+          };
+        }
+
+        const termEntry = termStats[term];
+
+        if (!termEntry.files[fileName]) {
+          termEntry.files[fileName] = {
+            total: 0,
+            pages: {},
+          };
+          termEntry.global.fileCount += 1;
+        }
+
+        const fileEntry = termEntry.files[fileName];
+
+        if (!fileEntry.pages[pageNo]) {
+          fileEntry.pages[pageNo] = {
+            coords: [],
+            count: 0,
+          };
+        }
+
+        fileEntry.pages[pageNo].coords.push(coord);
+        fileEntry.pages[pageNo].count += 1;
+        fileEntry.total += 1;
       }
-
-      const sentence = parts.join(" ").trim();
-      const startY = needed[needed.length - 1];
-      const endY = needed[0];
-      console.log(`startY: ${startY}, endY: ${endY}`);
-
-      return {
-        sentence,
-        range: { start: startY, end: endY },
-      };
+      Object.entries(termStats[term].files).sort(
+        ([, a], [, b]) => b.total - a.total
+      );
     }
 
-    if (isOptimizedFormat) {
-      let index;
-      try {
-        index = OptimizedKeywordIndex.fromJSON(buildIndex);
-      } catch (error) {
-        throw new AppError(
-          `Failed to parse optimized index: ${error.message}`,
-          500,
-          "INDEX_PARSE_ERROR"
-        );
-      }
+    Object.keys(termStats).sort(
+      (a, b) => termStats[b].global.fileCount - termStats[a].global.fileCount
+    );
 
-      const processedRanges = new Map();
-
-      for (const term of terms) {
-        const normalizedTerm = term.replace(/[.,;:!?'\"()[\]{}]+/g, "");
-        if (!normalizedTerm) continue;
-
-        let matches;
-
-        try {
-          matches = index.search(normalizedTerm, "all");
-        } catch (error) {
-          continue;
-        }
-
-        for (const [word, pageId, y] of matches) {
-          if (!pageSet.has(pageId)) continue;
-
-          const mapping = pageMappings.get(pageId);
-
-          if (!mapping) continue;
-
-          if (!processedRanges.has(pageId)) {
-            processedRanges.set(pageId, []);
-          }
-
-          const ranges = processedRanges.get(pageId);
-
-          const isAlreadyCovered = ranges.some(
-            (range) => y >= range.start && y <= range.end
-          );
-          if (isAlreadyCovered) continue;
-
-          const key = `${pageId}-${y}`;
-          if (sentenceMap.has(key)) continue;
-
-          const result = getSentences(y, mapping);
-
-          if (!result) continue;
-
-          const { sentence, range } = result;
-
-          ranges.push(range);
-
-          const fallbackSentence = mapping.has(y)
-            ? mapping
-                .get(y)
-                .filter((w) => w && w.word)
-                .map((w) => w.word)
-                .join(" ")
-            : "";
-
-          sentenceMap.set(key, {
-            file_name:
-              pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
-            pageId: pageId,
-            y: y,
-            sentence: sentence || fallbackSentence,
-          });
-        }
-      }
-    } else {
-      const processedRanges = new Map();
-
-      for (const term of terms) {
-        const normalizedTerm = term.replace(/[.,;:!?'\"()[\]{}]+/g, "");
-        const firstChar = normalizedTerm[0]?.toLowerCase();
-        if (!firstChar) continue;
-
-        const positions = buildIndex[firstChar] || [];
-
-        if (!Array.isArray(positions)) {
-          continue;
-        }
-
-        for (const pos of positions) {
-          const word = Array.isArray(pos) ? pos[0] : pos.word;
-          const pageId = Array.isArray(pos) ? pos[1] : pos.pageId;
-          const y = Array.isArray(pos) ? pos[2] : pos.y;
-
-          if (!pageSet.has(pageId)) continue;
-
-          const mapping = pageMappings.get(pageId);
-          if (!mapping) continue;
-
-          const row = mapping.get(y);
-          if (!row || !Array.isArray(row)) continue;
-
-          if (
-            word === normalizedTerm ||
-            word.startsWith(normalizedTerm) ||
-            word.endsWith(normalizedTerm) ||
-            word.includes(normalizedTerm)
-          ) {
-            if (!processedRanges.has(pageId)) {
-              processedRanges.set(pageId, []);
-            }
-
-            const ranges = processedRanges.get(pageId);
-
-            const isAlreadyCovered = ranges.some(
-              (range) => y >= range.start && y <= range.end
-            );
-
-            if (isAlreadyCovered) continue;
-
-            const key = `${pageId}-${y}`;
-            if (!sentenceMap.has(key)) {
-              const result = getSentences(y, mapping);
-
-              const sentenceText = result ? result.sentence : "";
-              const range = result ? result.range : null;
-
-              if (range) {
-                ranges.push(range);
-              }
-
-              sentenceMap.set(key, {
-                file_name:
-                  pagesContent.find((p) => p.id === pageId)?.name || "Unknown",
-                pageId: pageId,
-                y: y,
-                sentence: sentenceText,
-              });
-            }
-          }
-        }
-      }
-    }
-
-    return [...sentenceMap.values()];
+    return termStats;
   } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
+    if (error.isOperational) throw error;
+
     throw new AppError(
       `Failed to search build index: ${error.message}`,
       500,
