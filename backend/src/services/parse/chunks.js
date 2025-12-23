@@ -12,6 +12,20 @@ export function createContextualChunks(sortedMapping) {
     for (const region of regions) {
       if (region.rows.length === 0) continue;
 
+      if (region.type === "PROSE") {
+        const proseWords = region.rows.flat();
+        let s = chunkifyProse(proseWords);
+        s.map((item) =>
+          allChunks.push({
+            text: item.text,
+            startY: item.startY,
+            endY: item.endY,
+            wordCount: item.wordCount,
+          })
+        );
+        continue;
+      }
+
       const regionStartY = region.rows[0][0]?.y || 0;
       const regionEndY = region.rows[region.rows.length - 1][0]?.y || 0;
 
@@ -169,4 +183,58 @@ function computeColumnBoundaries(rows) {
   boundaries.push([last, xMax]);
 
   return boundaries;
+}
+
+function chunkifyProse(
+  sortedMapping,
+  targetLimit = 80,
+  maxLimit = 120,
+  overlap = 10
+) {
+  if (!sortedMapping || sortedMapping.length === 0) {
+    return [];
+  }
+
+  try {
+    const allWords = sortedMapping;
+
+    if (allWords.length === 0) {
+      return [];
+    }
+    const chunks = [];
+    let l = 0;
+    while (l < allWords.length) {
+      let r = l;
+      let lastSentenceEnd = -1;
+      while (r < allWords.length && r - l < maxLimit) {
+        const word = allWords[r].word;
+        if (/[.!?]["')\]]?$/.test(word)) {
+          lastSentenceEnd = r;
+          if (r - l >= targetLimit) break;
+        }
+        r++;
+      }
+      const cutPoint =
+        lastSentenceEnd !== -1
+          ? lastSentenceEnd + 1
+          : Math.min(l + maxLimit, allWords.length);
+      const slice = allWords.slice(l, cutPoint);
+      if (slice.length > 0) {
+        chunks.push({
+          text: slice.map((w) => w.word).join(" "),
+          startY: slice[0].y,
+          endY: slice[slice.length - 1].y,
+          wordCount: slice.length,
+        });
+      }
+      const nextL = cutPoint - overlap;
+      l = nextL > l ? nextL : cutPoint;
+    }
+    return chunks;
+  } catch (error) {
+    if (error.isOperational) {
+      throw error;
+    }
+    throw new AppError("Failed building chunks", 500, "BUILDING_CHUNKS_ERROR");
+  }
 }

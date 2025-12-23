@@ -6,10 +6,35 @@ import { AppError } from "../middleware/errorHandler.js";
 import { SearchRewrite } from "./searchRewrite.js";
 import { generateEmbedding } from "./parse/embedding.js";
 import { searchBuildIndex, searchContent } from "./parse/searchIndex.js";
+import { createPresignedUrl } from "./saveFiles/upload.js";
 dotenv.config();
 
 export { generateEmbedding } from "./parse/embedding.js";
 export { createContextualChunks } from "./parse/chunks.js";
+
+async function getFileMapping(files) {
+  const mapping = {};
+  if (!files || !Array.isArray(files)) return mapping;
+
+  const results = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const res = await createPresignedUrl(file);
+        return res;
+      } catch (err) {
+        console.error(`Failed to create presigned URL for ${file.file_name}:`, err);
+        return null;
+      }
+    })
+  );
+
+  results.filter(Boolean).forEach((res, index) => {
+    mapping[res.file_name] = res.presignedUrl;
+    // Fallback mapping for index-based names like "Document 1"
+    mapping[`Document ${index + 1}`] = res.presignedUrl;
+  });
+  return mapping;
+}
 
 function performRRF(semanticResults, keywordResults, k = 60) {
   const fusedScores = new Map();
@@ -80,6 +105,8 @@ export async function parse(id, search, userId, options = {}) {
         "INVALID_DATA_ROW"
       );
     }
+
+    const fileMapping = await getFileMapping(d.files);
 
     let pagesContent = d.pages_metadata;
     let inverted = d.inverted_index;
@@ -170,29 +197,50 @@ export async function parse(id, search, userId, options = {}) {
                 );
 
                 if (Object.keys(scores || {}).length === 0) {
-                  return [];
+                  return { termStats: {}, hits: [] };
                 }
-                const topPages = Object.entries(scores)
+                const topPagesForKeyword = Object.entries(scores)
                   .filter(([, score]) => score > 0)
                   .map(([id]) => id);
 
-                const results = searchBuildIndex(
+                const termStats = searchBuildIndex(
                   buildIndex,
                   search,
                   pagesContent,
-                  topPages
+                  topPagesForKeyword
                 );
 
-                if (results.length === 0) {
-                  return [];
+                // Flatten termStats for RRF
+                const hits = [];
+                for (const term in termStats) {
+                  for (const fileName in termStats[term].files) {
+                    for (const pageNo in termStats[term].files[fileName].pages) {
+                      const pageData =
+                        termStats[term].files[fileName].pages[pageNo];
+                      // Find pageId from pagNo/pagesContent
+                      const page = pagesContent.find(
+                        (p) =>
+                          (p.pageNumber ?? p.id) == pageNo &&
+                          p.name === fileName
+                      );
+                      if (!page) continue;
+
+                      hits.push(
+                        ...pageData.coords.map((coord) => ({
+                          pageId: page.id,
+                          file_name: fileName,
+                          y: coord.y,
+                          startY: coord.y,
+                          endY: coord.y,
+                          sentence: coord.word, // dummy sentence or we could try to reconstruct
+                          score: scores[page.id] || 0,
+                        }))
+                      );
+                    }
+                  }
                 }
 
-                return results.map((result) => ({
-                  ...result,
-                  score: scores[result.pageId],
-                  startY: result.y,
-                  endY: result.y,
-                }));
+                return { termStats, hits };
               } catch (error) {
                 if (error.isOperational) {
                   throw error;
@@ -206,28 +254,36 @@ export async function parse(id, search, userId, options = {}) {
             })(),
           ]);
 
-          if (semanticResults.length === 0 && keywordResults.length === 0) {
+          const { termStats, hits: keywordHits } = keywordResults;
+
+          if (semanticResults.length === 0 && keywordHits.length === 0) {
             return {
               success: true,
               searchResults: [],
+              termStats: termStats || {},
+              fileMapping,
             };
           }
 
           semanticResults.sort((a, b) => b.score - a.score);
-          keywordResults.sort((a, b) => b.score - a.score);
+          keywordHits.sort((a, b) => b.score - a.score);
 
-          const finalResults = performRRF(semanticResults, keywordResults);
+          const finalResults = performRRF(semanticResults, keywordHits);
 
           if (!finalResults || finalResults.length === 0) {
             return {
               success: true,
               searchResults: [],
+              termStats: termStats || {},
+              fileMapping,
             };
           }
 
           return {
             success: true,
             searchResults: finalResults.slice(0, topK),
+            termStats: termStats || {},
+            fileMapping,
             metadata: {
               searchMode,
               totalResults: finalResults.length,
@@ -251,6 +307,7 @@ export async function parse(id, search, userId, options = {}) {
             return {
               success: true,
               searchResults: [],
+              fileMapping,
             };
           }
 
@@ -263,6 +320,7 @@ export async function parse(id, search, userId, options = {}) {
             return {
               success: true,
               searchResults: [],
+              fileMapping,
             };
           }
         } catch (error) {
@@ -283,26 +341,28 @@ export async function parse(id, search, userId, options = {}) {
             return {
               success: true,
               searchResults: [],
+              termStats: {},
+              fileMapping,
             };
           }
 
-          topPages = Object.entries(scores)
+          const topPagesForTfidf = Object.entries(scores)
             .filter(([, score]) => score > 0)
             .map(([id]) => id);
 
-          searchResults = searchBuildIndex(
+          const termStats = searchBuildIndex(
             buildIndex,
             search,
             pagesContent,
-            topPages
+            topPagesForTfidf
           );
 
-          if (!searchResults || searchResults.length === 0) {
-            return {
-              success: true,
-              searchResults: [],
-            };
-          }
+          return {
+            success: true,
+            searchResults: [],
+            termStats,
+            fileMapping,
+          };
         } catch (error) {
           if (error.isOperational) {
             throw error;
@@ -325,17 +385,14 @@ export async function parse(id, search, userId, options = {}) {
       );
     }
 
-    if (!searchResults || searchResults.length === 0) {
-      return {
-        success: true,
-        searchResults: [],
-      };
-    }
-
     return {
       success: true,
-      searchResults,
+      searchResults: searchResults || [],
+      termStats: {},
+      fileMapping,
     };
+
+
   } catch (error) {
     if (error.isOperational) {
       throw error;

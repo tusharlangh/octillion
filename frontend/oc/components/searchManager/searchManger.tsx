@@ -7,8 +7,12 @@ interface QueryContextProps {
   search: string;
   setSearch: (string: string) => void;
   query: any[];
+  termStats: any;
+  setTermStats: (stats: any) => void;
+  fileMapping: Record<string, string>;
+  setFileMapping: (mapping: Record<string, string>) => void;
   setIsLoading: (loading: boolean) => void;
-  setQuery: (query: any[]) => void;
+  setQuery: (query: any[], termStats?: any, fileMapping?: any) => void;
   isLoading: boolean;
   lastSuccessfulSearch: string;
   lastSearchType: string;
@@ -28,6 +32,10 @@ export default function SearchManager({
     search,
     setSearch,
     query,
+    termStats,
+    setTermStats,
+    fileMapping,
+    setFileMapping,
     setIsLoading,
     setQuery,
     isLoading,
@@ -42,6 +50,10 @@ export default function SearchManager({
         search,
         setSearch,
         query,
+        termStats,
+        setTermStats,
+        fileMapping,
+        setFileMapping,
         setIsLoading,
         setQuery,
         isLoading,
