@@ -167,7 +167,7 @@ export async function extractPagesContent(links, files) {
     const batchPromises = batch.map((link, batchIndex) => {
       const fileIndex = i + batchIndex;
       const fileName =
-        files[fileIndex]?.originalname || `Document ${fileIndex + 1}`;
+        files[fileIndex]?.file_name || `Document ${fileIndex + 1}`;
       const file = files[fileIndex];
       return processSinglePDF(link, fileIndex, fileName, file);
     });

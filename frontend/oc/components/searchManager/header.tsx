@@ -98,7 +98,11 @@ export default function Header({ id }: Props) {
         return;
       }
 
-      setQuery(data.searchResults || []);
+      setQuery(
+        data.searchResults || [],
+        data.termStats || {},
+        data.fileMapping || {}
+      );
     } catch (error) {
       console.error("Search error: ", error);
 
