@@ -1,18 +1,16 @@
 import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
-import { identifyBlocks } from "./layoutEngine.js";
 
-export function searchBuildIndex(
+export async function searchBuildIndex(
   buildIndex,
   searchTerms,
   pagesContent,
-  topPageIds
+  topPageIds,
+  fileMapping
 ) {
   try {
     const terms = searchTerms.toLowerCase().split(/\s+/);
     const pageSet = new Set(topPageIds);
-
-    const termStats = {};
 
     const pageById = new Map();
     const pageMappings = new Map();
@@ -42,6 +40,11 @@ export function searchBuildIndex(
       );
     }
 
+    const highlights = {};
+
+    const tasks = [];
+    const processedMap = new Set();
+
     for (const rawTerm of terms) {
       const term = rawTerm.replace(/[^\w]/g, "");
       if (!term) continue;
@@ -53,62 +56,48 @@ export function searchBuildIndex(
         continue;
       }
 
-      for (const [word, pageId, y] of matches) {
-        if (!pageSet.has(pageId)) continue;
+      for (const [word, pageId] of matches) {
+        const file_index = Number(pageId.split(".")[0]);
+        const key = `${word}:${file_index}`;
 
-        const page = pageById.get(pageId);
-        const mapping = pageMappings.get(pageId);
-        if (!page || !mapping) continue;
+        if (processedMap.has(key)) continue;
+        processedMap.add(key);
 
-        const row = mapping.get(y);
-        if (!row) continue;
+        const pageData = pageById.get(pageId);
+        const fileName = pageData ? pageData.name : `Document ${file_index}`;
+        const presigned_url = fileMapping[`Document ${file_index}`];
 
-        const coord = row.find((w) => w.word === word);
-        if (!coord) continue;
+        if (!presigned_url) continue;
 
-        const fileName = page.name;
-        const pageNo = page.pageNumber ?? pageId;
+        tasks.push(async () => {
+          try {
+            const results = await callMain(presigned_url, 0, word);
 
-        if (!termStats[term]) {
-          termStats[term] = {
-            global: { fileCount: 0 },
-            files: {},
-          };
-        }
+            if (!highlights[word]) {
+              highlights[word] = [];
+            }
 
-        const termEntry = termStats[term];
+            const transformed = results.map((r) => ({
+              file_name: fileName,
+              page: r.page,
+              rects: r.rects,
+              total: r.total || r.rects.length,
+            }));
 
-        if (!termEntry.files[fileName]) {
-          termEntry.files[fileName] = {
-            total: 0,
-            pages: {},
-          };
-          termEntry.global.fileCount += 1;
-        }
-
-        const fileEntry = termEntry.files[fileName];
-
-        if (!fileEntry.pages[pageNo]) {
-          fileEntry.pages[pageNo] = {
-            coords: [],
-            count: 0,
-          };
-        }
-
-        fileEntry.pages[pageNo].coords.push(coord);
-        fileEntry.pages[pageNo].count += 1;
-        fileEntry.total += 1;
+            highlights[word].push(...transformed);
+          } catch (e) {
+            console.error(
+              `Error fetching geometry for ${fileName} word ${word}:`,
+              e
+            );
+          }
+        });
       }
-      Object.entries(termStats[term].files).sort(
-        ([, a], [, b]) => b.total - a.total
-      );
     }
 
-    Object.keys(termStats).sort(
-      (a, b) => termStats[b].global.fileCount - termStats[a].global.fileCount
-    );
+    await Promise.all(tasks.map((t) => t()));
 
-    return termStats;
+    return highlights;
   } catch (error) {
     if (error.isOperational) throw error;
 
@@ -118,6 +107,20 @@ export function searchBuildIndex(
       "SEARCH_BUILD_INDEX_ERROR"
     );
   }
+}
+
+async function callMain(presignedUrl, page, query) {
+  const response = await fetch("http://localhost:8000/geometry", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: presignedUrl, page, query }),
+  });
+
+  const data = await response.json();
+
+  return data;
 }
 
 export async function searchContent(sitesContent, inverted, search) {

@@ -22,7 +22,10 @@ async function getFileMapping(files) {
         const res = await createPresignedUrl(file);
         return res;
       } catch (err) {
-        console.error(`Failed to create presigned URL for ${file.file_name}:`, err);
+        console.error(
+          `Failed to create presigned URL for ${file.file_name}:`,
+          err
+        );
         return null;
       }
     })
@@ -30,7 +33,6 @@ async function getFileMapping(files) {
 
   results.filter(Boolean).forEach((res, index) => {
     mapping[res.file_name] = res.presignedUrl;
-    // Fallback mapping for index-based names like "Document 1"
     mapping[`Document ${index + 1}`] = res.presignedUrl;
   });
   return mapping;
@@ -210,11 +212,11 @@ export async function parse(id, search, userId, options = {}) {
                   topPagesForKeyword
                 );
 
-                // Flatten termStats for RRF
                 const hits = [];
                 for (const term in termStats) {
                   for (const fileName in termStats[term].files) {
-                    for (const pageNo in termStats[term].files[fileName].pages) {
+                    for (const pageNo in termStats[term].files[fileName]
+                      .pages) {
                       const pageData =
                         termStats[term].files[fileName].pages[pageNo];
                       // Find pageId from pagNo/pagesContent
@@ -350,12 +352,15 @@ export async function parse(id, search, userId, options = {}) {
             .filter(([, score]) => score > 0)
             .map(([id]) => id);
 
-          const termStats = searchBuildIndex(
+          const termStats = await searchBuildIndex(
             buildIndex,
             search,
             pagesContent,
-            topPagesForTfidf
+            topPagesForTfidf,
+            fileMapping
           );
+
+          console.log(termStats);
 
           return {
             success: true,
@@ -391,8 +396,6 @@ export async function parse(id, search, userId, options = {}) {
       termStats: {},
       fileMapping,
     };
-
-
   } catch (error) {
     if (error.isOperational) {
       throw error;
