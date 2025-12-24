@@ -36,6 +36,9 @@ export async function processFiles(id, keys, userId) {
     );
   }
 
+  const canonicalData = await Promise.all(links.map((link) => callMain(link)));
+  console.log(JSON.stringify(canonicalData[0].pages, null, 2));
+
   let pagesContent = await extractPagesContent(links, fileObjects);
 
   let invertedIndex;
@@ -96,6 +99,20 @@ export async function processFiles(id, keys, userId) {
   console.log(
     `🎉 Lambda processing completed successfully for parse_id: ${id} - All files processed, indexed, and saved to database`
   );
+
+  return data;
+}
+
+async function callMain(presignedUrl) {
+  const response = await fetch("http://localhost:8000/parse_to_json", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: presignedUrl }),
+  });
+
+  const data = await response.json();
 
   return data;
 }

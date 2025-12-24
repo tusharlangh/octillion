@@ -32,9 +32,6 @@ app = Flask(__name__)
 
 @app.route("/geometry", methods=["POST"])
 def geometry():
-    """
-    Returns exact word coordinates for a given search term.
-    """
     data = request.get_json()
     presigned_url = data.get("url")
     query = data.get("query")
@@ -77,6 +74,71 @@ def geometry():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/parse_to_json", methods=["POST"])
+def generate_canonical_json():
+    data = request.get_json()
+    presigned_url = data.get("url")
+
+    if not presigned_url:
+        return jsonify({"error": "Missing parameters"}), 400
+
+    resp = requests.get(presigned_url)
+    resp.raise_for_status()
+    pdf_bytes = resp.content
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    
+    canonical_data = {
+        "metadata": doc.metadata,
+        "page_count": doc.page_count,
+        "pages": []
+    }
+    for page_num, page in enumerate(doc):
+        text_dict = page.get_text("dict")
+    
+        page_width = page.rect.width
+        page_height = page.rect.height
+        
+        blocks = []
+        for block in text_dict.get("blocks", []):
+            if block["type"] == 0:
+                clean_lines = []
+                for line in block["lines"]:
+                    clean_spans = []
+                    for span in line["spans"]:
+                        clean_spans.append({
+                            "text": span["text"],
+                            "bbox": span["bbox"],  
+                            "size": round(span["size"], 2),
+                            "font": span["font"],
+                        })
+                    
+                    if clean_spans:
+                        clean_lines.append({
+                            "bbox": line["bbox"],
+                            "spans": clean_spans,
+                        })
+                if clean_lines:
+                    blocks.append({
+                        "type": "text",
+                        "bbox": block["bbox"],
+                        "lines": clean_lines
+                    })
+            elif block["type"] == 1:
+                blocks.append({
+                    "type": "image",
+                    "bbox": block["bbox"]
+                })
+        canonical_data["pages"].append({
+            "page_number": page_num + 1, 
+            "width": page_width,
+            "height": page_height,
+            "blocks": blocks
+        })
+    
+    doc.close()
+    return canonical_data
 
 if __name__ == "__main__":
     app.run(debug=True, port=8000)
