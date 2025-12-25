@@ -670,7 +670,6 @@ export async function parse_v2(id, search, userId, options = {}) {
       } else if (searchMode === "tfidf") {
         try {
           const scores = await searchContent_v2(pagesContent, inverted, search);
-          console.log(scores);
 
           if (Object.keys(scores || {}).length === 0) {
             return {

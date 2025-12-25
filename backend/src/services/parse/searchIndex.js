@@ -101,9 +101,18 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
       for (let term of Object.keys(terms)) {
         const pages = result.terms[term].pages;
         for (let [pageNo, metadata] of Object.entries(pages)) {
-          const bboxes = metadata.bboxes;
-          const result = await callMain(url, pageNo, term, bboxes);
-          results.push(result);
+          const matches = metadata.matches;
+          const bboxes = matches.map((m) => m.bbox);
+
+          const callResult = await callMain(
+            result.fileName,
+            url,
+            pageNo,
+            term,
+            bboxes,
+            matches
+          );
+          results.push(callResult);
         }
       }
     }
@@ -120,20 +129,26 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
   }
 }
 
-async function callMain(presignedUrl, page, query, bboxes) {
+async function callMain(fileName, presignedUrl, page, query, bboxes, matches) {
   const response = await fetch("http://localhost:8000/geometry_v2", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url: presignedUrl, page, query, bboxes }),
+    body: JSON.stringify({
+      file_name: fileName,
+      url: presignedUrl,
+      page,
+      query,
+      bboxes,
+      matches,
+    }),
   });
 
   const data = await response.json();
 
   return data;
 }
-
 export async function searchContent(sitesContent, inverted, search) {
   try {
     if (
@@ -248,22 +263,13 @@ export async function searchContent_v2(sitesContent, inverted, search) {
       throw new ValidationError("Search query required");
     }
 
-    /* ----------------------------------
-       Tokenize query
-    ---------------------------------- */
-    const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+    const queryTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
 
-    if (terms.length === 0) return {};
+    if (queryTerms.length === 0) return {};
 
-    /* ----------------------------------
-       BM25 constants
-    ---------------------------------- */
     const k1 = 1.2;
     const b = 0.75;
 
-    /* ----------------------------------
-       Build document lengths (file-level)
-    ---------------------------------- */
     const docLengths = {};
     let totalWords = 0;
     let docCount = 0;
@@ -301,79 +307,139 @@ export async function searchContent_v2(sitesContent, inverted, search) {
     const avgdl = docCount > 0 ? totalWords / docCount : 0;
     const N = docCount;
 
-    /* ----------------------------------
-       Compute IDF per term
-    ---------------------------------- */
-    const IDF = {};
+    const matchingTermsMap = {};
 
-    for (const term of terms) {
-      const termEntry = inverted[term] || {};
-      const n_q = Object.keys(termEntry).length;
+    for (const queryTerm of queryTerms) {
+      const matches = [];
 
-      IDF[term] = Math.log(1 + (N - n_q + 0.5) / (n_q + 0.5));
+      for (const indexedTerm of Object.keys(inverted)) {
+        if (indexedTerm.includes(queryTerm)) {
+          matches.push(indexedTerm);
+        }
+      }
+
+      matchingTermsMap[queryTerm] = matches;
     }
 
-    /* ----------------------------------
-       Build results with evidence
-    ---------------------------------- */
+    const IDF = {};
+
+    for (const queryTerm of queryTerms) {
+      const matchingTerms = matchingTermsMap[queryTerm];
+
+      const docsWithTerm = new Set();
+
+      for (const term of matchingTerms) {
+        const termEntry = inverted[term] || {};
+        for (const fileName of Object.keys(termEntry)) {
+          docsWithTerm.add(fileName);
+        }
+      }
+
+      const n_q = docsWithTerm.size;
+      IDF[queryTerm] = Math.log(1 + (N - n_q + 0.5) / (n_q + 0.5));
+    }
+
     const fileResults = {};
 
-    for (const term of terms) {
-      const termFiles = inverted[term];
-      if (!termFiles) continue;
+    for (const queryTerm of queryTerms) {
+      const matchingTerms = matchingTermsMap[queryTerm];
+      const idf = IDF[queryTerm];
 
-      const idf = IDF[term];
+      for (const term of matchingTerms) {
+        const termFiles = inverted[term];
+        if (!termFiles) continue;
 
-      for (const [fileName, pages] of Object.entries(termFiles)) {
-        if (!fileResults[fileName]) {
-          fileResults[fileName] = {
-            fileName,
-            score: 0,
-            coverage: {
-              matchedTerms: 0,
-              totalOccurrences: 0,
-            },
-            terms: {},
-          };
+        for (const [fileName, pages] of Object.entries(termFiles)) {
+          if (!fileResults[fileName]) {
+            fileResults[fileName] = {
+              fileName,
+              score: 0,
+              coverage: {
+                matchedTerms: 0,
+                totalOccurrences: 0,
+              },
+              terms: {},
+            };
+          }
+
+          if (!fileResults[fileName].terms[queryTerm]) {
+            fileResults[fileName].terms[queryTerm] = {
+              score: 0,
+              occurrences: 0,
+              pages: {},
+              matchedVariants: [],
+            };
+          }
+
+          let tf = 0;
+
+          for (const [pageNo, hits] of Object.entries(pages)) {
+            if (!Array.isArray(hits)) continue;
+
+            tf += hits.length;
+
+            if (!fileResults[fileName].terms[queryTerm].pages[pageNo]) {
+              fileResults[fileName].terms[queryTerm].pages[pageNo] = {
+                count: 0,
+                matches: [],
+              };
+            }
+
+            fileResults[fileName].terms[queryTerm].pages[pageNo].count +=
+              hits.length;
+
+            fileResults[fileName].terms[queryTerm].pages[pageNo].matches.push(
+              ...hits.map((h) => ({
+                bbox: h.lineBBox,
+                surface: h.surface,
+                base: term,
+                query: queryTerm,
+              }))
+            );
+          }
+
+          if (tf === 0) continue;
+
+          if (
+            !fileResults[fileName].terms[queryTerm].matchedVariants.includes(
+              term
+            )
+          ) {
+            fileResults[fileName].terms[queryTerm].matchedVariants.push(term);
+          }
+
+          fileResults[fileName].terms[queryTerm].occurrences += tf;
         }
 
-        let tf = 0;
-        const pageMap = {};
+        for (const [fileName, result] of Object.entries(fileResults)) {
+          if (result.terms[queryTerm]) {
+            const tf = result.terms[queryTerm].occurrences;
+            const dl = docLengths[fileName] || 0;
 
-        for (const [pageNo, hits] of Object.entries(pages)) {
-          if (!Array.isArray(hits)) continue;
+            if (dl > 0 && tf > 0) {
+              const bm25 =
+                idf *
+                ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
 
-          tf += hits.length;
-
-          pageMap[pageNo] = {
-            count: hits.length,
-            bboxes: hits.map((h) => h.lineBBox),
-          };
+              result.terms[queryTerm].score = bm25;
+              result.score += bm25;
+            }
+          }
         }
-
-        if (tf === 0) continue;
-
-        const dl = docLengths[fileName] || 0;
-        if (dl === 0) continue;
-
-        const bm25 =
-          idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
-
-        fileResults[fileName].score += bm25;
-        fileResults[fileName].coverage.totalOccurrences += tf;
-        fileResults[fileName].coverage.matchedTerms += 1;
-
-        fileResults[fileName].terms[term] = {
-          score: bm25,
-          occurrences: tf,
-          pages: pageMap,
-        };
       }
     }
 
-    /* ----------------------------------
-       Rank results
-    ---------------------------------- */
+    for (const result of Object.values(fileResults)) {
+      const matchedTerms = Object.keys(result.terms).length;
+      const totalOccurrences = Object.values(result.terms).reduce(
+        (sum, term) => sum + term.occurrences,
+        0
+      );
+
+      result.coverage.matchedTerms = matchedTerms;
+      result.coverage.totalOccurrences = totalOccurrences;
+    }
+
     const rankedResults = Object.values(fileResults)
       .sort((a, b) => b.score - a.score)
       .map((r, idx) => ({
@@ -381,13 +447,10 @@ export async function searchContent_v2(sitesContent, inverted, search) {
         rank: idx + 1,
       }));
 
-    /* ----------------------------------
-       Final Google-level response
-    ---------------------------------- */
     return {
       meta: {
         query: search,
-        terms,
+        terms: queryTerms,
         totalDocsMatched: rankedResults.length,
         avgDocLength: avgdl,
       },

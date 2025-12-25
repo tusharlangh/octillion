@@ -26,6 +26,15 @@ export function createInvertedSearch(pagesContent) {
   }
 }
 
+function normalizeToken(token) {
+  if (!token || typeof token !== "string") return token;
+  return token
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/[^\p{L}\p{N}]+$/u, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
 export function createInvertedSearch_V2_1(docs) {
   try {
     const inverted = {};
@@ -39,20 +48,24 @@ export function createInvertedSearch_V2_1(docs) {
           for (const line of block.lines) {
             const normalizedText = line.spans.map((s) => s.text).join(" ");
 
-            const words = normalizedText.toLowerCase().match(/\b[\w]+\b/g);
+            const words = normalizedText.toLowerCase().split(/\s+/);
 
             if (!words) continue;
 
             for (const word of words) {
-              if (!inverted[word]) inverted[word] = {};
-              if (!inverted[word][fileName]) inverted[word][fileName] = {};
-              if (!inverted[word][fileName][`p${pageNo}`]) {
-                inverted[word][fileName][`p${pageNo}`] = [];
+              const tokenized = normalizeToken(word);
+
+              if (!inverted[tokenized]) inverted[tokenized] = {};
+              if (!inverted[tokenized][fileName])
+                inverted[tokenized][fileName] = {};
+              if (!inverted[tokenized][fileName][`p${pageNo}`]) {
+                inverted[tokenized][fileName][`p${pageNo}`] = [];
               }
 
-              inverted[word][fileName][`p${pageNo}`].push({
+              inverted[tokenized][fileName][`p${pageNo}`].push({
                 lineBBox: line.bbox,
-                text: word,
+                surface: word,
+                base: tokenized,
               });
             }
           }

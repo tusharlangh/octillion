@@ -61,23 +61,25 @@ def geometry():
 def geometry_v2():
     try:
         data = request.get_json()
-
+        fileName = data.get("file_name")
         presigned_url = data.get("url")
         query = data.get("query")
         bboxes = data.get("bboxes")
+        matches = data.get("matches")
         page_input = data.get("page")
 
         print(bboxes)
-        print("length ",len(bboxes))
+        print("length ", len(bboxes))
 
         if (
             not presigned_url or
             not query or
             not isinstance(bboxes, list) or
+            not isinstance(matches, list) or
             page_input is None
         ):
             return jsonify({
-                "error": "Missing parameters (url, query, bboxes[], page)"
+                "error": "Missing parameters (url, query, bboxes[], matches[], page)"
             }), 400
 
         if isinstance(page_input, str) and page_input.lower().startswith("p"):
@@ -97,10 +99,13 @@ def geometry_v2():
         page = doc[page_index]
         page_rect = page.rect
 
-        query_lower = query.lower()
         rects = []
 
-        for bbox in bboxes:
+        for match in matches:
+            bbox = match.get("bbox")
+            surface = match.get("surface", "").lower()
+            base = match.get("base", "").lower()
+
             if not isinstance(bbox, list) or len(bbox) != 4:
                 continue
 
@@ -112,18 +117,22 @@ def geometry_v2():
 
             for w in words:
                 x0, y0, x1, y1, text = w[:5]
+                text_lower = text.lower()
 
-                if text.lower().startswith(query_lower):
+                if text_lower == surface:
                     rects.append({
                         "x": x0,
                         "y": y0,
                         "width": x1 - x0,
-                        "height": y1 - y0
+                        "height": y1 - y0,
+                        "surface": text,
+                        "base": base
                     })
 
         doc.close()
 
         return jsonify({
+            "file_name": fileName,
             "page": page_input,
             "query": query,
             "rects": rects,
@@ -133,7 +142,6 @@ def geometry_v2():
     except Exception as e:
         print(f"Error processing geometry_v2: {e}")
         return jsonify({"error": str(e)}), 500
-
 
 
 @app.route("/parse_to_json", methods=["POST"])

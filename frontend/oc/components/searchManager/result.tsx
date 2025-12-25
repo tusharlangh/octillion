@@ -52,7 +52,7 @@ export default function Result() {
     initialPage: number,
     rects: { x: number; y: number; width: number; height: number }[]
   ) => {
-    console.log(initialPage);
+    console.log("this is the result: ", result);
     const url = fileMapping[fileName];
     if (!url) {
       console.warn("Missing presigned URL for", fileName);
@@ -113,7 +113,7 @@ export default function Result() {
             key={item.page}
             onClick={() =>
               handleOpenViewer(
-                "Cover Letter.pdf",
+                item.file_name,
                 Number(item.page.slice(1)) - 1,
                 item.rects
               )
