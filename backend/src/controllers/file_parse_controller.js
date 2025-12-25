@@ -1,4 +1,4 @@
-import { parse } from "../services/parse.js";
+import { parse, parse_v2 } from "../services/parse.js";
 import {
   ValidationError,
   UnauthorizedError,
@@ -28,7 +28,7 @@ export async function file_parse_controller(req, res, next) {
 
     const topKNum = topK ? parseInt(topK, 10) : undefined;
 
-    const parsed = await parse(id, search, userId, {
+    const parsed = await parse_v2(id, search, userId, {
       searchMode:
         searchType === "enhanced"
           ? "semantic"
@@ -48,8 +48,7 @@ export async function file_parse_controller(req, res, next) {
 
     return res.status(200).json({
       success: true,
-      searchResults: parsed.searchResults,
-      termStats: parsed.termStats,
+      result: parsed.result,
       fileMapping: parsed.fileMapping,
       message: "Successfully parsed results",
     });

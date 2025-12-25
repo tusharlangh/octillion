@@ -4,6 +4,7 @@ import { useQuery } from "@/hooks/useQuery";
 import { createContext } from "react";
 
 interface QueryContextProps {
+  result: any[];
   search: string;
   setSearch: (string: string) => void;
   query: any[];
@@ -12,7 +13,7 @@ interface QueryContextProps {
   fileMapping: Record<string, string>;
   setFileMapping: (mapping: Record<string, string>) => void;
   setIsLoading: (loading: boolean) => void;
-  setQuery: (query: any[], termStats?: any, fileMapping?: any) => void;
+  setQuery: (result?: any[], fileMapping?: any) => void;
   isLoading: boolean;
   lastSuccessfulSearch: string;
   lastSearchType: string;
@@ -29,6 +30,7 @@ export default function SearchManager({
   children: React.ReactNode;
 }) {
   const {
+    result,
     search,
     setSearch,
     query,
@@ -47,6 +49,7 @@ export default function SearchManager({
   return (
     <queryContext.Provider
       value={{
+        result,
         search,
         setSearch,
         query,

@@ -1,8 +1,6 @@
-import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
 
 export async function searchBuildIndex(
-  buildIndex,
   searchTerms,
   pagesContent,
   topPageIds,
@@ -22,23 +20,7 @@ export async function searchBuildIndex(
       pageMappings.set(page.id, new Map(page.mapping));
     }
 
-    const isOptimizedFormat =
-      buildIndex.prefixIndex !== undefined ||
-      buildIndex.suffixIndex !== undefined ||
-      buildIndex.ngramIndex !== undefined;
-
     if (!isOptimizedFormat) return {};
-
-    let index;
-    try {
-      index = OptimizedKeywordIndex.fromJSON(buildIndex);
-    } catch (error) {
-      throw new AppError(
-        `Failed to parse optimized index: ${error.message}`,
-        500,
-        "INDEX_PARSE_ERROR"
-      );
-    }
 
     const highlights = {};
 
@@ -51,7 +33,7 @@ export async function searchBuildIndex(
 
       let matches;
       try {
-        matches = index.search(term, "all");
+        //matches = index.search(term, "all");
       } catch {
         continue;
       }
@@ -109,13 +91,42 @@ export async function searchBuildIndex(
   }
 }
 
-async function callMain(presignedUrl, page, query) {
-  const response = await fetch("http://localhost:8000/geometry", {
+export async function searchBuildIndex_v2(scores, fileMapping) {
+  try {
+    const results = [];
+    for (let result of scores.results) {
+      const url = fileMapping[result.fileName];
+      const terms = result.terms;
+
+      for (let term of Object.keys(terms)) {
+        const pages = result.terms[term].pages;
+        for (let [pageNo, metadata] of Object.entries(pages)) {
+          const bboxes = metadata.bboxes;
+          const result = await callMain(url, pageNo, term, bboxes);
+          results.push(result);
+        }
+      }
+    }
+
+    return results;
+  } catch (error) {
+    if (error.isOperational) throw error;
+
+    throw new AppError(
+      `Failed to search build index: ${error.message}`,
+      500,
+      "SEARCH_BUILD_INDEX_ERROR"
+    );
+  }
+}
+
+async function callMain(presignedUrl, page, query, bboxes) {
+  const response = await fetch("http://localhost:8000/geometry_v2", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ url: presignedUrl, page, query }),
+    body: JSON.stringify({ url: presignedUrl, page, query, bboxes }),
   });
 
   const data = await response.json();
@@ -217,6 +228,176 @@ export async function searchContent(sitesContent, inverted, search) {
     }
     throw new AppError(
       `Failed to search content: ${error.message}`,
+      500,
+      "SEARCH_CONTENT_ERROR"
+    );
+  }
+}
+
+export async function searchContent_v2(sitesContent, inverted, search) {
+  try {
+    if (!Array.isArray(sitesContent) || sitesContent.length === 0) {
+      throw new AppError("Sites content invalid", 500);
+    }
+
+    if (!inverted || typeof inverted !== "object") {
+      throw new AppError("Inverted index invalid", 500);
+    }
+
+    if (!search || typeof search !== "string") {
+      throw new ValidationError("Search query required");
+    }
+
+    /* ----------------------------------
+       Tokenize query
+    ---------------------------------- */
+    const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+
+    if (terms.length === 0) return {};
+
+    /* ----------------------------------
+       BM25 constants
+    ---------------------------------- */
+    const k1 = 1.2;
+    const b = 0.75;
+
+    /* ----------------------------------
+       Build document lengths (file-level)
+    ---------------------------------- */
+    const docLengths = {};
+    let totalWords = 0;
+    let docCount = 0;
+
+    for (const site of sitesContent) {
+      if (!Array.isArray(site.pages)) continue;
+
+      for (const page of site.pages) {
+        const fileName = page.file_name;
+        if (!fileName) continue;
+
+        if (!docLengths[fileName]) {
+          docLengths[fileName] = 0;
+          docCount++;
+        }
+
+        for (const block of page.blocks || []) {
+          if (block.type !== "text") continue;
+
+          for (const line of block.lines || []) {
+            for (const span of line.spans || []) {
+              if (typeof span.text === "string") {
+                docLengths[fileName] += span.text.trim().split(/\s+/).length;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    for (const len of Object.values(docLengths)) {
+      totalWords += len;
+    }
+
+    const avgdl = docCount > 0 ? totalWords / docCount : 0;
+    const N = docCount;
+
+    /* ----------------------------------
+       Compute IDF per term
+    ---------------------------------- */
+    const IDF = {};
+
+    for (const term of terms) {
+      const termEntry = inverted[term] || {};
+      const n_q = Object.keys(termEntry).length;
+
+      IDF[term] = Math.log(1 + (N - n_q + 0.5) / (n_q + 0.5));
+    }
+
+    /* ----------------------------------
+       Build results with evidence
+    ---------------------------------- */
+    const fileResults = {};
+
+    for (const term of terms) {
+      const termFiles = inverted[term];
+      if (!termFiles) continue;
+
+      const idf = IDF[term];
+
+      for (const [fileName, pages] of Object.entries(termFiles)) {
+        if (!fileResults[fileName]) {
+          fileResults[fileName] = {
+            fileName,
+            score: 0,
+            coverage: {
+              matchedTerms: 0,
+              totalOccurrences: 0,
+            },
+            terms: {},
+          };
+        }
+
+        let tf = 0;
+        const pageMap = {};
+
+        for (const [pageNo, hits] of Object.entries(pages)) {
+          if (!Array.isArray(hits)) continue;
+
+          tf += hits.length;
+
+          pageMap[pageNo] = {
+            count: hits.length,
+            bboxes: hits.map((h) => h.lineBBox),
+          };
+        }
+
+        if (tf === 0) continue;
+
+        const dl = docLengths[fileName] || 0;
+        if (dl === 0) continue;
+
+        const bm25 =
+          idf * ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
+
+        fileResults[fileName].score += bm25;
+        fileResults[fileName].coverage.totalOccurrences += tf;
+        fileResults[fileName].coverage.matchedTerms += 1;
+
+        fileResults[fileName].terms[term] = {
+          score: bm25,
+          occurrences: tf,
+          pages: pageMap,
+        };
+      }
+    }
+
+    /* ----------------------------------
+       Rank results
+    ---------------------------------- */
+    const rankedResults = Object.values(fileResults)
+      .sort((a, b) => b.score - a.score)
+      .map((r, idx) => ({
+        ...r,
+        rank: idx + 1,
+      }));
+
+    /* ----------------------------------
+       Final Google-level response
+    ---------------------------------- */
+    return {
+      meta: {
+        query: search,
+        terms,
+        totalDocsMatched: rankedResults.length,
+        avgDocLength: avgdl,
+      },
+      results: rankedResults,
+    };
+  } catch (error) {
+    if (error.isOperational) throw error;
+
+    throw new AppError(
+      `Search failed: ${error.message}`,
       500,
       "SEARCH_CONTENT_ERROR"
     );

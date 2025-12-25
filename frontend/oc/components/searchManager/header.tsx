@@ -98,14 +98,7 @@ export default function Header({ id }: Props) {
         return;
       }
 
-      console.log(data.termStats);
-      console.log(data.fileMapping);
-
-      setQuery(
-        data.searchResults || [],
-        data.termStats || {},
-        data.fileMapping || {}
-      );
+      setQuery(data.result || {}, data.fileMapping || {});
     } catch (error) {
       console.error("Search error: ", error);
 
