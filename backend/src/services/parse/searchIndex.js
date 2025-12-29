@@ -1,18 +1,14 @@
-import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
-import { identifyBlocks } from "./layoutEngine.js";
 
-export function searchBuildIndex(
-  buildIndex,
+export async function searchBuildIndex(
   searchTerms,
   pagesContent,
-  topPageIds
+  topPageIds,
+  fileMapping
 ) {
   try {
     const terms = searchTerms.toLowerCase().split(/\s+/);
     const pageSet = new Set(topPageIds);
-
-    const termStats = {};
 
     const pageById = new Map();
     const pageMappings = new Map();
@@ -24,23 +20,12 @@ export function searchBuildIndex(
       pageMappings.set(page.id, new Map(page.mapping));
     }
 
-    const isOptimizedFormat =
-      buildIndex.prefixIndex !== undefined ||
-      buildIndex.suffixIndex !== undefined ||
-      buildIndex.ngramIndex !== undefined;
-
     if (!isOptimizedFormat) return {};
 
-    let index;
-    try {
-      index = OptimizedKeywordIndex.fromJSON(buildIndex);
-    } catch (error) {
-      throw new AppError(
-        `Failed to parse optimized index: ${error.message}`,
-        500,
-        "INDEX_PARSE_ERROR"
-      );
-    }
+    const highlights = {};
+
+    const tasks = [];
+    const processedMap = new Set();
 
     for (const rawTerm of terms) {
       const term = rawTerm.replace(/[^\w]/g, "");
@@ -48,67 +33,53 @@ export function searchBuildIndex(
 
       let matches;
       try {
-        matches = index.search(term, "all");
+        //matches = index.search(term, "all");
       } catch {
         continue;
       }
 
-      for (const [word, pageId, y] of matches) {
-        if (!pageSet.has(pageId)) continue;
+      for (const [word, pageId] of matches) {
+        const file_index = Number(pageId.split(".")[0]);
+        const key = `${word}:${file_index}`;
 
-        const page = pageById.get(pageId);
-        const mapping = pageMappings.get(pageId);
-        if (!page || !mapping) continue;
+        if (processedMap.has(key)) continue;
+        processedMap.add(key);
 
-        const row = mapping.get(y);
-        if (!row) continue;
+        const pageData = pageById.get(pageId);
+        const fileName = pageData ? pageData.name : `Document ${file_index}`;
+        const presigned_url = fileMapping[`Document ${file_index}`];
 
-        const coord = row.find((w) => w.word === word);
-        if (!coord) continue;
+        if (!presigned_url) continue;
 
-        const fileName = page.name;
-        const pageNo = page.pageNumber ?? pageId;
+        tasks.push(async () => {
+          try {
+            const results = await callMain(presigned_url, 0, word);
 
-        if (!termStats[term]) {
-          termStats[term] = {
-            global: { fileCount: 0 },
-            files: {},
-          };
-        }
+            if (!highlights[word]) {
+              highlights[word] = [];
+            }
 
-        const termEntry = termStats[term];
+            const transformed = results.map((r) => ({
+              file_name: fileName,
+              page: r.page,
+              rects: r.rects,
+              total: r.total || r.rects.length,
+            }));
 
-        if (!termEntry.files[fileName]) {
-          termEntry.files[fileName] = {
-            total: 0,
-            pages: {},
-          };
-          termEntry.global.fileCount += 1;
-        }
-
-        const fileEntry = termEntry.files[fileName];
-
-        if (!fileEntry.pages[pageNo]) {
-          fileEntry.pages[pageNo] = {
-            coords: [],
-            count: 0,
-          };
-        }
-
-        fileEntry.pages[pageNo].coords.push(coord);
-        fileEntry.pages[pageNo].count += 1;
-        fileEntry.total += 1;
+            highlights[word].push(...transformed);
+          } catch (e) {
+            console.error(
+              `Error fetching geometry for ${fileName} word ${word}:`,
+              e
+            );
+          }
+        });
       }
-      Object.entries(termStats[term].files).sort(
-        ([, a], [, b]) => b.total - a.total
-      );
     }
 
-    Object.keys(termStats).sort(
-      (a, b) => termStats[b].global.fileCount - termStats[a].global.fileCount
-    );
+    await Promise.all(tasks.map((t) => t()));
 
-    return termStats;
+    return highlights;
   } catch (error) {
     if (error.isOperational) throw error;
 
@@ -120,6 +91,70 @@ export function searchBuildIndex(
   }
 }
 
+export async function searchBuildIndex_v2(scores, fileMapping) {
+  try {
+    const results = {};
+
+    for (let result of scores.results) {
+      const url = fileMapping[result.fileName];
+      const terms = result.terms;
+      let score = result.score;
+
+      for (let term of Object.keys(terms)) {
+        const pages = result.terms[term].pages;
+        for (let [pageNo, metadata] of Object.entries(pages)) {
+          const matches = metadata.matches;
+          const bboxes = matches.map((m) => m.bbox);
+
+          const callResult = await callMain(
+            result.fileName,
+            url,
+            pageNo,
+            term,
+            bboxes,
+            matches
+          );
+          if (!results[callResult.file_name]) {
+            results[callResult.file_name] = { result: [], score: 0 };
+          }
+          results[callResult.file_name].result.push(callResult);
+          results[callResult.file_name].score = score;
+        }
+      }
+    }
+
+    return results;
+  } catch (error) {
+    if (error.isOperational) throw error;
+
+    throw new AppError(
+      `Failed to search build index: ${error.message}`,
+      500,
+      "SEARCH_BUILD_INDEX_ERROR"
+    );
+  }
+}
+
+async function callMain(fileName, presignedUrl, page, query, bboxes, matches) {
+  const response = await fetch("http://localhost:8000/geometry_v2", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      file_name: fileName,
+      url: presignedUrl,
+      page,
+      query,
+      bboxes,
+      matches,
+    }),
+  });
+
+  const data = await response.json();
+
+  return data;
+}
 export async function searchContent(sitesContent, inverted, search) {
   try {
     if (
@@ -214,6 +249,224 @@ export async function searchContent(sitesContent, inverted, search) {
     }
     throw new AppError(
       `Failed to search content: ${error.message}`,
+      500,
+      "SEARCH_CONTENT_ERROR"
+    );
+  }
+}
+
+export async function searchContent_v2(sitesContent, inverted, search) {
+  try {
+    if (!Array.isArray(sitesContent) || sitesContent.length === 0) {
+      throw new AppError("Sites content invalid", 500);
+    }
+
+    if (!inverted || typeof inverted !== "object") {
+      throw new AppError("Inverted index invalid", 500);
+    }
+
+    if (!search || typeof search !== "string") {
+      throw new ValidationError("Search query required");
+    }
+
+    const queryTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
+
+    if (queryTerms.length === 0) return {};
+
+    const k1 = 1.2;
+    const b = 0.75;
+
+    const docLengths = {};
+    let totalWords = 0;
+    let docCount = 0;
+
+    for (const site of sitesContent) {
+      if (!Array.isArray(site.pages)) continue;
+
+      for (const page of site.pages) {
+        const fileName = page.file_name;
+        if (!fileName) continue;
+
+        if (!docLengths[fileName]) {
+          docLengths[fileName] = 0;
+          docCount++;
+        }
+
+        for (const block of page.blocks || []) {
+          if (block.type !== "text") continue;
+
+          for (const line of block.lines || []) {
+            for (const span of line.spans || []) {
+              if (typeof span.text === "string") {
+                docLengths[fileName] += span.text.trim().split(/\s+/).length;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    for (const len of Object.values(docLengths)) {
+      totalWords += len;
+    }
+
+    const avgdl = docCount > 0 ? totalWords / docCount : 0;
+    const N = docCount;
+
+    const matchingTermsMap = {};
+
+    for (const queryTerm of queryTerms) {
+      const matches = [];
+
+      for (const indexedTerm of Object.keys(inverted)) {
+        if (indexedTerm.includes(queryTerm)) {
+          matches.push(indexedTerm);
+        }
+      }
+
+      matchingTermsMap[queryTerm] = matches;
+    }
+
+    const IDF = {};
+
+    for (const queryTerm of queryTerms) {
+      const matchingTerms = matchingTermsMap[queryTerm];
+
+      const docsWithTerm = new Set();
+
+      for (const term of matchingTerms) {
+        const termEntry = inverted[term] || {};
+        for (const fileName of Object.keys(termEntry)) {
+          docsWithTerm.add(fileName);
+        }
+      }
+
+      const n_q = docsWithTerm.size;
+      IDF[queryTerm] = Math.log(1 + (N - n_q + 0.5) / (n_q + 0.5));
+    }
+
+    const fileResults = {};
+
+    for (const queryTerm of queryTerms) {
+      const matchingTerms = matchingTermsMap[queryTerm];
+      const idf = IDF[queryTerm];
+
+      for (const term of matchingTerms) {
+        const termFiles = inverted[term];
+        if (!termFiles) continue;
+
+        for (const [fileName, pages] of Object.entries(termFiles)) {
+          if (!fileResults[fileName]) {
+            fileResults[fileName] = {
+              fileName,
+              score: 0,
+              coverage: {
+                matchedTerms: 0,
+                totalOccurrences: 0,
+              },
+              terms: {},
+            };
+          }
+
+          if (!fileResults[fileName].terms[queryTerm]) {
+            fileResults[fileName].terms[queryTerm] = {
+              score: 0,
+              occurrences: 0,
+              pages: {},
+              matchedVariants: [],
+            };
+          }
+
+          let tf = 0;
+
+          for (const [pageNo, hits] of Object.entries(pages)) {
+            if (!Array.isArray(hits)) continue;
+
+            tf += hits.length;
+
+            if (!fileResults[fileName].terms[queryTerm].pages[pageNo]) {
+              fileResults[fileName].terms[queryTerm].pages[pageNo] = {
+                count: 0,
+                matches: [],
+              };
+            }
+
+            fileResults[fileName].terms[queryTerm].pages[pageNo].count +=
+              hits.length;
+
+            fileResults[fileName].terms[queryTerm].pages[pageNo].matches.push(
+              ...hits.map((h) => ({
+                bbox: h.lineBBox,
+                surface: h.surface,
+                base: term,
+                query: queryTerm,
+              }))
+            );
+          }
+
+          if (tf === 0) continue;
+
+          if (
+            !fileResults[fileName].terms[queryTerm].matchedVariants.includes(
+              term
+            )
+          ) {
+            fileResults[fileName].terms[queryTerm].matchedVariants.push(term);
+          }
+
+          fileResults[fileName].terms[queryTerm].occurrences += tf;
+        }
+
+        for (const [fileName, result] of Object.entries(fileResults)) {
+          if (result.terms[queryTerm]) {
+            const tf = result.terms[queryTerm].occurrences;
+            const dl = docLengths[fileName] || 0;
+
+            if (dl > 0 && tf > 0) {
+              const bm25 =
+                idf *
+                ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * (dl / avgdl))));
+
+              result.terms[queryTerm].score = bm25;
+              result.score += bm25;
+            }
+          }
+        }
+      }
+    }
+
+    for (const result of Object.values(fileResults)) {
+      const matchedTerms = Object.keys(result.terms).length;
+      const totalOccurrences = Object.values(result.terms).reduce(
+        (sum, term) => sum + term.occurrences,
+        0
+      );
+
+      result.coverage.matchedTerms = matchedTerms;
+      result.coverage.totalOccurrences = totalOccurrences;
+    }
+
+    const rankedResults = Object.values(fileResults)
+      .sort((a, b) => b.score - a.score)
+      .map((r, idx) => ({
+        ...r,
+        rank: idx + 1,
+      }));
+
+    return {
+      meta: {
+        query: search,
+        terms: queryTerms,
+        totalDocsMatched: rankedResults.length,
+        avgDocLength: avgdl,
+      },
+      results: rankedResults,
+    };
+  } catch (error) {
+    if (error.isOperational) throw error;
+
+    throw new AppError(
+      `Search failed: ${error.message}`,
       500,
       "SEARCH_CONTENT_ERROR"
     );

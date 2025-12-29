@@ -6,6 +6,7 @@ import {
   createInvertedSearch,
   buildOptimizedIndex,
   generateChunks,
+  createInvertedSearch_V2_1,
 } from "./saveFiles/indexing.js";
 import { generateAndUploadEmbeddings } from "./saveFiles/embeddings.js";
 import { saveFilesRecord } from "./saveFiles/persist.js";
@@ -36,11 +37,17 @@ export async function processFiles(id, keys, userId) {
     );
   }
 
+  const canonicalData = await Promise.all(
+    links.map((link, index) => callMain(link, fileObjects[index].file_name))
+  );
+
   let pagesContent = await extractPagesContent(links, fileObjects);
 
-  let invertedIndex;
+  //let invertedIndex;
+  let invertedIndex_v2;
   try {
-    invertedIndex = createInvertedSearch(pagesContent);
+    //invertedIndex = createInvertedSearch(pagesContent);
+    invertedIndex_v2 = createInvertedSearch_V2_1(canonicalData);
   } catch {
     throw new AppError(
       "Failed to get inverted index",
@@ -48,7 +55,10 @@ export async function processFiles(id, keys, userId) {
       "FAILED_INVERTED_INDEX_ERROR"
     );
   }
+  //console.log(JSON.stringify(invertedIndex_v2, null, 2));
 
+  {
+    /*
   let keywordIndex;
 
   try {
@@ -64,31 +74,35 @@ export async function processFiles(id, keys, userId) {
       "FAILED_OPTIMIZED_INDEX_ERROR"
     );
   }
-
-  const buildIndex = keywordIndex.toJSON();
-
-  try {
-    pagesContent = await generateChunks(pagesContent);
-  } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
-    throw new AppError("Failed to build chunks", 500, "FAILED_CHUNKS_ERROR");
+  */
   }
 
-  await generateAndUploadEmbeddings(id, userId, pagesContent);
+  {
+    /*
+    const buildIndex = keywordIndex.toJSON();
+    try {
+      pagesContent = await generateChunks(pagesContent);
+    } catch (error) {
+      if (error.isOperational) {
+        throw error;
+      }
+      throw new AppError("Failed to build chunks", 500, "FAILED_CHUNKS_ERROR");
+    }
+  */
+  }
 
-  const [pagesContentRef, invertedIndexRef, buildIndexRef] = await Promise.all([
-    uploadJsonToS3(id, "pages_content", pagesContent),
-    uploadJsonToS3(id, "inverted_index", invertedIndex),
-    uploadJsonToS3(id, "build_index", buildIndex),
+  //await generateAndUploadEmbeddings(id, userId, pagesContent);
+
+  const [pagesContentRef, invertedIndexRef] = await Promise.all([
+    uploadJsonToS3(id, "pages_content", canonicalData),
+    uploadJsonToS3(id, "inverted_index", invertedIndex_v2),
   ]);
 
   const data = await saveFilesRecord(
     id,
     userId,
     fileObjects,
-    buildIndexRef,
+    null,
     invertedIndexRef,
     pagesContentRef
   );
@@ -96,6 +110,20 @@ export async function processFiles(id, keys, userId) {
   console.log(
     `🎉 Lambda processing completed successfully for parse_id: ${id} - All files processed, indexed, and saved to database`
   );
+
+  return data;
+}
+
+async function callMain(presignedUrl, fileName) {
+  const response = await fetch("http://localhost:8000/parse_to_json", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ url: presignedUrl, file_name: fileName }),
+  });
+
+  const data = await response.json();
 
   return data;
 }

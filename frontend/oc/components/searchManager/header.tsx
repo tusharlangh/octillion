@@ -98,11 +98,7 @@ export default function Header({ id }: Props) {
         return;
       }
 
-      setQuery(
-        data.searchResults || [],
-        data.termStats || {},
-        data.fileMapping || {}
-      );
+      setQuery(data.result || {}, data.fileMapping || {});
     } catch (error) {
       console.error("Search error: ", error);
 
@@ -219,7 +215,6 @@ export default function Header({ id }: Props) {
           </button>
         </div>
       </div>
-
     </section>
   );
 }
