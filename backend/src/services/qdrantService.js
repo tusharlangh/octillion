@@ -24,7 +24,7 @@ function getCollectionName(parseId, userId) {
   }
 }
 
-const VECTOR_DIMENSION = 384;
+const VECTOR_DIMENSION = 1536;
 
 function isNotFoundError(error) {
   return (

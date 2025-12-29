@@ -1,53 +1,19 @@
 import { AppError } from "../../middleware/errorHandler.js";
-
-let embeddingPipeline = null;
-
-async function loadEmbeddingModel() {
-  try {
-    if (embeddingPipeline) return embeddingPipeline;
-
-    console.log("Loading embedding model...");
-
-    const { pipeline } = await import("@xenova/transformers");
-
-    embeddingPipeline = await pipeline(
-      "feature-extraction",
-      "Xenova/all-MiniLM-L6-v2"
-    );
-    console.log("Model loaded successfully");
-    return embeddingPipeline;
-  } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
-    throw new AppError(
-      `Failed to load model: ${error.message}`,
-      500,
-      "FAILED_MODEL_LOADING_ERROR"
-    );
-  }
-}
+import { callToEmbed } from "../../utils/openAi/callToEmbed.js";
 
 export async function generateEmbedding(text) {
-  if (!embeddingPipeline) {
-    await loadEmbeddingModel();
-  }
-
   try {
-    const output = await embeddingPipeline(text, {
-      pooling: "mean",
-      normalize: true,
-    });
+    const embedding = await callToEmbed(text);
 
-    if (!output || !output.data) {
+    if (!embedding || embedding.length === 0) {
       throw new AppError(
-        "Invalid embedding output",
+        "Invalid embedding output from OpenAI",
         500,
         "INVALID_EMBEDDING_OUTPUT"
       );
     }
 
-    return Array.from(output.data);
+    return embedding;
   } catch (error) {
     if (error.isOperational) {
       throw error;

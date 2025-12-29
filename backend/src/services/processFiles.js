@@ -8,8 +8,12 @@ import {
   generateChunks,
   createInvertedSearch_V2_1,
 } from "./saveFiles/indexing.js";
-import { generateAndUploadEmbeddings } from "./saveFiles/embeddings.js";
+import {
+  generateAndUploadEmbeddings,
+  generateAndUploadEmbeddings_v2,
+} from "./saveFiles/embeddings.js";
 import { saveFilesRecord } from "./saveFiles/persist.js";
+import { createContextualChunks_v2 } from "./parse/chunks.js";
 
 dotenv.config();
 
@@ -55,7 +59,6 @@ export async function processFiles(id, keys, userId) {
       "FAILED_INVERTED_INDEX_ERROR"
     );
   }
-  //console.log(JSON.stringify(invertedIndex_v2, null, 2));
 
   {
     /*
@@ -91,11 +94,15 @@ export async function processFiles(id, keys, userId) {
   */
   }
 
-  //await generateAndUploadEmbeddings(id, userId, pagesContent);
+  const chunks = createContextualChunks_v2(canonicalData);
 
-  const [pagesContentRef, invertedIndexRef] = await Promise.all([
+  //await generateAndUploadEmbeddings(id, userId, pagesContent);
+  await generateAndUploadEmbeddings_v2(id, userId, chunks);
+
+  const [pagesContentRef, invertedIndexRef, chunksRef] = await Promise.all([
     uploadJsonToS3(id, "pages_content", canonicalData),
     uploadJsonToS3(id, "inverted_index", invertedIndex_v2),
+    uploadJsonToS3(id, "chunks", chunks),
   ]);
 
   const data = await saveFilesRecord(
@@ -104,7 +111,8 @@ export async function processFiles(id, keys, userId) {
     fileObjects,
     null,
     invertedIndexRef,
-    pagesContentRef
+    pagesContentRef,
+    chunksRef
   );
 
   console.log(

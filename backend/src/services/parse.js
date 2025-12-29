@@ -12,6 +12,7 @@ import {
   searchContent_v2,
 } from "./parse/searchIndex.js";
 import { createPresignedUrl } from "./saveFiles/upload.js";
+import { createContextualChunks_v2 } from "./parse/chunks.js";
 dotenv.config();
 
 export { generateEmbedding } from "./parse/embedding.js";
