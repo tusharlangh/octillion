@@ -1,9 +1,12 @@
+useQuery;
 import { useState } from "react";
 
 export function useQuery() {
   const [search, setSearch] = useState<string>("");
   const [query, setQuery] = useState<any[]>([]);
-  const [result, setResult] = useState<any>([]);
+  const [result, setResult] = useState<
+    Record<string, { result: any[]; score: number }>
+  >({});
   const [termStats, setTermStats] = useState<any>({});
   const [fileMapping, setFileMapping] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);

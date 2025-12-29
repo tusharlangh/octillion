@@ -84,16 +84,16 @@ export default function Result() {
       <div className="">
         <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
           <p
-            className={`${dmSans.className} text-7xl md:text-8xl font-medium 
-                       text-neutral-800 dark:text-neutral-200
-                       transition-colors duration-200`}
+            className={`${dmSans.className} text-7xl md:text-8xl font-medium
+                      text-neutral-800 dark:text-neutral-200
+                      transition-colors duration-200`}
           >
             (◠‿◠)
           </p>
           <p
-            className={`${dmSans.className} text-xl md:text-2xl font-medium 
-                       text-neutral-800 dark:text-neutral-200
-                       transition-colors duration-200`}
+            className={`${dmSans.className} text-xl md:text-2xl font-medium
+                      text-neutral-800 dark:text-neutral-200
+                      transition-colors duration-200`}
           >
             Start your search!
           </p>
@@ -104,35 +104,36 @@ export default function Result() {
 
   {
     /*
-    if (
-    lastSuccessfulSearch.trim() !== "" &&
-    query.length === 0 &&
-    Object.keys(termStats || {}).length === 0 &&
-    !isLoading
-  ) {
-    return (
-      <div className="">
-        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
-          <p
-            className={`${dmSans.className} text-7xl md:text-8xl font-medium 
-                       text-neutral-800 dark:text-neutral-200
-                       transition-colors duration-200`}
-          >
-            (^_^)
-          </p>
-          <p
-            className={`${dmSans.className} text-xl md:text-2xl font-medium 
-                       text-neutral-800 dark:text-neutral-200
-                       transition-colors duration-200`}
-          >
-            No results found for "{lastSuccessfulSearch}"
-          </p>
-        </div>
-      </div>
-    );
-  }
+   if (
+   lastSuccessfulSearch.trim() !== "" &&
+   query.length === 0 &&
+   Object.keys(termStats || {}).length === 0 &&
+   !isLoading
+ ) {
+   return (
+     <div className="">
+       <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+         <p
+           className={`${dmSans.className} text-7xl md:text-8xl font-medium
+                      text-neutral-800 dark:text-neutral-200
+                      transition-colors duration-200`}
+         >
+           (^_^)
+         </p>
+         <p
+           className={`${dmSans.className} text-xl md:text-2xl font-medium
+                      text-neutral-800 dark:text-neutral-200
+                      transition-colors duration-200`}
+         >
+           No results found for "{lastSuccessfulSearch}"
+         </p>
+       </div>
+     </div>
+   );
+ }
 
-    */
+
+   */
   }
 
   if (isLoading) return <SearchLoading />;
@@ -147,17 +148,10 @@ export default function Result() {
         </p>
       </div>
       <div className="flex flex-col gap-1">
-        {result.map((item, index) => (
+        {Object.keys(result).map((fileName, index) => (
           <div
-            className="group flex items-center justify-between px-4 py-4 -mx-3 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-200 "
-            key={item.page + index}
-            onClick={() =>
-              handleOpenViewer(
-                item.file_name,
-                Number(item.page.slice(1)) - 1,
-                item.rects
-              )
-            }
+            className="group flex items-center justify-between px-4 py-4 -mx-3 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-200"
+            key={index}
           >
             <div className="">
               <div className="flex items-center gap-3 overflow-hidden">
@@ -168,64 +162,63 @@ export default function Result() {
                   <p
                     className={`${dmSans.className} flex items-center text-neutral-800 dark:text-neutral-200 font-medium text-base truncate`}
                   >
-                    {item.file_name}
+                    {fileName}
                   </p>
                 </div>
               </div>
               <div className="flex flex-col gap-4 ml-2 text-neutral-500 mt-1">
-                <div className="flex gap-2 items-center">
-                  <CornerDownRight size={16} />
+                {result[fileName].result.map((item, i) => (
+                  <div className="flex gap-2 items-center" key={i}>
+                    <CornerDownRight size={16} />
 
-                  <p
-                    className={`${dmSans.className} dark:text-neutral-200 font-normal text-base truncate`}
-                  >
-                    <span className="hover:underline">
-                      Page {item.page.slice(1)}
+                    <p
+                      className={`${dmSans.className} dark:text-neutral-200 font-normal text-base truncate`}
+                    >
+                      <span
+                        className="hover:underline"
+                        onClick={() =>
+                          handleOpenViewer(
+                            fileName,
+                            item.page.slice(1) - 1,
+                            item.rects
+                          )
+                        }
+                      >
+                        Page {item.page.slice(1)}
+                      </span>
+                    </p>
+                    <span
+                      className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
+                    >
+                      {item.query}
                     </span>
-                  </p>
-                  <span
-                    className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                  >
-                    {item.query}
-                  </span>
-                  <span
-                    className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                  >
-                    3
-                  </span>
-                </div>
-                <div className="flex gap-2 items-center">
-                  <CornerDownRight size={16} />
-
-                  <p
-                    className={`${dmSans.className} dark:text-neutral-200 font-normal text-base truncate`}
-                  >
-                    <span className="hover:underline">Page 3</span>
-                  </p>
-                  <span
-                    className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                  >
-                    {item.query}
-                  </span>
-                  <span
-                    className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                  >
-                    2
-                  </span>
-                </div>
+                    <span
+                      className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
+                    >
+                      {item.total}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div className="flex-shrink-0 flex items-center gap-4 text-neutral-400 text-sm">
-              <span
-                className={`${dmSans.className} bg-[rgb(59,117,198)] px-1.5 py-0.5 rounded text-white`}
-              >
-                {index + 0.6}
-              </span>
+              {index / Object.keys(result).length < 0.33 && (
+                <span
+                  className={`${dmSans.className} bg-[rgb(59,117,198)] px-1.5 py-0.5 rounded text-white`}
+                >
+                  High relevancy
+                </span>
+              )}
+
               <span
                 className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
               >
-                {item.rects.length} matches
+                {result[fileName].result.reduce(
+                  (sum, item) => sum + item.total,
+                  0
+                )}{" "}
+                matches
               </span>
               <div className="hidden group-hover:block">
                 <CornerDownLeft size={16} />

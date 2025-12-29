@@ -93,10 +93,12 @@ export async function searchBuildIndex(
 
 export async function searchBuildIndex_v2(scores, fileMapping) {
   try {
-    const results = [];
+    const results = {};
+
     for (let result of scores.results) {
       const url = fileMapping[result.fileName];
       const terms = result.terms;
+      let score = result.score;
 
       for (let term of Object.keys(terms)) {
         const pages = result.terms[term].pages;
@@ -112,7 +114,11 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
             bboxes,
             matches
           );
-          results.push(callResult);
+          if (!results[callResult.file_name]) {
+            results[callResult.file_name] = { result: [], score: 0 };
+          }
+          results[callResult.file_name].result.push(callResult);
+          results[callResult.file_name].score = score;
         }
       }
     }

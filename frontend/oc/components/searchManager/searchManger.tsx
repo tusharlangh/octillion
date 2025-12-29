@@ -4,7 +4,7 @@ import { useQuery } from "@/hooks/useQuery";
 import { createContext } from "react";
 
 interface QueryContextProps {
-  result: any[];
+  result: Record<string, { result: any[]; score: number }>;
   search: string;
   setSearch: (string: string) => void;
   query: any[];
@@ -69,10 +69,10 @@ export default function SearchManager({
         className={`${
           isLoading ? "overflow-hidden" : "overflow-y-auto"
         } h-full relative
-           scrollbar-thin scrollbar-track-transparent
-           scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300
-           dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
-           transition-colors duration-200 md:rounded-[10px]`}
+          scrollbar-thin scrollbar-track-transparent
+          scrollbar-thumb-neutral-200 hover:scrollbar-thumb-neutral-300
+          dark:scrollbar-thumb-neutral-800 dark:hover:scrollbar-thumb-neutral-700
+          transition-colors duration-200 md:rounded-[10px]`}
       >
         {children}
       </div>
