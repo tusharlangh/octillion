@@ -4,7 +4,6 @@ import { searchQdrant } from "./qdrantService.js";
 import { getJsonFromS3 } from "./saveFiles/upload.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { SearchRewrite } from "./searchRewrite.js";
-import { generateEmbedding } from "./parse/embedding.js";
 import {
   searchBuildIndex,
   searchBuildIndex_v2,
@@ -12,11 +11,8 @@ import {
   searchContent_v2,
 } from "./parse/searchIndex.js";
 import { createPresignedUrl } from "./saveFiles/upload.js";
-import { createContextualChunks_v2 } from "./parse/chunks.js";
+import { callToEmbed } from "../utils/openAi/callToEmbed.js";
 dotenv.config();
-
-export { generateEmbedding } from "./parse/embedding.js";
-export { createContextualChunks } from "./parse/chunks.js";
 
 async function getFileMapping(files) {
   const mapping = {};
@@ -682,6 +678,11 @@ export async function parse_v2(id, search, userId, options = {}) {
           }
 
           const result = await searchBuildIndex_v2(scores, fileMapping);
+
+          const demoText = "chicago roigwrgwgrwgrninrnownoignoi";
+          const demoEmbeddings = await callToEmbed(demoText);
+
+          await searchQdrant(id, userId, demoEmbeddings);
 
           return {
             success: true,

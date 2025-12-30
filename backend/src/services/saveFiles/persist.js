@@ -14,7 +14,6 @@ export async function saveFilesRecord(
     .from("files")
     .update({
       files: keys,
-      build_index: buildIndex,
       inverted_index: invertedIndex,
       pages_metadata: pagesContent,
       chunks_metadata: chunks,

@@ -1,122 +1,8 @@
-import { AppError } from "../../middleware/errorHandler.js";
+import { AppError, ValidationError } from "../../middleware/errorHandler.js";
 import { callToEmbed } from "../../utils/openAi/callToEmbed.js";
-import { generateEmbedding } from "../parse/embedding.js";
-import { uploadChunksToQdrant } from "../qdrantService.js";
 import qdrantClient from "../../utils/qdrant/client.js";
 import pRetry from "p-retry";
-
-export async function generateAndUploadEmbeddings(id, userId, pagesContent) {
-  try {
-    const UPLOAD_BATCH_SIZE = 50;
-    let currentBatch = [];
-    let totalUploaded = 0;
-    const embedErrors = [];
-    let totalProcessed = 0;
-
-    for (const page of pagesContent) {
-      if (!page.chunks || page.chunks.length === 0) continue;
-
-      const CHUNK_BATCH_SIZE = 5;
-      for (let i = 0; i < page.chunks.length; i += CHUNK_BATCH_SIZE) {
-        const batch = page.chunks.slice(i, i + CHUNK_BATCH_SIZE);
-
-        const batchEmbeddings = await Promise.all(
-          batch.map(async (chunk) => {
-            try {
-              return await generateEmbedding(chunk.text);
-            } catch {
-              embedErrors.push({
-                pageId: page.id,
-                error: `Chunk embeddings failed for page: ${page.id}`,
-              });
-              return null;
-            }
-          })
-        );
-
-        for (let j = 0; j < batch.length; j++) {
-          const embedding = batchEmbeddings[j];
-          const chunk = batch[j];
-          totalProcessed++;
-
-          if (!embedding || !chunk) continue;
-
-          currentBatch.push({
-            embedding,
-            pageId: page.id,
-            file_name: page.name,
-            startY: chunk.startY,
-            endY: chunk.endY,
-            text: chunk.text,
-            wordCount: chunk.wordCount,
-          });
-        }
-
-        if (currentBatch.length >= UPLOAD_BATCH_SIZE) {
-          try {
-            await uploadChunksToQdrant(id, userId, currentBatch, totalUploaded);
-            totalUploaded += currentBatch.length;
-            currentBatch = [];
-            if (global.gc) global.gc();
-          } catch (err) {
-            throw new AppError(
-              "Failed to upload embeddings batch to vector database",
-              500,
-              "QDRANT_BATCH_UPLOAD_FAILED"
-            );
-          }
-        }
-      }
-    }
-
-    if (currentBatch.length > 0) {
-      try {
-        await uploadChunksToQdrant(id, userId, currentBatch, totalUploaded);
-        totalUploaded += currentBatch.length;
-        currentBatch = [];
-      } catch (err) {
-        throw new AppError(
-          "Failed to upload final embeddings batch to vector database",
-          500,
-          "QDRANT_FINAL_UPLOAD_FAILED"
-        );
-      }
-    }
-
-    if (
-      totalUploaded === 0 &&
-      totalProcessed > 0 &&
-      embedErrors.length === totalProcessed
-    ) {
-      throw new AppError(
-        "All chunks failed to embed",
-        500,
-        "ALL_CHUNKS_FAILED"
-      );
-    }
-
-    const errorRate =
-      totalProcessed > 0 ? embedErrors.length / totalProcessed : 0;
-
-    if (errorRate > 0.3) {
-      throw new AppError(
-        `Too many embedding failures: ${embedErrors.length} out of ${totalProcessed} chunks failed`,
-        500,
-        "HIGH_EMBEDDING_FAILURE_RATE"
-      );
-    }
-  } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
-
-    throw new AppError(
-      "Failed to generate and upload embeddings",
-      500,
-      "EMBEDDING_PROCESS_FAILED"
-    );
-  }
-}
+import crypto from "crypto";
 
 function getCollectionName(parseId, userId) {
   if (!parseId || !userId) {
@@ -125,7 +11,7 @@ function getCollectionName(parseId, userId) {
   return `parse_${parseId}_${userId}`;
 }
 
-async function ensureCollection(collectionName, vectorSize = 1024) {
+async function ensureCollection(collectionName, vectorSize = 1536) {
   try {
     const collections = await qdrantClient.getCollections();
     const exists = collections.collections.some(
@@ -142,6 +28,9 @@ async function ensureCollection(collectionName, vectorSize = 1024) {
         size: vectorSize,
         distance: "Cosine",
       },
+      strict_mode_config: {
+        enabled: false,
+      },
       optimizers_config: {
         indexing_threshold: 20000,
       },
@@ -154,24 +43,6 @@ async function ensureCollection(collectionName, vectorSize = 1024) {
       "COLLECTION_CREATION_FAILED"
     );
   }
-}
-
-function validateChunks(chunks) {
-  if (!Array.isArray(chunks) || chunks.length === 0) {
-    throw new ValidationError("Chunks must be a non-empty array");
-  }
-
-  const invalidChunks = chunks.filter(
-    (c) => !c.text || typeof c.text !== "string" || !c.id || !c.stats
-  );
-
-  if (invalidChunks.length > 0) {
-    throw new ValidationError(
-      `Found ${invalidChunks.length} invalid chunks. Each chunk must have text, id, and stats.`
-    );
-  }
-
-  return true;
 }
 
 async function callToEmbedWithRetry(text, MAX_RETRIES, RETRY_DELAY) {
@@ -242,14 +113,13 @@ export async function generateAndUploadEmbeddings_v2(
       RETRY_DELAY = 1000,
     } = options;
 
-    validateChunks(chunks);
-
     const collectionName = getCollectionName(id, userId);
 
     await ensureCollection(collectionName);
 
     let successCount = 0;
     let failureCount = 0;
+    let totalPointsUploaded = 0;
 
     for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
       const batch = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
@@ -274,7 +144,7 @@ export async function generateAndUploadEmbeddings_v2(
           const chunk = batch[j];
 
           points.push({
-            id: `${id}_${chunk.id}`,
+            id: crypto.randomUUID(),
             vector: embedding,
             payload: {
               text: chunk.text,
@@ -301,25 +171,33 @@ export async function generateAndUploadEmbeddings_v2(
 
           await pRetry(
             async () => {
-              await qdrantClient.upsert(collectionName, {
-                wait: true,
-                points: qdrantBatch,
-              });
+              try {
+                await qdrantClient.upsert(collectionName, {
+                  wait: true,
+                  points: qdrantBatch,
+                });
+                totalPointsUploaded += qdrantBatch.length;
+              } catch (err) {
+                console.error(`❌ Qdrant upsert error:`, err.message);
+                throw err;
+              }
             },
             {
               retries: MAX_RETRIES,
               minTimeout: RETRY_DELAY,
               onFailedAttempt: (error) => {
                 console.warn(
-                  `Qdrant upsert attempt ${error.attemptNumber} failed. ${error.retriesLeft} retries left.`
+                  `Retry ${error.attemptNumber}/${MAX_RETRIES + 1} - ${
+                    error.retriesLeft
+                  } left`
                 );
               },
             }
           );
         }
       } catch (error) {
+        console.error(`Batch error:`, error.message);
         failureCount += batch.length;
-
         continue;
       }
     }
