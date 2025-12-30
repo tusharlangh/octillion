@@ -7,15 +7,16 @@ export async function saveFilesRecord(
   keys,
   buildIndex,
   invertedIndex,
-  pagesContent
+  pagesContent,
+  chunks
 ) {
   const { data, error } = await supabase
     .from("files")
     .update({
       files: keys,
-      build_index: buildIndex,
       inverted_index: invertedIndex,
       pages_metadata: pagesContent,
+      chunks_metadata: chunks,
     })
     .eq("parse_id", id)
     .eq("user_id", userId);

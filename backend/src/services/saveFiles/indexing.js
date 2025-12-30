@@ -1,6 +1,5 @@
 import { AppError } from "../../middleware/errorHandler.js";
 import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
-import { createContextualChunks } from "../parse.js";
 
 export function createInvertedSearch(pagesContent) {
   try {
