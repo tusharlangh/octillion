@@ -88,8 +88,6 @@ export default function Header({ id }: Props) {
         return;
       }
 
-      console.log(data.result);
-
       setQuery(data.result || {}, data.fileMapping || {});
     } catch (error) {
       console.error("Search error: ", error);

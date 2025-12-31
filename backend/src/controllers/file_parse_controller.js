@@ -36,6 +36,7 @@ export async function file_parse_controller(req, res, next) {
       success: true,
       result: parsed.result,
       fileMapping: parsed.fileMapping,
+      overview: parsed.overview,
       message: "Successfully parsed results",
     });
   } catch (error) {

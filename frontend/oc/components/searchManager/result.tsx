@@ -1,14 +1,20 @@
 "use client";
 
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { queryContext } from "./searchManger";
 import SearchLoading from "../animations/searchLoading";
-import { FileText, Hash, Sparkles } from "lucide-react";
+import { ChevronDown, FileText, Hash, Sparkle, Sparkles } from "lucide-react";
 import { DM_Sans } from "next/font/google";
 import SmartPDFViewer from "../fileManager/SmartPDFViewer";
 import { HybridSearchResult } from "@/types/search";
 import { ResultBadges } from "./ResultBadges";
 import { ResultPreview } from "./ResultPreview";
+import ReactMarkdown from "react-markdown";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import { SidebarContext } from "../ConditionalLayout";
+import { useRouter } from "next/navigation";
+import SurfingLoading from "../animations/surfingLoading";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -27,10 +33,17 @@ type ViewerState = {
 };
 
 export default function Result() {
+  const router = useRouter();
+
   const context = useContext(queryContext);
   if (!context) throw new Error("queryContext not found");
 
-  const { isLoading, fileMapping, lastSuccessfulSearch, result } = context;
+  const sidebarContext = useContext(SidebarContext);
+  if (!sidebarContext) throw new Error("sidebarContext is not working");
+
+  const { setNotis } = sidebarContext;
+  const { search, isLoading, fileMapping, lastSuccessfulSearch, result } =
+    context;
 
   const [viewerState, setViewerState] = useState<ViewerState>({
     isOpen: false,
@@ -39,6 +52,90 @@ export default function Result() {
     highlights: {},
     initialPage: 0,
   });
+
+  const [overview, setOverview] = useState("");
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
+  useEffect(() => {
+    async function GET() {
+      setOverviewLoading(true);
+      setOverview("");
+
+      try {
+        const jwt = await handleTokenAction();
+        if (!jwt) {
+          throw new Error("Failed to get authentication token");
+        }
+
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/get-ai-overview`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
+            body: JSON.stringify({
+              hybridSearchResults: result,
+              search: search,
+            }),
+          }
+        );
+
+        const data = await res.json();
+        setOverview(data.response);
+
+        console.log(data.response);
+
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message ||
+            data.error ||
+            getErrorMessageByStatus(res.status);
+
+          console.error("Fetch ai overview failed:", {
+            status: res.status,
+            error: errorMessage,
+            details: data.error?.details,
+          });
+
+          setNotis({ message: errorMessage, type: "error" });
+
+          if (res.status === 401 || res.status === 403) {
+            setTimeout(() => router.replace("/login"), 2000);
+          }
+
+          return;
+        }
+      } catch (error) {
+        console.error("ai overview error: ", error);
+
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          setNotis({
+            message: "Network error. Please check your connection.",
+            type: "error",
+          });
+        } else if (error instanceof Error && error.message.includes("token")) {
+          setNotis({
+            message: "Authentication failed. Please log in again.",
+            type: "error",
+          });
+          setTimeout(() => router.replace("/login"), 2000);
+        } else {
+          setNotis({
+            message: "An unexpected error occurred. Please try again.",
+            type: "error",
+          });
+        }
+      } finally {
+        setOverviewLoading(false);
+      }
+    }
+
+    if (result.length !== 0) {
+      GET();
+    }
+  }, [result]);
 
   const handleOpenViewer = (item: HybridSearchResult) => {
     const url = fileMapping[item.file_name];
@@ -77,7 +174,7 @@ export default function Result() {
   if (lastSuccessfulSearch.trim() === "" && result.length === 0) {
     return (
       <div className="">
-        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh] animate-[fadeIn_0.5s_ease-out]">
           <p
             className={`${dmSans.className} text-7xl md:text-8xl font-medium
                       text-neutral-800 dark:text-neutral-200
@@ -100,7 +197,7 @@ export default function Result() {
   if (lastSuccessfulSearch.trim() !== "" && result.length === 0 && !isLoading) {
     return (
       <div className="">
-        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh] animate-[fadeIn_0.5s_ease-out]">
           <p
             className={`${dmSans.className} text-7xl md:text-8xl font-medium
                       text-neutral-800 dark:text-neutral-200
@@ -122,52 +219,66 @@ export default function Result() {
 
   if (isLoading) return <SearchLoading />;
 
-  const stats = {
-    total: result.length,
-    both: result.filter((r) => r.source === "both").length,
-    semantic: result.filter((r) => r.source === "semantic").length,
-    keyword: result.filter((r) => r.source === "keyword").length,
-  };
-
   return (
     <div className="relative h-full px-4 md:px-12 pt-8 max-w-5xl mx-auto">
-      <div className="mb-6 space-y-3">
+      <div
+        className="flex flex-col px-2 py-8 gap-6
+                   animate-[fadeIn_0.5s_ease-out]"
+      >
         <div className="flex items-center justify-between">
-          <p
-            className={`${dmSans.className} text-neutral-500 font-medium text-base tracking-wide`}
-          >
-            Best matches
-          </p>
-          <p className={`${dmSans.className} text-neutral-400 text-sm`}>
-            {stats.total} {stats.total === 1 ? "result" : "results"}
-          </p>
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg animate-[pulse_3s_ease-in-out_infinite]">
+              <Sparkle size={16} className="text-blue-500" strokeWidth={2.5} />
+            </div>
+            <p
+              className={`${dmSans.className} text-neutral-900 dark:text-neutral-100 
+              font-semibold text-[15px] tracking-tight`}
+            >
+              AI Overview
+            </p>
+          </div>
         </div>
 
-        {stats.total > 0 && (
-          <div className="flex items-center gap-3 text-xs">
-            {stats.both > 0 && (
+        {overviewLoading && <SurfingLoading />}
+
+        <div
+          className={`flex flex-wrap items-baseline gap-x-1 leading-relaxed
+                     transition-all duration-300 ease-out overflow-hidden border-b border-neutral-200/60 dark:border-neutral-800/60 pb-6`}
+        >
+          {overview.split(/(\[\d+\])/g).map((text, idx) => {
+            if (text.startsWith("[") && text.endsWith("]")) {
+              const chunk_idx = Number(text.slice(1, -1)) - 1;
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => handleOpenViewer(result[chunk_idx])}
+                  className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 
+                     text-[11px] font-medium text-blue-600 dark:text-blue-400 
+                     hover:text-blue-700 dark:hover:text-blue-300
+                     bg-blue-50/50 dark:bg-blue-500/10 
+                     hover:bg-blue-100/80 dark:hover:bg-blue-500/20
+                     rounded border border-blue-200/50 dark:border-blue-500/20
+                     transition-all duration-200 ease-out
+                     hover:scale-110 active:scale-95
+                     hover:shadow-sm"
+                >
+                  {chunk_idx + 1}
+                </button>
+              );
+            }
+
+            return (
               <span
-                className={`${dmSans.className} text-emerald-600 dark:text-emerald-400`}
+                key={idx}
+                className={`${dmSans.className} text-neutral-700 dark:text-neutral-300 
+                  font-normal text-[15px] leading-[1.7]`}
               >
-                {stats.both} found by both
+                <ReactMarkdown>{text}</ReactMarkdown>
               </span>
-            )}
-            {stats.semantic > 0 && (
-              <span
-                className={`${dmSans.className} text-blue-600 dark:text-blue-400`}
-              >
-                {stats.semantic} semantic only
-              </span>
-            )}
-            {stats.keyword > 0 && (
-              <span
-                className={`${dmSans.className} text-purple-600 dark:text-purple-400`}
-              >
-                {stats.keyword} keyword only
-              </span>
-            )}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -176,7 +287,10 @@ export default function Result() {
             className="group flex flex-col px-4 py-4 -mx-3 rounded-lg cursor-pointer 
               hover:bg-neutral-100 dark:hover:bg-neutral-800 
               transition-all duration-200 border border-transparent
-              hover:border-neutral-200 dark:hover:border-neutral-700"
+              hover:border-neutral-200 dark:hover:border-neutral-700
+              hover:shadow-sm
+              animate-[fadeInUp_0.4s_ease-out]"
+            style={{ animationDelay: `${index * 50}ms` }}
             key={`${item.chunk_id}-${index}`}
             onClick={() => handleOpenViewer(item)}
           >
@@ -184,7 +298,7 @@ export default function Result() {
               <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                 <div
                   className="flex-shrink-0 text-neutral-400 group-hover:text-neutral-600 
-                  dark:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors"
+                  dark:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors duration-200"
                 >
                   <FileText size={20} />
                 </div>

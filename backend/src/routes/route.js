@@ -9,6 +9,7 @@ import { get_chat_controller } from "../controllers/get_chat_controller.js";
 import { get_name_controller } from "../controllers/get_name_controller.js";
 import { get_upload_urls_controller } from "../controllers/get_upload_urls_controller.js";
 import { get_parse_status_controller } from "../controllers/get_parse_status_controller.js";
+import { get_ai_overview_controller } from "../controllers/get_ai_overview_controller.js";
 
 const router = express.Router();
 
@@ -29,5 +30,6 @@ router.get("/get-name", auth, get_name_controller);
 router.get("/get-chats", auth, get_chat_controller);
 router.post("/get-upload-urls", auth, get_upload_urls_controller);
 router.get("/parse-status", auth, get_parse_status_controller);
+router.post("/get-ai-overview", auth, get_ai_overview_controller);
 
 export default router;
