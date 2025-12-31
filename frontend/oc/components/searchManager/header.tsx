@@ -21,9 +21,6 @@ interface Props {
 export default function Header({ id }: Props) {
   const router = useRouter();
   const context = useContext(queryContext);
-  const [searchType, setSearchType] = useState<
-    "enhanced" | "keyword" | "hybrid"
-  >("keyword");
   const sidebarContext = useContext(SidebarContext);
   if (!sidebarContext) throw new Error("SidebarContext is not working");
   const { setNotis } = sidebarContext;
@@ -31,8 +28,7 @@ export default function Header({ id }: Props) {
   if (!context)
     throw new Error("queryContext in Header component is not working");
 
-  const { setIsLoading, setQuery, search, setSearch, setLastSearchType } =
-    context;
+  const { setIsLoading, setQuery, search, setSearch } = context;
 
   const handleSearch = async () => {
     if (!search?.trim()) {
@@ -42,11 +38,6 @@ export default function Header({ id }: Props) {
 
     if (!id) {
       setNotis({ message: "Id not found", type: "error" });
-      return;
-    }
-
-    if (!searchType) {
-      setNotis({ message: "Search type not selected", type: "error" });
       return;
     }
 
@@ -60,7 +51,6 @@ export default function Header({ id }: Props) {
 
       const query = new URLSearchParams({
         id: id,
-        searchType: searchType,
         search: search.trim(),
       });
 
@@ -97,6 +87,8 @@ export default function Header({ id }: Props) {
 
         return;
       }
+
+      console.log(data.result);
 
       setQuery(data.result || {}, data.fileMapping || {});
     } catch (error) {
@@ -163,56 +155,6 @@ export default function Header({ id }: Props) {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
           />
-        </div>
-        <div className="inline-flex items-center p-0.5 shrink-0 mb-2 md:mb-0 gap-1">
-          <button
-            onClick={() => {
-              setSearchType("keyword");
-              setLastSearchType("keyword");
-            }}
-            className={`${
-              dmSans.className
-            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
-            transition-all duration-200 ease-out ${
-              searchType === "keyword"
-                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
-                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-            }`}
-          >
-            Keyword
-          </button>
-          <button
-            onClick={() => {
-              setSearchType("enhanced");
-              setLastSearchType("enhanced");
-            }}
-            className={`${
-              dmSans.className
-            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
-            transition-all duration-200 ease-out ${
-              searchType === "enhanced"
-                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
-                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-            }`}
-          >
-            Enhanced
-          </button>
-          <button
-            onClick={() => {
-              setSearchType("hybrid");
-              setLastSearchType("hybrid");
-            }}
-            className={`${
-              dmSans.className
-            } relative z-10 px-2 py-0.5 text-[12px] md:text-[13px] font-medium rounded-[5px] 
-            transition-all duration-200 ease-out ${
-              searchType === "hybrid"
-                ? "text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800"
-                : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-            }`}
-          >
-            Hybrid
-          </button>
         </div>
       </div>
     </section>

@@ -1,5 +1,4 @@
 import supabase from "../utils/supabase/client.js";
-import { parse } from "./parse.js";
 import { callToChat } from "../utils/openAi/callToChat.js";
 import { AppError, ValidationError } from "../middleware/errorHandler.js";
 import { classifyQuery } from "./chat/queryClassifier.js";

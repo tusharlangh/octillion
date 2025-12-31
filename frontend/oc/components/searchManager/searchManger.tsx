@@ -2,25 +2,9 @@
 
 import { useQuery } from "@/hooks/useQuery";
 import { createContext } from "react";
+import { SearchContextProps } from "@/types/search";
 
-interface QueryContextProps {
-  result: Record<string, { result: any[]; score: number }>;
-  search: string;
-  setSearch: (string: string) => void;
-  query: any[];
-  termStats: any;
-  setTermStats: (stats: any) => void;
-  fileMapping: Record<string, string>;
-  setFileMapping: (mapping: Record<string, string>) => void;
-  setIsLoading: (loading: boolean) => void;
-  setQuery: (result?: any[], fileMapping?: any) => void;
-  isLoading: boolean;
-  lastSuccessfulSearch: string;
-  lastSearchType: string;
-  setLastSearchType: (type: string) => void;
-}
-
-export const queryContext = createContext<QueryContextProps | undefined>(
+export const queryContext = createContext<SearchContextProps | undefined>(
   undefined
 );
 
@@ -33,17 +17,12 @@ export default function SearchManager({
     result,
     search,
     setSearch,
-    query,
-    termStats,
-    setTermStats,
     fileMapping,
     setFileMapping,
     setIsLoading,
     setQuery,
     isLoading,
     lastSuccessfulSearch,
-    lastSearchType,
-    setLastSearchType,
   } = useQuery();
 
   return (
@@ -52,17 +31,12 @@ export default function SearchManager({
         result,
         search,
         setSearch,
-        query,
-        termStats,
-        setTermStats,
         fileMapping,
         setFileMapping,
         setIsLoading,
         setQuery,
         isLoading,
         lastSuccessfulSearch,
-        lastSearchType,
-        setLastSearchType,
       }}
     >
       <div

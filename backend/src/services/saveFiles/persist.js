@@ -5,7 +5,6 @@ export async function saveFilesRecord(
   id,
   userId,
   keys,
-  buildIndex,
   invertedIndex,
   pagesContent,
   chunks
