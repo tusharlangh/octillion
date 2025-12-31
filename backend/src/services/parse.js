@@ -11,6 +11,7 @@ import {
   normalizeSemanticResults,
 } from "./parse/resultNormalizer.js";
 import { analyzeQuery } from "../utils/stopwords.js";
+import { createContextualChunks_v2 } from "./parse/chunks.js";
 
 dotenv.config();
 

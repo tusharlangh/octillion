@@ -54,6 +54,7 @@ export async function normalizeSemanticResults(semanticResults, chunks) {
         score: result.score || 0,
         source: "semantic",
         text: chunk.text,
+        rects: chunk.rects || [], // Add rects from chunk for PDF highlighting
       };
     })
     .filter((r) => r !== null);
