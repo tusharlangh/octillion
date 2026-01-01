@@ -60,7 +60,15 @@ export default function Result() {
     async function GET() {
       setOverviewLoading(true);
       setOverview("");
+      const hybridSearchResults = result.filter(
+        (item) => item.source === "semantic" || item.source === "both"
+      );
 
+      if (hybridSearchResults.length === 0) {
+        setOverviewLoading(false);
+        setOverview("NA");
+        return;
+      }
       try {
         const jwt = await handleTokenAction();
         if (!jwt) {
@@ -76,7 +84,7 @@ export default function Result() {
               Authorization: `Bearer ${jwt}`,
             },
             body: JSON.stringify({
-              hybridSearchResults: result,
+              hybridSearchResults: hybridSearchResults,
               search: search,
             }),
           }

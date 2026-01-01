@@ -1,9 +1,9 @@
 "use client";
 
-import { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { chatContext } from "./charManger";
 import { DM_Sans } from "next/font/google";
-import { Copy } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { Libre_Baskerville } from "next/font/google";
 import SurfingLoading from "../animations/surfingLoading";
 import ReactMarkdown from "react-markdown";
@@ -26,6 +26,14 @@ export default function ChatMessages() {
     throw new Error("chatContext in ChatMessages component is not working");
 
   const { messages, isLoading } = context;
+
+  const [copy, setCopy] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (copy) {
+      setTimeout(() => setCopy(false), 2000);
+    }
+  }, [copy]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -93,14 +101,29 @@ export default function ChatMessages() {
                   className="space-y-2 p-3 pb-10 "
                 >
                   <ReactMarkdown>{message.content}</ReactMarkdown>
-                  <div>
-                    <Copy
-                      className="text-neutral-400 dark:text-neutral-500 
+                  <div
+                    onClick={() => {
+                      navigator.clipboard.writeText(message.content);
+                      setCopy(true);
+                    }}
+                  >
+                    {!copy ? (
+                      <Copy
+                        className="text-neutral-400 dark:text-neutral-500 
                      hover:text-neutral-700 dark:hover:text-neutral-300 
                      transition-colors duration-200 cursor-pointer"
-                      height={18}
-                      width={18}
-                    />
+                        height={18}
+                        width={18}
+                      />
+                    ) : (
+                      <Check
+                        className="text-neutral-400 dark:text-neutral-500 
+                     hover:text-neutral-700 dark:hover:text-neutral-300 
+                     transition-colors duration-200 cursor-pointer"
+                        height={18}
+                        width={18}
+                      />
+                    )}
                   </div>
                 </div>
               );
