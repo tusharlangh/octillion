@@ -1,6 +1,7 @@
 import { callToOverview } from "../utils/callsAi/callToOverview.js";
+import { trackRAGRetrieval } from "../utils/processMetrics.js";
 
-export async function overview(hybridSearchResults, search) {
+export async function overview(hybridSearchResults, search, userId = null) {
   const context = hybridSearchResults
     .map((result, idx) => {
       return `SOURCE [${idx + 1}]: ${result.file_name} (Page ${
@@ -10,6 +11,22 @@ RELEVANCE: ${(result.rrf_score * 100).toFixed(1)}%
 TEXT: ${result.text}`;
     })
     .join("\n\n---\n\n");
+
+  const scores = hybridSearchResults.map((r) => r.rrf_score || 0);
+  const avgScore =
+    scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const topScore = Math.max(...scores);
+
+  trackRAGRetrieval({
+    userId,
+    parseId: null,
+    query: search,
+    retrievedChunks: hybridSearchResults.length,
+    avgRelevanceScore: avgScore,
+    topScore: topScore,
+    contextLength: context.length,
+    retrievalLatency: 0,
+  });
 
   const prompt = `You are a highly accurate AI assistant powering an enterprise search system. Your role is to generate concise, trustworthy overviews from document search results.
 SEARCH RESULTS FOR: "${search}"
@@ -58,5 +75,14 @@ Generate the AI Overview now:`;
     },
   ];
 
-  return { success: true, response: await callToOverview(messages) };
+  return {
+    success: true,
+    response: await callToOverview(
+      messages,
+      "llama-3.3-70b-versatile",
+      0.7,
+      1000,
+      userId
+    ),
+  };
 }

@@ -22,11 +22,11 @@ export async function get_ai_overview_controller(req, res, next) {
       throw new ValidationError("Search not found");
     }
 
-    const overviewResult = await overview(hybridSearchResults, search);
+    const overviewResult = await overview(hybridSearchResults, search, userId);
 
     if (!overviewResult.success) {
       throw new AppError(
-        chatResult.error || "Failed to process ai overview request",
+        overviewResult.error || "Failed to process ai overview request",
         500,
         "AI_OVERVIEW_ERROR"
       );

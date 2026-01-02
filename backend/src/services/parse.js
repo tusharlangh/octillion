@@ -11,6 +11,14 @@ import {
   normalizeSemanticResults,
 } from "./parse/resultNormalizer.js";
 import { analyzeQuery } from "../utils/stopwords.js";
+import {
+  trackSearchMetrics,
+  trackZeroResults,
+  trackQueryAnalysis,
+  trackResultQuality,
+  trackComponentPerformance,
+  SearchTimer,
+} from "../utils/searchMetrics.js";
 
 dotenv.config();
 
@@ -173,9 +181,11 @@ async function hybridSearch(
 ) {
   const { topK = 10, k = 60 } = options;
 
+  const overallTimer = new SearchTimer("Overall Search");
+
   const analysis = analyzeQuery(query);
 
-  console.log("\n🔍 QUERY ANALYSIS:");
+  console.log("\nQUERY ANALYSIS:");
   console.log(`  Original: "${query}"`);
   console.log(`  Content words: ${analysis.contentWords.join(", ")}`);
   console.log(`  Type: ${analysis.queryType.toUpperCase()}`);
@@ -185,14 +195,37 @@ async function hybridSearch(
     ).toFixed(0)}% keyword`
   );
 
+  trackQueryAnalysis({
+    query,
+    queryType: analysis.queryType,
+    contentWords: analysis.contentWords,
+    semanticWeight: analysis.semanticWeight,
+    keywordWeight: analysis.keywordWeight,
+    userId,
+  });
+
   const keywordQuery = analysis.contentWords.join(" ") || query;
+
+  const keywordTimer = new SearchTimer("Keyword Search");
+  const semanticTimer = new SearchTimer("Semantic Search");
 
   const [keywordResultsRaw, semanticResultsRaw] = await Promise.all([
     keywordSearch(keywordQuery, pagesContent, inverted, fileMapping, {
       topK: topK * 2,
+    }).then((result) => {
+      keywordTimer.stop();
+      return result;
     }),
-    semanticSearch(query, parseId, userId, { topK: topK * 2 }),
+    semanticSearch(query, parseId, userId, { topK: topK * 2 }).then(
+      (result) => {
+        semanticTimer.stop();
+        return result;
+      }
+    ),
   ]);
+
+  const keywordLatency = keywordTimer.stop();
+  const semanticLatency = semanticTimer.stop();
 
   const keywordResults = await normalizeKeywordResults(
     keywordResultsRaw,
@@ -267,6 +300,84 @@ async function hybridSearch(
   const mergedResults = Array.from(rrfScores.values())
     .sort((a, b) => b.rrf_score - a.rrf_score)
     .slice(0, topK);
+
+  const totalLatency = overallTimer.stop();
+
+  const scores = mergedResults.map((r) => r.rrf_score);
+  const sortedScores = [...scores].sort((a, b) => b - a);
+  const scoreDistribution =
+    scores.length > 0
+      ? {
+          min: Math.min(...scores),
+          max: Math.max(...scores),
+          p50: sortedScores[Math.floor(sortedScores.length * 0.5)] || 0,
+          p95: sortedScores[Math.floor(sortedScores.length * 0.95)] || 0,
+        }
+      : null;
+
+  const avgScore =
+    scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+
+  trackSearchMetrics({
+    query,
+    queryType: analysis.queryType,
+    userId,
+    parseId,
+
+    totalResults: mergedResults.length,
+    keywordResultCount: keywordResults.length,
+    semanticResultCount: semanticResults.length,
+    mergedResultCount: mergedResults.length,
+
+    totalLatency,
+    keywordLatency,
+    semanticLatency,
+
+    contentWords: analysis.contentWords,
+    semanticWeight: analysis.semanticWeight,
+    keywordWeight: analysis.keywordWeight,
+
+    hasResults: mergedResults.length > 0,
+    scoreDistribution,
+  });
+
+  if (mergedResults.length === 0) {
+    trackZeroResults({
+      query,
+      queryType: analysis.queryType,
+      userId,
+      parseId,
+      contentWords: analysis.contentWords,
+      totalLatency,
+    });
+  }
+
+  if (mergedResults.length > 0) {
+    trackResultQuality({
+      query,
+      queryType: analysis.queryType,
+      results: mergedResults,
+      userId,
+    });
+  }
+
+  trackComponentPerformance({
+    query,
+    queryType: analysis.queryType,
+    userId,
+    components: {
+      keyword: keywordLatency,
+      semantic: semanticLatency,
+    },
+  });
+
+  console.log(`\n📊 Search completed in ${totalLatency}ms`);
+  console.log(
+    `   Keyword: ${keywordLatency}ms | Semantic: ${semanticLatency}ms`
+  );
+  console.log(
+    `   Results: ${mergedResults.length} (${keywordResults.length} keyword, ${semanticResults.length} semantic)`
+  );
 
   return [mergedResults, analysis.queryType];
 }
