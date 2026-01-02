@@ -13,12 +13,31 @@ interface ResultPreviewProps {
 export function ResultPreview({ item }: ResultPreviewProps) {
   if (item.text && item.text.length > 0) {
     const preview =
-      item.text.length > 150 ? item.text.substring(0, 150) + "..." : item.text;
+      item.text.length > 280 ? item.text.substring(0, 280) + "…" : item.text;
 
     return (
       <p
-        className={`${dmSans.className} text-sm text-neutral-600 
-          dark:text-neutral-400 mt-2 line-clamp-2`}
+        className={`${dmSans.className} text-[16px] leading-[1.7] font-light
+          text-neutral-700 dark:text-neutral-300 
+          line-clamp-3`}
+      >
+        {preview}
+      </p>
+    );
+  }
+
+  if (item.rects && item.rects.length > 0) {
+    const keywordText = item.rects.map((rect) => rect.surface).join(" ");
+    const preview =
+      keywordText.length > 280
+        ? keywordText.substring(0, 280) + "…"
+        : keywordText;
+
+    return (
+      <p
+        className={`${dmSans.className} text-[16px] leading-[1.7] font-light
+          text-neutral-700 dark:text-neutral-300 
+          line-clamp-3`}
       >
         {preview}
       </p>

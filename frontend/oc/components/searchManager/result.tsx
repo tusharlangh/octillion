@@ -228,135 +228,129 @@ export default function Result() {
   if (isLoading) return <SearchLoading />;
 
   return (
-    <div className="relative h-full px-4 md:px-12 pt-8 max-w-5xl mx-auto">
-      {overview !== "NA" && (
-        <div
-          className="flex flex-col px-2 py-8 gap-6
-                   animate-[fadeIn_0.5s_ease-out]"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="rounded-lg animate-[pulse_3s_ease-in-out_infinite]">
-                <Sparkle
-                  size={16}
-                  className="text-blue-500"
-                  strokeWidth={2.5}
-                />
-              </div>
-              <p
-                className={`${dmSans.className} text-neutral-900 dark:text-neutral-100 
-              font-semibold text-[15px] tracking-tight`}
+    <div className="relative h-full pt-12 pb-24">
+      <div className="mx-auto max-w-[680px] px-6 pb-50">
+        {overview !== "NA" && (
+          <article className="mb-16 animate-[fadeIn_0.6s_ease-out]">
+            <div className="mb-2 flex items-center gap-2">
+              <Sparkle
+                size={14}
+                className="text-black dark:text-white"
+                strokeWidth={1.5}
+              />
+              <span
+                className={`${dmSans.className} text-[15px] font-normal tracking-wide 
+                text-black dark:text-white`}
               >
-                AI Overview
-              </p>
+                Overview
+              </span>
             </div>
-          </div>
 
-          {overviewLoading && <SurfingLoading />}
+            {overviewLoading && <SurfingLoading />}
 
-          <div
-            className={`flex flex-wrap items-baseline gap-x-1 leading-relaxed
-                     transition-all duration-300 ease-out overflow-hidden border-b border-neutral-200/60 dark:border-neutral-800/60 pb-6`}
-          >
-            {overview.split(/(\[\d+\])/g).map((text, idx) => {
-              if (text.startsWith("[") && text.endsWith("]")) {
-                const chunk_idx = Number(text.slice(1, -1)) - 1;
+            <div
+              className={`${dmSans.className} text-[17px] leading-[1.75] 
+              text-neutral-800 dark:text-neutral-200 font-light
+              mb-12`}
+            >
+              {overview.split(/(\[\d+\])/g).map((text, idx) => {
+                if (text.startsWith("[") && text.endsWith("]")) {
+                  const chunk_idx = Number(text.slice(1, -1)) - 1;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleOpenViewer(result[chunk_idx])}
+                      className="inline-flex items-center align-baseline mx-[2px] px-[5px] py-[1px]
+                      text-[11px] font-normal tabular-nums
+                      text-black dark:text-white
+                      border-b border-black dark:border-white
+                      hover:text-black/50 dark:hover:text-white/80
+                      hover:border-black/50 dark:hover:border-white/80
+                      transition-all duration-150"
+                    >
+                      {chunk_idx + 1}
+                    </button>
+                  );
+                }
 
                 return (
-                  <button
+                  <ReactMarkdown
                     key={idx}
-                    onClick={() => handleOpenViewer(result[chunk_idx])}
-                    className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 
-                     text-[11px] font-medium text-blue-600 dark:text-blue-400 
-                     hover:text-blue-700 dark:hover:text-blue-300
-                     bg-blue-50/50 dark:bg-blue-500/10 
-                     hover:bg-blue-100/80 dark:hover:bg-blue-500/20
-                     rounded border border-blue-200/50 dark:border-blue-500/20
-                     transition-all duration-200 ease-out
-                     hover:scale-110 active:scale-95
-                     hover:shadow-sm"
+                    components={{
+                      p: ({ children }) => <span>{children}</span>,
+                    }}
                   >
-                    {chunk_idx + 1}
-                  </button>
+                    {text}
+                  </ReactMarkdown>
                 );
-              }
+              })}
+            </div>
 
-              return (
+            <div className="h-px bg-gradient-to-r from-transparent via-neutral-200 dark:via-neutral-800 to-transparent" />
+          </article>
+        )}
+
+        <section className="space-y-12">
+          {result.map((item, index) => (
+            <article
+              key={`${item.chunk_id}-${index}`}
+              onClick={() => handleOpenViewer(item)}
+              className="group cursor-pointer
+              opacity-0 animate-[fadeIn_0.5s_ease-out_forwards]"
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <div
+                className="mb-3 flex items-center gap-3 flex-wrap
+                transition-opacity duration-300"
+              >
                 <span
-                  key={idx}
-                  className={`${dmSans.className} text-neutral-700 dark:text-neutral-300 
-                  font-normal text-[15px] leading-[1.7]`}
+                  className={`${dmSans.className} text-[15px] font-medium
+                  text-black dark:text-white`}
                 >
-                  <ReactMarkdown>{text}</ReactMarkdown>
+                  {item.file_name}
                 </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {result.map((item, index) => (
-          <div
-            className="group flex flex-col px-4 py-4 -mx-3 rounded-lg cursor-pointer 
-              hover:bg-neutral-100 dark:hover:bg-neutral-800 
-              transition-all duration-200 border border-transparent
-              hover:border-neutral-200 dark:hover:border-neutral-700
-              hover:shadow-sm
-              animate-[fadeInUp_0.4s_ease-out]"
-            style={{ animationDelay: `${index * 50}ms` }}
-            key={`${item.chunk_id}-${index}`}
-            onClick={() => handleOpenViewer(item)}
-          >
-            <div className="flex items-start justify-between gap-4 mb-2">
-              <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
-                <div
-                  className="flex-shrink-0 text-neutral-400 group-hover:text-neutral-600 
-                  dark:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors duration-200"
+                <span className="text-black dark:text-white">·</span>
+                <span
+                  className={`${dmSans.className} text-[14px] font-normal
+                  text-black dark:text-white`}
                 >
-                  <FileText size={20} />
-                </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <p
-                    className={`${dmSans.className} text-neutral-800 dark:text-neutral-200 
-                      font-medium text-base truncate`}
-                  >
-                    {item.file_name}
-                  </p>
-                  <p
-                    className={`${dmSans.className} text-neutral-500 dark:text-neutral-400 
-                      text-sm mt-0.5`}
-                  >
-                    Page {item.page_number}
-                  </p>
-                </div>
+                  Page {item.page_number}
+                </span>
+
+                <ResultBadges item={item} totalResults={result.length} />
               </div>
 
-              <ResultBadges item={item} totalResults={result.length} />
-            </div>
+              <div className="mb-4">
+                <ResultPreview item={item} />
+              </div>
 
-            <ResultPreview item={item} />
-
-            <div className="flex items-center gap-4 mt-3 text-xs text-neutral-500">
-              {item.keyword_rank !== null && (
-                <div className="flex items-center gap-1.5">
-                  <Hash size={14} />
-                  <span className={dmSans.className}>
-                    Keyword rank: {item.keyword_rank + 1}
+              <div
+                className="flex items-center gap-4 text-[12px]
+                text-neutral-400 dark:text-neutral-600
+                opacity-0 group-hover:opacity-100
+                transition-all duration-300
+                translate-y-[-4px] group-hover:translate-y-0"
+              >
+                {item.keyword_rank !== null && (
+                  <span className={`${dmSans.className} font-normal`}>
+                    Keyword #{item.keyword_rank + 1}
                   </span>
-                </div>
-              )}
-              {item.semantic_rank !== null && (
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={14} />
-                  <span className={dmSans.className}>
-                    Semantic rank: {item.semantic_rank + 1}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+                )}
+                {item.semantic_rank !== null && (
+                  <>
+                    {item.keyword_rank !== null && (
+                      <span className="opacity-40">·</span>
+                    )}
+                    <span className={`${dmSans.className} font-normal`}>
+                      Semantic #{item.semantic_rank + 1}
+                    </span>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+        </section>
       </div>
 
       {viewerState.isOpen && (

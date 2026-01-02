@@ -121,7 +121,7 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <section className="w-full pt-2 px-2 md:px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
+    <section className="w-full pt-0.5 px-2 md:px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
       <div className="px-2 relative w-full mt-20 group flex flex-col md:flex-row border-b border-neutral-200 dark:border-neutral-800">
         <div className="relative flex-1 flex items-center">
           <Search
