@@ -1,5 +1,5 @@
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
-import { callToEmbed } from "../../utils/openAi/callToEmbed.js";
+import { callToEmbed } from "../../utils/callsAi/callToEmbed.js";
 import qdrantClient from "../../utils/qdrant/client.js";
 import pRetry from "p-retry";
 import crypto from "crypto";

@@ -229,39 +229,44 @@ export default function Result() {
 
   return (
     <div className="relative h-full px-4 md:px-12 pt-8 max-w-5xl mx-auto">
-      <div
-        className="flex flex-col px-2 py-8 gap-6
-                   animate-[fadeIn_0.5s_ease-out]"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="rounded-lg animate-[pulse_3s_ease-in-out_infinite]">
-              <Sparkle size={16} className="text-blue-500" strokeWidth={2.5} />
-            </div>
-            <p
-              className={`${dmSans.className} text-neutral-900 dark:text-neutral-100 
-              font-semibold text-[15px] tracking-tight`}
-            >
-              AI Overview
-            </p>
-          </div>
-        </div>
-
-        {overviewLoading && <SurfingLoading />}
-
+      {overview !== "NA" && (
         <div
-          className={`flex flex-wrap items-baseline gap-x-1 leading-relaxed
-                     transition-all duration-300 ease-out overflow-hidden border-b border-neutral-200/60 dark:border-neutral-800/60 pb-6`}
+          className="flex flex-col px-2 py-8 gap-6
+                   animate-[fadeIn_0.5s_ease-out]"
         >
-          {overview.split(/(\[\d+\])/g).map((text, idx) => {
-            if (text.startsWith("[") && text.endsWith("]")) {
-              const chunk_idx = Number(text.slice(1, -1)) - 1;
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-lg animate-[pulse_3s_ease-in-out_infinite]">
+                <Sparkle
+                  size={16}
+                  className="text-blue-500"
+                  strokeWidth={2.5}
+                />
+              </div>
+              <p
+                className={`${dmSans.className} text-neutral-900 dark:text-neutral-100 
+              font-semibold text-[15px] tracking-tight`}
+              >
+                AI Overview
+              </p>
+            </div>
+          </div>
 
-              return (
-                <button
-                  key={idx}
-                  onClick={() => handleOpenViewer(result[chunk_idx])}
-                  className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 
+          {overviewLoading && <SurfingLoading />}
+
+          <div
+            className={`flex flex-wrap items-baseline gap-x-1 leading-relaxed
+                     transition-all duration-300 ease-out overflow-hidden border-b border-neutral-200/60 dark:border-neutral-800/60 pb-6`}
+          >
+            {overview.split(/(\[\d+\])/g).map((text, idx) => {
+              if (text.startsWith("[") && text.endsWith("]")) {
+                const chunk_idx = Number(text.slice(1, -1)) - 1;
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => handleOpenViewer(result[chunk_idx])}
+                    className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 
                      text-[11px] font-medium text-blue-600 dark:text-blue-400 
                      hover:text-blue-700 dark:hover:text-blue-300
                      bg-blue-50/50 dark:bg-blue-500/10 
@@ -270,24 +275,25 @@ export default function Result() {
                      transition-all duration-200 ease-out
                      hover:scale-110 active:scale-95
                      hover:shadow-sm"
-                >
-                  {chunk_idx + 1}
-                </button>
-              );
-            }
+                  >
+                    {chunk_idx + 1}
+                  </button>
+                );
+              }
 
-            return (
-              <span
-                key={idx}
-                className={`${dmSans.className} text-neutral-700 dark:text-neutral-300 
+              return (
+                <span
+                  key={idx}
+                  className={`${dmSans.className} text-neutral-700 dark:text-neutral-300 
                   font-normal text-[15px] leading-[1.7]`}
-              >
-                <ReactMarkdown>{text}</ReactMarkdown>
-              </span>
-            );
-          })}
+                >
+                  <ReactMarkdown>{text}</ReactMarkdown>
+                </span>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col gap-2">
         {result.map((item, index) => (

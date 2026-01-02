@@ -1,4 +1,4 @@
-import { callToChat } from "../utils/openAi/callToChat.js";
+import { callToChat } from "../utils/callsAi/callToChat.js";
 import { AppError, ValidationError } from "../middleware/errorHandler.js";
 import { createSystemPrompt } from "./chat/systemPrompt.js";
 import { parse_v2 } from "./parse.js";
@@ -51,17 +51,9 @@ export async function chat(id, search, userId) {
       },
     ];
 
-    const temperature = 0.3;
-    const maxTokens = 800;
-
     let aiResponse;
     try {
-      aiResponse = await callToChat(
-        messages,
-        "gpt-4o-mini",
-        temperature,
-        maxTokens
-      );
+      aiResponse = await callToChat(messages);
     } catch (error) {
       if (error.isOperational) {
         throw error;

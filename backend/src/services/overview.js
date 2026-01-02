@@ -1,4 +1,4 @@
-import { callToOverview } from "../utils/openAi/callToOverview.js";
+import { callToOverview } from "../utils/callsAi/callToOverview.js";
 
 export async function overview(hybridSearchResults, search) {
   const context = hybridSearchResults

@@ -5,14 +5,12 @@ import { getJsonFromS3 } from "./saveFiles/upload.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { searchBuildIndex_v2, searchContent_v2 } from "./parse/searchIndex.js";
 import { createPresignedUrl } from "./saveFiles/upload.js";
-import { callToEmbed } from "../utils/openAi/callToEmbed.js";
+import { callToEmbed } from "../utils/callsAi/callToEmbed.js";
 import {
   normalizeKeywordResults,
   normalizeSemanticResults,
 } from "./parse/resultNormalizer.js";
 import { analyzeQuery } from "../utils/stopwords.js";
-import { createContextualChunks_v2 } from "./parse/chunks.js";
-import { callToOverview } from "../utils/openAi/callToOverview.js";
 
 dotenv.config();
 
