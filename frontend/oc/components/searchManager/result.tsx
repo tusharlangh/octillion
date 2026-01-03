@@ -1,11 +1,20 @@
 "use client";
 
-import { useContext, useState, useEffect } from "react";
+import { useContext, useEffect, useState } from "react";
 import { queryContext } from "./searchManger";
 import SearchLoading from "../animations/searchLoading";
-import { FileText, CornerDownLeft, CornerDownRight } from "lucide-react";
+import { ChevronDown, FileText, Hash, Sparkle, Sparkles } from "lucide-react";
 import { DM_Sans } from "next/font/google";
 import SmartPDFViewer from "../fileManager/SmartPDFViewer";
+import { HybridSearchResult } from "@/types/search";
+import { ResultBadges } from "./ResultBadges";
+import { ResultPreview } from "./ResultPreview";
+import ReactMarkdown from "react-markdown";
+import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
+import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import { SidebarContext } from "../ConditionalLayout";
+import { useRouter } from "next/navigation";
+import SurfingLoading from "../animations/surfingLoading";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -24,17 +33,17 @@ type ViewerState = {
 };
 
 export default function Result() {
+  const router = useRouter();
+
   const context = useContext(queryContext);
   if (!context) throw new Error("queryContext not found");
 
-  const {
-    isLoading,
-    query,
-    termStats,
-    fileMapping,
-    lastSuccessfulSearch,
-    result,
-  } = context;
+  const sidebarContext = useContext(SidebarContext);
+  if (!sidebarContext) throw new Error("sidebarContext is not working");
+
+  const { setNotis } = sidebarContext;
+  const { search, isLoading, fileMapping, lastSuccessfulSearch, result } =
+    context;
 
   const [viewerState, setViewerState] = useState<ViewerState>({
     isOpen: false,
@@ -43,46 +52,137 @@ export default function Result() {
     highlights: {},
     initialPage: 0,
   });
-  useEffect(() => {
-    console.log(result);
-  });
 
-  const handleOpenViewer = (
-    fileName: string,
-    initialPage: number,
-    rects: { x: number; y: number; width: number; height: number }[]
-  ) => {
-    console.log("this is the result: ", result);
-    const url = fileMapping[fileName];
+  const [overview, setOverview] = useState("");
+  const [overviewLoading, setOverviewLoading] = useState(false);
+
+  useEffect(() => {
+    async function GET() {
+      setOverviewLoading(true);
+      setOverview("");
+      const hybridSearchResults = result.filter(
+        (item) => item.source === "semantic" || item.source === "both"
+      );
+
+      if (hybridSearchResults.length === 0) {
+        setOverviewLoading(false);
+        setOverview("NA");
+        return;
+      }
+      try {
+        const jwt = await handleTokenAction();
+        if (!jwt) {
+          throw new Error("Failed to get authentication token");
+        }
+
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/get-ai-overview`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
+            body: JSON.stringify({
+              hybridSearchResults: hybridSearchResults,
+              search: search,
+            }),
+          }
+        );
+
+        const data = await res.json();
+        setOverview(data.response);
+
+        console.log(data.response);
+
+        if (!res.ok) {
+          const errorMessage =
+            data.error?.message ||
+            data.error ||
+            getErrorMessageByStatus(res.status);
+
+          console.error("Fetch ai overview failed:", {
+            status: res.status,
+            error: errorMessage,
+            details: data.error?.details,
+          });
+
+          setNotis({ message: errorMessage, type: "error" });
+
+          if (res.status === 401 || res.status === 403) {
+            setTimeout(() => router.replace("/login"), 2000);
+          }
+
+          return;
+        }
+      } catch (error) {
+        console.error("ai overview error: ", error);
+
+        if (error instanceof TypeError && error.message.includes("fetch")) {
+          setNotis({
+            message: "Network error. Please check your connection.",
+            type: "error",
+          });
+        } else if (error instanceof Error && error.message.includes("token")) {
+          setNotis({
+            message: "Authentication failed. Please log in again.",
+            type: "error",
+          });
+          setTimeout(() => router.replace("/login"), 2000);
+        } else {
+          setNotis({
+            message: "An unexpected error occurred. Please try again.",
+            type: "error",
+          });
+        }
+      } finally {
+        setOverviewLoading(false);
+      }
+    }
+
+    if (result.length !== 0) {
+      GET();
+    }
+  }, [result]);
+
+  const handleOpenViewer = (item: HybridSearchResult) => {
+    const url = fileMapping[item.file_name];
     if (!url) {
-      console.warn("Missing presigned URL for", fileName);
+      console.warn("Missing presigned URL for", item.file_name);
       return;
     }
+
+    const rects =
+      item.rects?.map((r) => ({
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+      })) || [];
 
     const fileHighlights: Record<
       number,
       { x: number; y: number; width: number; height: number }[]
-    > = {
-      [initialPage]: rects,
-    };
+    > =
+      rects.length > 0
+        ? {
+            [item.page_number - 1]: rects,
+          }
+        : {};
 
     setViewerState({
       isOpen: true,
       url,
-      fileName,
+      fileName: item.file_name,
       highlights: fileHighlights,
-      initialPage: initialPage,
+      initialPage: item.page_number - 1,
     });
   };
 
-  if (
-    lastSuccessfulSearch.trim() === "" &&
-    query.length === 0 &&
-    Object.keys(termStats || {}).length === 0
-  ) {
+  if (lastSuccessfulSearch.trim() === "" && result.length === 0) {
     return (
       <div className="">
-        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
+        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh] animate-[fadeIn_0.5s_ease-out]">
           <p
             className={`${dmSans.className} text-7xl md:text-8xl font-medium
                       text-neutral-800 dark:text-neutral-200
@@ -102,131 +202,157 @@ export default function Result() {
     );
   }
 
-  {
-    /*
-   if (
-   lastSuccessfulSearch.trim() !== "" &&
-   query.length === 0 &&
-   Object.keys(termStats || {}).length === 0 &&
-   !isLoading
- ) {
-   return (
-     <div className="">
-       <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh]">
-         <p
-           className={`${dmSans.className} text-7xl md:text-8xl font-medium
+  if (lastSuccessfulSearch.trim() !== "" && result.length === 0 && !isLoading) {
+    return (
+      <div className="">
+        <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh] animate-[fadeIn_0.5s_ease-out]">
+          <p
+            className={`${dmSans.className} text-7xl md:text-8xl font-medium
                       text-neutral-800 dark:text-neutral-200
                       transition-colors duration-200`}
-         >
-           (^_^)
-         </p>
-         <p
-           className={`${dmSans.className} text-xl md:text-2xl font-medium
+          >
+            (^_^)
+          </p>
+          <p
+            className={`${dmSans.className} text-xl md:text-2xl font-medium
                       text-neutral-800 dark:text-neutral-200
                       transition-colors duration-200`}
-         >
-           No results found for "{lastSuccessfulSearch}"
-         </p>
-       </div>
-     </div>
-   );
- }
-
-
-   */
+          >
+            No results found for "{lastSuccessfulSearch}"
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading) return <SearchLoading />;
 
   return (
-    <div className="relative h-full px-4 md:px-12 pt-8 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <p
-          className={`${dmSans.className} text-neutral-500 font-medium text-base tracking-wide`}
-        >
-          Best matches
-        </p>
-      </div>
-      <div className="flex flex-col gap-1">
-        {Object.keys(result).map((fileName, index) => (
-          <div
-            className="group flex items-center justify-between px-4 py-4 -mx-3 rounded-lg cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-200"
-            key={index}
-          >
-            <div className="">
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className="flex-shrink-0 text-neutral-400 group-hover:text-neutral-600 dark:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors">
-                  <FileText size={20} />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <p
-                    className={`${dmSans.className} flex items-center text-neutral-800 dark:text-neutral-200 font-medium text-base truncate`}
-                  >
-                    {fileName}
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-4 ml-2 text-neutral-500 mt-1">
-                {result[fileName].result.map((item, i) => (
-                  <div className="flex gap-2 items-center" key={i}>
-                    <CornerDownRight size={16} />
-
-                    <p
-                      className={`${dmSans.className} dark:text-neutral-200 font-normal text-base truncate`}
-                    >
-                      <span
-                        className="hover:underline"
-                        onClick={() =>
-                          handleOpenViewer(
-                            fileName,
-                            item.page.slice(1) - 1,
-                            item.rects
-                          )
-                        }
-                      >
-                        Page {item.page.slice(1)}
-                      </span>
-                    </p>
-                    <span
-                      className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                    >
-                      {item.query}
-                    </span>
-                    <span
-                      className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
-                    >
-                      {item.total}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 flex items-center gap-4 text-neutral-400 text-sm">
-              {index / Object.keys(result).length < 0.33 && (
-                <span
-                  className={`${dmSans.className} bg-[rgb(59,117,198)] px-1.5 py-0.5 rounded text-white`}
-                >
-                  High relevancy
-                </span>
-              )}
-
+    <div className="relative h-full pt-12 pb-24">
+      <div className="mx-auto max-w-[680px] px-6 pb-50">
+        {overview !== "NA" && (
+          <article className="mb-16 animate-[fadeIn_0.6s_ease-out]">
+            <div className="mb-2 flex items-center gap-2">
+              <Sparkle
+                size={14}
+                className="text-black dark:text-white"
+                strokeWidth={1.5}
+              />
               <span
-                className={`${dmSans.className} bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-neutral-500 dark:text-neutral-400 group-hover:bg-neutral-200 dark:group-hover:bg-neutral-700 transition-colors`}
+                className={`${dmSans.className} text-[15px] font-normal tracking-wide 
+                text-black dark:text-white`}
               >
-                {result[fileName].result.reduce(
-                  (sum, item) => sum + item.total,
-                  0
-                )}{" "}
-                matches
+                Overview
               </span>
-              <div className="hidden group-hover:block">
-                <CornerDownLeft size={16} />
-              </div>
             </div>
-          </div>
-        ))}
+
+            {overviewLoading && <SurfingLoading />}
+
+            <div
+              className={`${dmSans.className} text-[17px] leading-[1.75] 
+              text-neutral-800 dark:text-neutral-200 font-light
+              mb-12`}
+            >
+              {overview.split(/(\[\d+\])/g).map((text, idx) => {
+                if (text.startsWith("[") && text.endsWith("]")) {
+                  const chunk_idx = Number(text.slice(1, -1)) - 1;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => handleOpenViewer(result[chunk_idx])}
+                      className="inline-flex items-center align-baseline mx-[2px] px-[5px] py-[1px]
+                      text-[11px] font-normal tabular-nums
+                      text-black dark:text-white
+                      border-b border-black dark:border-white
+                      hover:text-black/50 dark:hover:text-white/80
+                      hover:border-black/50 dark:hover:border-white/80
+                      transition-all duration-150"
+                    >
+                      {chunk_idx + 1}
+                    </button>
+                  );
+                }
+
+                return (
+                  <ReactMarkdown
+                    key={idx}
+                    components={{
+                      p: ({ children }) => <span>{children}</span>,
+                    }}
+                  >
+                    {text}
+                  </ReactMarkdown>
+                );
+              })}
+            </div>
+
+            <div className="h-px bg-gradient-to-r from-transparent via-neutral-200 dark:via-neutral-800 to-transparent" />
+          </article>
+        )}
+
+        <section className="space-y-12">
+          {result.map((item, index) => (
+            <article
+              key={`${item.chunk_id}-${index}`}
+              onClick={() => handleOpenViewer(item)}
+              className="group cursor-pointer
+              opacity-0 animate-[fadeIn_0.5s_ease-out_forwards]"
+              style={{ animationDelay: `${index * 80}ms` }}
+            >
+              <div
+                className="mb-3 flex items-center gap-3 flex-wrap
+                transition-opacity duration-300"
+              >
+                <span
+                  className={`${dmSans.className} text-[15px] font-medium
+                  text-black dark:text-white`}
+                >
+                  {item.file_name}
+                </span>
+                <span className="text-black dark:text-white">·</span>
+                <span
+                  className={`${dmSans.className} text-[14px] font-normal
+                  text-black dark:text-white`}
+                >
+                  Page {item.page_number}
+                </span>
+
+                <ResultBadges item={item} totalResults={result.length} />
+              </div>
+
+              <div className="mb-4">
+                <ResultPreview item={item} />
+              </div>
+
+              <div
+                className="flex items-center gap-4 text-[12px]
+                text-neutral-400 dark:text-neutral-600
+                opacity-0 group-hover:opacity-100
+                transition-all duration-300
+                translate-y-[-4px] group-hover:translate-y-0"
+              >
+                {item.keyword_rank !== null && (
+                  <span className={`${dmSans.className} font-normal`}>
+                    Keyword #{item.keyword_rank + 1}
+                  </span>
+                )}
+                {item.semantic_rank !== null && (
+                  <>
+                    {item.keyword_rank !== null && (
+                      <span className="opacity-40">·</span>
+                    )}
+                    <span className={`${dmSans.className} font-normal`}>
+                      Semantic #{item.semantic_rank + 1}
+                    </span>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+        </section>
       </div>
+
       {viewerState.isOpen && (
         <SmartPDFViewer
           url={viewerState.url}

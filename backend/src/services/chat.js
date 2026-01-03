@@ -1,13 +1,19 @@
-import supabase from "../utils/supabase/client.js";
-import { parse } from "./parse.js";
-import { callToChat } from "../utils/openAi/callToChat.js";
+import { callToChat } from "../utils/callsAi/callToChat.js";
 import { AppError, ValidationError } from "../middleware/errorHandler.js";
-import { classifyQuery } from "./chat/queryClassifier.js";
-import { buildContext, buildFullContext } from "./chat/contextBuilder.js";
 import { createSystemPrompt } from "./chat/systemPrompt.js";
-import { getJsonFromS3 } from "./saveFiles/upload.js";
+import { parse_v2 } from "./parse.js";
+import { buildContext } from "./chat/contextBuilder.js";
+import {
+  trackChatMetrics,
+  trackRAGRetrieval,
+} from "../utils/processMetrics.js";
 
 export async function chat(id, search, userId) {
+  const chatStartTime = Date.now();
+  let searchLatency = 0;
+  let contextBuildLatency = 0;
+  let llmLatency = 0;
+
   try {
     if (!id || typeof id !== "string") {
       throw new ValidationError("Parse ID is required");
@@ -21,144 +27,28 @@ export async function chat(id, search, userId) {
       throw new ValidationError("User ID is required");
     }
 
-    const { data, error } = await supabase
-      .from("files")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("parse_id", id);
+    const searchStartTime = Date.now();
+    const parsedResult = await parse_v2(id, search, userId);
+    searchLatency = Date.now() - searchStartTime;
 
-    if (error) {
-      throw new AppError(
-        `Failed to fetch files: ${error.message}`,
-        500,
-        "SUPABASE_ERROR"
-      );
+    if (!parsedResult.success) {
+      throw new AppError("failed to generate parsedResult");
     }
 
-    if (!data || data.length === 0) {
-      throw new AppError(
-        "No files found for the given parse ID",
-        404,
-        "NO_FILES_FOUND"
-      );
+    const hybridResults = parsedResult.result;
+
+    if (hybridResults.length === 0) {
+      throw new AppError("Hybrid results are empty");
     }
 
-    const fileData = data[0];
+    const scores = hybridResults.map((r) => r.rrf_score || 0);
+    const avgScore =
+      scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    const topScore = Math.max(...scores);
 
-    if (!fileData) {
-      throw new AppError("Invalid file data", 500, "INVALID_FILE_DATA");
-    }
-
-    let pagesContent = fileData.pages_metadata;
-
-    if (pagesContent && pagesContent.s3Key) {
-      pagesContent = await getJsonFromS3(pagesContent.s3Key);
-    }
-
-    if (!pagesContent || pagesContent.length === 0) {
-      throw new AppError(
-        "Pages metadata is empty",
-        500,
-        "EMPTY_PAGES_METADATA"
-      );
-    }
-
-    let queryType;
-    try {
-      queryType = await classifyQuery(search);
-    } catch (error) {
-      if (error.isOperational) {
-        throw error;
-      }
-      throw new AppError(
-        `Failed to classify query: ${error.message}`,
-        500,
-        "CLASSIFY_QUERY_ERROR"
-      );
-    }
-
-    if (!queryType || (queryType !== "direct" && queryType !== "search")) {
-      throw new AppError("Invalid query type", 500, "INVALID_QUERY_TYPE");
-    }
-
-    let context;
-
-    if (queryType === "direct") {
-      try {
-        context = buildFullContext(pagesContent);
-      } catch (error) {
-        if (error.isOperational) {
-          throw error;
-        }
-        throw new AppError(
-          `Failed to build full context: ${error.message}`,
-          500,
-          "BUILD_FULL_CONTEXT_ERROR"
-        );
-      }
-    } else {
-      let searchResults;
-      try {
-        searchResults = await parse(id, search, userId, {
-          searchMode: "hybrid",
-          topK: 7,
-        });
-      } catch (error) {
-        if (error.isOperational) {
-          throw error;
-        }
-        throw new AppError(
-          `Failed to parse search: ${error.message}`,
-          500,
-          "PARSE_SEARCH_ERROR"
-        );
-      }
-
-      if (
-        !searchResults ||
-        !searchResults.success ||
-        !searchResults.searchResults ||
-        searchResults.searchResults.length === 0
-      ) {
-        throw new AppError("No search results found", 404, "NO_SEARCH_RESULTS");
-      }
-
-      const uniquePageIds = new Set();
-      for (const result of searchResults.searchResults) {
-        if (result && result.pageId) {
-          uniquePageIds.add(result.pageId);
-        }
-      }
-
-      if (uniquePageIds.size === 0) {
-        throw new AppError(
-          "No valid page IDs in search results",
-          500,
-          "NO_VALID_PAGE_IDS"
-        );
-      }
-
-      const matchedPages = pagesContent.filter(
-        (page) => page && page.id && uniquePageIds.has(page.id)
-      );
-
-      if (matchedPages.length === 0) {
-        throw new AppError("No matching pages found", 404, "NO_MATCHING_PAGES");
-      }
-
-      try {
-        context = buildContext(searchResults.searchResults, matchedPages);
-      } catch (error) {
-        if (error.isOperational) {
-          throw error;
-        }
-        throw new AppError(
-          `Failed to build context: ${error.message}`,
-          500,
-          "BUILD_CONTEXT_ERROR"
-        );
-      }
-    }
+    const contextBuildStartTime = Date.now();
+    const context = buildContext(hybridResults);
+    contextBuildLatency = Date.now() - contextBuildStartTime;
 
     if (!context || typeof context !== "string" || !context.trim()) {
       throw new AppError(
@@ -168,10 +58,21 @@ export async function chat(id, search, userId) {
       );
     }
 
+    trackRAGRetrieval({
+      userId,
+      parseId: id,
+      query: search,
+      retrievedChunks: hybridResults.length,
+      avgRelevanceScore: avgScore,
+      topScore: topScore,
+      contextLength: context.length,
+      retrievalLatency: searchLatency + contextBuildLatency,
+    });
+
     const messages = [
       {
         role: "system",
-        content: createSystemPrompt(queryType),
+        content: createSystemPrompt(),
       },
       {
         role: "user",
@@ -179,18 +80,19 @@ export async function chat(id, search, userId) {
       },
     ];
 
-    const temperature = queryType === "direct" ? 0.4 : 0.3;
-    const maxTokens = queryType === "direct" ? 1200 : 800;
-
     let aiResponse;
+    const llmStartTime = Date.now();
     try {
       aiResponse = await callToChat(
         messages,
-        "gpt-4o-mini",
-        temperature,
-        maxTokens
+        "llama-3.3-70b-versatile",
+        0.7,
+        1000,
+        userId
       );
+      llmLatency = Date.now() - llmStartTime;
     } catch (error) {
+      llmLatency = Date.now() - llmStartTime;
       if (error.isOperational) {
         throw error;
       }
@@ -207,11 +109,49 @@ export async function chat(id, search, userId) {
 
     console.log("here is the ai response: ", aiResponse);
 
+    const totalLatency = Date.now() - chatStartTime;
+
+    trackChatMetrics({
+      userId,
+      parseId: id,
+      query: search,
+      queryLength: search.length,
+      totalLatency,
+      searchLatency,
+      contextBuildLatency,
+      llmLatency,
+      contextLength: context.length,
+      contextChunkCount: hybridResults.length,
+      responseLength: aiResponse.length,
+      modelUsed: "llama-3.3-70b-versatile",
+      success: true,
+      errorMessage: null,
+    });
+
     return {
       success: true,
       response: aiResponse,
     };
   } catch (error) {
+    const totalLatency = Date.now() - chatStartTime;
+
+    trackChatMetrics({
+      userId,
+      parseId: id,
+      query: search,
+      queryLength: search.length,
+      totalLatency,
+      searchLatency,
+      contextBuildLatency,
+      llmLatency,
+      contextLength: 0,
+      contextChunkCount: 0,
+      responseLength: 0,
+      modelUsed: "llama-3.3-70b-versatile",
+      success: false,
+      errorMessage: error.message,
+    });
+
     if (error.isOperational) {
       throw error;
     }

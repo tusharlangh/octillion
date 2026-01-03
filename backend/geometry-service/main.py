@@ -5,58 +5,6 @@ import io
 
 app = Flask(__name__)
 
-@app.route("/geometry", methods=["POST"])
-def geometry():
-    try:
-        data = request.get_json()
-        presigned_url = data.get("url")
-        query = data.get("query")
-       
-        page_num_1_based = data.get("page")
-
-        if not presigned_url or not query or page_num_1_based is None:
-            return jsonify({"error": "Missing parameters (url, query, page)"}), 400
-
-        page_index = int(page_num_1_based) - 1
-
-        resp = requests.get(presigned_url, stream=True)
-        resp.raise_for_status()
-        
-
-        pdf_bytes = io.BytesIO(resp.content)
-
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        
-        if page_index < 0 or page_index >= len(doc):
-             return jsonify({"error": "Page number out of range"}), 400
-
-        page = doc[page_index]
-        
-    
-        results = page.search_for(query)
-        
-
-        rects = []
-        for r in results:
-            rects.append({
-                "x": r.x0,
-                "y": r.y0,
-                "width": r.width, # r.x1 - r.x0
-                "height": r.height # r.y1 - r.y0
-            })
-
-        doc.close()
-
-        return jsonify({
-            "page": page_num_1_based,
-            "rects": rects,
-            "total": len(rects)
-        })
-
-    except Exception as e:
-        print(f"Error processing geometry: {e}")
-        return jsonify({"error": str(e)}), 500
-
 @app.route("/geometry_v2", methods=["POST"])
 def geometry_v2():
     try:

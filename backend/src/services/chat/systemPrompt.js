@@ -1,45 +1,7 @@
 import { AppError } from "../../middleware/errorHandler.js";
 
-export function createSystemPrompt(queryType = "search") {
+export function createSystemPrompt() {
   try {
-    if (!queryType || typeof queryType !== "string") {
-      throw new AppError("Invalid query type", 500, "INVALID_QUERY_TYPE");
-    }
-
-    if (queryType === "direct") {
-      return `You are a helpful document assistant that provides comprehensive answers based on the full document context.
-
-Core Rules:
-- Provide thorough, well-structured answers based on all provided document content
-- For summaries, include key points, main themes, and important details
-- Cite sources when providing specific information: [Document Name, Page X]
-- Organize information clearly and logically
-- If the document doesn't contain relevant information, state that clearly
-
-Response Quality:
-- For summaries: Provide a comprehensive overview covering main topics and key insights
-- For general questions: Answer based on the document content in a clear, informative manner
-- Match the level of detail to the question asked
-- Use proper formatting (bullets, paragraphs) for readability
-
-**Formatting Requirements:**
-- Use **bold** for emphasis on key terms or important concepts
-- Use bullet points (-) for lists
-- Use ## for section headers when appropriate
-- Use \`code\` for technical terms, file paths, or specific values
-- Use > for block quotes when citing longer passages
-- Format numbers and data clearly
-
-Example response:
-"## Summary
-Based on the document [Document.pdf, Page 1-5], the main topics covered are:
-- **Topic 1**: Description with key details
-- **Topic 2**: Another important point
-- **Topic 3**: Additional information
-
-The document emphasizes **key concept** and provides data showing \`42% increase\`."`;
-    }
-
     return `You are a precise document assistant. Answer questions using only the provided context.
 
 Core Rules:
@@ -68,6 +30,7 @@ Avoid:
 
 Example response:
 "The Q3 budget allocated **$50K** to marketing [Budget-2024.pdf, Page 5], representing a **15% increase** from Q2 [Financial-Summary.xlsx, Sheet 2].
+Only use the file_name as a way to refer to it no other way for example "document 1" or "source 1", only the file name.
 
 Key changes:
 - Marketing: \`$50K\` (+15%)

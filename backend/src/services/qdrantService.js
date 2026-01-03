@@ -32,14 +32,11 @@ export async function searchQdrant(
       throw new ValidationError("User ID is required");
     }
 
-    console.log("lets start");
-
     const { topK = 10 } = options;
 
     let collectionName;
     try {
       collectionName = getCollectionName(parseId, userId);
-      console.log("got the name", collectionName);
     } catch (error) {
       if (error.isOperational) {
         throw error;
@@ -59,7 +56,6 @@ export async function searchQdrant(
         with_payload: true,
         with_vector: false,
       });
-      console.log("got the searchResults", searchResults);
     } catch (error) {
       if (error.isOperational) {
         throw error;
@@ -89,10 +85,9 @@ export async function searchQdrant(
       results.push({
         chunk_id: result.payload.chunk_id,
         chunk_index: result.payload.stats.chunk_index,
+        score: result.score,
       });
     }
-
-    console.log(results);
 
     return results;
   } catch (error) {
