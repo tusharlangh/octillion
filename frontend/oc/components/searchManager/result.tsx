@@ -141,7 +141,7 @@ export default function Result() {
     }
 
     if (result.length !== 0) {
-      GET();
+      //GET();
     }
   }, [result]);
 
@@ -151,14 +151,9 @@ export default function Result() {
       console.warn("Missing presigned URL for", item.file_name);
       return;
     }
+    console.log(item);
 
-    const rects =
-      item.rects?.map((r) => ({
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-      })) || [];
+    const rects = item.preciseHighlight.boundingBoxes;
 
     const fileHighlights: Record<
       number,
@@ -318,7 +313,7 @@ export default function Result() {
                   Page {item.page_number}
                 </span>
 
-                <ResultBadges item={item} totalResults={result.length} />
+                <ResultBadges item={item} totalResults={result.length} index={index} />
               </div>
 
               <div className="mb-4">

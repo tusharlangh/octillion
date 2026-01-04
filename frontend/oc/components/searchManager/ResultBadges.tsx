@@ -9,19 +9,11 @@ const dmSans = DM_Sans({
 interface ResultBadgesProps {
   item: HybridSearchResult;
   totalResults: number;
+  index: number;
 }
 
-export function ResultBadges({ item, totalResults }: ResultBadgesProps) {
-  const normalizedScore = Math.round(item.rrf_score * 1000);
-
-  const position =
-    totalResults > 0
-      ? Array.from({ length: totalResults }, (_, i) => i).indexOf(
-          totalResults - 1 - Math.floor((item.rrf_score / 0.05) * totalResults)
-        )
-      : 0;
-
-  const isHighRelevancy = position < totalResults * 0.25;
+export function ResultBadges({ item, totalResults, index }: ResultBadgesProps) {
+  const isHighRelevancy = index < totalResults * 0.25;
 
   return (
     <div className="flex items-center gap-2 text-[11px]">
@@ -57,7 +49,7 @@ export function ResultBadges({ item, totalResults }: ResultBadgesProps) {
           <span className="opacity-40">·</span>
           <span
             className={`${dmSans.className} font-medium
-              text-slate-700 dark:text-slate-400`}
+              text-black dark:text-white`}
           >
             high relevancy
           </span>

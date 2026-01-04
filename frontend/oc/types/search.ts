@@ -8,28 +8,33 @@ export interface SearchRect {
   surface: string;
 }
 
+export interface PreciseHighlights {
+  text: string;
+  startChar: number;
+  endChar: number;
+  score: number;
+  method: string;
+  confidence: string;
+  boundingBoxes: any[];
+}
+
 export interface HybridSearchResult {
   chunk_id: number;
   chunk_index: number;
   file_name: string;
   page_number: number;
-
-  // RRF fusion
   rrf_score: number;
   source: "keyword" | "semantic" | "both";
-
-  // Keyword data
   keyword_rank: number | null;
   keyword_score: number | null;
   keyword_weight?: number;
   match_count?: number;
   rects?: SearchRect[];
-
-  // Semantic data
   semantic_rank: number | null;
   semantic_score: number | null;
   semantic_weight?: number;
   text?: string;
+  preciseHighlight: PreciseHighlights;
 }
 
 export interface SearchContextProps {

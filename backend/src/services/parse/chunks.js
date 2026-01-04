@@ -11,7 +11,8 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
       let previousSentences = [];
       let currentChunk = "";
       let currentWords = 0;
-      let curRects = [];
+      let currentTextSpans = [];
+      let spanIdCounter = 0;
 
       for (const rect of pageRects) {
         const para = rect.block;
@@ -26,7 +27,13 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
           previousSentences.push(...sentences.map((s) => s.trim()));
           previousSentences = previousSentences.slice(-overlapSentences);
 
-          curRects.push(...rect.bboxes);
+          for (const line of rect.lines) {
+            currentTextSpans.push({
+              span_text_id: spanIdCounter++,
+              span: line.text,
+              span_bbox: line.bbox,
+            });
+          }
         } else {
           if (currentChunk) {
             const chunkSentences = currentChunk.match(/[^.!?]+[.!?]+/g) || [
@@ -50,11 +57,13 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
                 starts_with_header: startsWithHeader(currentChunk),
                 contains_list: containsList(currentChunk),
               },
-              rects: curRects,
+              text_spans: currentTextSpans,
+              staticSignals: computeStaticSignals(currentChunk),
             });
           }
 
-          curRects = [];
+          currentTextSpans = [];
+          spanIdCounter = 0;
 
           if (paraWords > maxWords) {
             const paraChunks = splitLargeParagraph(
@@ -65,7 +74,7 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
               page.file_name,
               page.page_number,
               chunkIndex,
-              rect.bboxes
+              rect.lines
             );
             chunks.push(...paraChunks);
             chunkIndex += paraChunks.length;
@@ -113,7 +122,8 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
             starts_with_header: startsWithHeader(currentChunk),
             contains_list: containsList(currentChunk),
           },
-          rects: curRects,
+          text_spans: currentTextSpans,
+          staticSignals: computeStaticSignals(currentChunk),
         });
       }
     }
@@ -125,19 +135,31 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
 function extractPageText(page) {
   const rects = [];
   for (const block of page.blocks || []) {
-    let rect = { block: "", bboxes: [] };
+    let blockText = "";
+    let lines = [];
+
     for (const line of block.lines || []) {
       const [x0, y0, x1, y1] = line.bbox;
-      rect.bboxes.push({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+      let lineText = "";
+
       for (const span of line.spans || []) {
-        rect.block += span.text;
+        lineText += span.text;
       }
-      rect.block += "\n";
+
+      lines.push({
+        text: lineText,
+        bbox: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 },
+      });
+
+      blockText += lineText + "\n";
     }
-    rect.block += "\n";
-    rect.block = rect.block.trim();
-    if (rect.block !== "") {
-      rects.push(rect);
+
+    blockText = blockText.trim();
+    if (blockText !== "") {
+      rects.push({
+        block: blockText,
+        lines: lines,
+      });
     }
   }
   return rects;
@@ -151,7 +173,7 @@ function splitLargeParagraph(
   file_name,
   page_number,
   startIndex,
-  bboxes = []
+  lines = []
 ) {
   const sentences = paragraph.match(/[^.!?]+[.!?]+/g) || [paragraph];
   const chunks = [];
@@ -191,7 +213,8 @@ function splitLargeParagraph(
             starts_with_header: startsWithHeader(chunk),
             contains_list: containsList(chunk),
           },
-          rects: [],
+          text_spans: [],
+          staticSignals: computeStaticSignals(chunk.trim()),
         });
       }
 
@@ -224,32 +247,195 @@ function splitLargeParagraph(
         starts_with_header: startsWithHeader(chunk),
         contains_list: containsList(chunk),
       },
-      rects: [],
+      text_spans: [],
     });
   }
 
-  if (chunks.length > 0 && bboxes.length > 0) {
+  if (chunks.length > 0 && lines.length > 0) {
+    let spanIdCounter = 0;
     const totalTextLength = chunks.reduce((sum, c) => sum + c.text.length, 0);
-
-    let bboxStartIdx = 0;
+    let lineStartIdx = 0;
 
     chunks.forEach((chunk, idx) => {
       const chunkProportion = chunk.text.length / totalTextLength;
 
-      const numBboxes =
+      const numLines =
         idx === chunks.length - 1
-          ? bboxes.length - bboxStartIdx
-          : Math.max(1, Math.round(bboxes.length * chunkProportion));
+          ? lines.length - lineStartIdx
+          : Math.max(1, Math.round(lines.length * chunkProportion));
 
-      const bboxEndIdx = Math.min(bboxStartIdx + numBboxes, bboxes.length);
+      const lineEndIdx = Math.min(lineStartIdx + numLines, lines.length);
 
-      chunk.rects = bboxes.slice(bboxStartIdx, bboxEndIdx);
+      chunk.text_spans = lines.slice(lineStartIdx, lineEndIdx).map((line) => ({
+        span_text_id: spanIdCounter++,
+        span: line.text,
+        span_bbox: line.bbox,
+      }));
 
-      bboxStartIdx = bboxEndIdx;
+      lineStartIdx = lineEndIdx;
     });
   }
 
   return chunks;
+}
+
+function splitSentences(text) {
+  return text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+/g) || [];
+}
+
+function computeStaticSignals(text) {
+  const sentences = splitSentences(text);
+  const sentenceCount = sentences.length;
+  const avgSentenceLength = computeAvgSentenceWordLength(sentences);
+
+  const definitionScore = detectDefinitionScore(text);
+  const causalScore = detectCausalScore(text);
+  const proceduralScore = detectProceduralScore(text);
+  const comparativeScore = detectComparativeScore(text);
+
+  const citationDensity = computeCitationDensity(text);
+  const sectionType = detectSectionType(text);
+
+  return {
+    sentenceCount,
+    avgSentenceLength,
+
+    hasDefinitionLanguage: definitionScore >= 2,
+    hasCausalLanguage: causalScore >= 2,
+    hasProceduralLanguage: proceduralScore >= 2,
+    hasComparativeLanguage: comparativeScore >= 2,
+
+    definitionScore,
+    causalScore,
+    proceduralScore,
+    comparativeScore,
+
+    citationDensity,
+    sectionType,
+  };
+}
+
+function computeAvgSentenceWordLength(sentences) {
+  if (!sentences.length) return 0;
+
+  const totalWords = sentences.reduce((sum, s) => {
+    return sum + s.split(/\s+/).filter(Boolean).length;
+  }, 0);
+
+  return Math.round(totalWords / sentences.length);
+}
+
+function detectDefinitionScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(is defined as|refers to|means that|is the process of|is how)\b/i,
+    /\b(can be defined as|is known as)\b/i,
+  ];
+
+  const weakPatterns = [/\b(is a|are a)\s+\w+/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectCausalScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(because|therefore|thus|hence|consequently)\b/i,
+    /\b(as a result|leads to|results in|causes)\b/i,
+  ];
+
+  const weakPatterns = [/\b(due to|since)\b/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectProceduralScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(step\s+\d+|step by step)\b/i,
+    /\b(how to|instructions for|procedure for)\b/i,
+  ];
+
+  const weakPatterns = [
+    /\b(first|second|third|finally|next|then)\b/i,
+    /\b(begin by|start by|complete the process)\b/i,
+  ];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectComparativeScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(compared to|in contrast to|as opposed to)\b/i,
+    /\b(more|less|better|worse)\b.*\bthan\b/i,
+  ];
+
+  const weakPatterns = [/\b(whereas|however|on the other hand)\b/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function computeCitationDensity(text) {
+  const citationPatterns = [/\[\d+\]/g, /\(\d{4}\)/g, /\bet al\.\b/gi];
+
+  let citationCount = 0;
+  citationPatterns.forEach((p) => {
+    const matches = text.match(p);
+    if (matches) citationCount += matches.length;
+  });
+
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return words > 0 ? citationCount / words : 0;
+}
+
+function detectSectionType(text) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const firstLine = lines[0]?.toLowerCase() || "";
+  const lower = text.toLowerCase();
+
+  if (/\b(introduction|background|overview|abstract)\b/.test(firstLine)) {
+    return "intro";
+  }
+
+  if (
+    /\b(reference|bibliography|works cited)\b/.test(firstLine) ||
+    lines.filter((l) => /\[\d+\]/.test(l)).length >= 3
+  ) {
+    return "reference";
+  }
+
+  if (
+    /\b(conclusion|summary|discussion|future work)\b/.test(firstLine) ||
+    /\b(in conclusion|to summarize|in summary)\b/.test(lower)
+  ) {
+    return "conclusion";
+  }
+
+  if (lines.some((l) => /^[A-Z][A-Za-z\s]{3,}:$/.test(l))) {
+    return "mixed";
+  }
+
+  return "body";
 }
 
 function detectStructureType(text) {

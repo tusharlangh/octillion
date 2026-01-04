@@ -2,6 +2,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist";
+import { DM_Sans } from "next/font/google";
+import { Minus, Plus, X } from "lucide-react";
+
+const dmSans = DM_Sans({
+  weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
+  subsets: ["latin"],
+});
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -29,6 +36,7 @@ export default function SmartPDFViewer({
 }: SmartPDFViewerProps) {
   const [pdf, setPdf] = useState<any>(null);
   const [scale, setScale] = useState<number>(1.5);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -44,62 +52,136 @@ export default function SmartPDFViewer({
   useEffect(() => {
     if (pdf && pageRefs.current[initialPage]) {
       setTimeout(() => {
-        pageRefs.current[initialPage]?.scrollIntoView({ behavior: "smooth" });
-      }, 500);
+        pageRefs.current[initialPage]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 300);
     }
   }, [pdf, initialPage]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const container = containerRef.current;
+      if (!container) return;
+
+      const pages = pageRefs.current;
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        if (!page) continue;
+
+        const pageRect = page.getBoundingClientRect();
+        if (
+          pageRect.top <= containerCenter &&
+          pageRect.bottom >= containerCenter
+        ) {
+          setCurrentPage(i);
+          break;
+        }
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("scroll", handleScroll);
+      return () => container.removeEventListener("scroll", handleScroll);
+    }
+  }, [pdf]);
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      onClose();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center">
-      <div className="w-full bg-neutral-900 text-white p-4 flex justify-between items-center shadow-md z-10">
-        <h2 className="text-lg font-medium truncate max-w-2xl">{fileName}</h2>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-neutral-800 rounded px-2">
-            <button
-              onClick={() => setScale((s) => Math.max(0.5, s - 0.25))}
-              className="px-2 py-1 hover:text-blue-400"
+    <div className="fixed inset-0 bg-white dark:bg-[#191919] z-50 flex flex-col">
+      <div className="w-full">
+        <div className="mx-2 md:mx-4 px-4 md:px-8 h-14 flex justify-between items-center bg-black/3 dark:bg-white/3 rounded-xl m-2">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <h2
+              className={`${dmSans.className} text-sm md:text-md font-medium text-neutral-900 dark:text-neutral-100 truncate`}
             >
-              -
-            </button>
-            <span className="text-sm min-w-[3ch] text-center">
-              {Math.round(scale * 100)}%
-            </span>
+              {fileName}
+            </h2>
+            {pdf && (
+              <span
+                className={`${dmSans.className} text-xs text-neutral-500 dark:text-neutral-400`}
+              >
+                {currentPage + 1} of {pdf.numPages}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center rounded-lg bg-black/3 dark:bg-white/3 p-1 gap-1">
+              <button
+                onClick={() => setScale((s) => Math.max(0.5, s - 0.25))}
+                className="p-1 text-xs text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md cursor-pointer"
+                aria-label="Zoom out"
+              >
+                <Minus className="text-neutral-500" size={16} />
+              </button>
+              <span
+                className={`${dmSans.className} px-3 text-xs text-neutral-600 dark:text-neutral-200 font-semibold bg-white dark:bg-black rounded-md p-1`}
+              >
+                {Math.round(scale * 100)}%
+              </span>
+              <button
+                onClick={() => setScale((s) => Math.min(3, s + 0.25))}
+                className="p-1 text-xs text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md cursor-pointer"
+                aria-label="Zoom in"
+              >
+                <Plus className="text-neutral-500" size={16} />
+              </button>
+            </div>
+
             <button
-              onClick={() => setScale((s) => Math.min(3, s + 0.25))}
-              className="px-2 py-1 hover:text-blue-400"
+              onClick={onClose}
+              className={`${dmSans.className} text-xs text-neutral-700 dark:text-neutral-300 rounded-lg cursor-pointer`}
             >
-              +
+              <X className="text-neutral-500" size={20} />
             </button>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-white text-black px-4 py-1.5 rounded hover:bg-neutral-200 font-medium"
-          >
-            Close
-          </button>
         </div>
       </div>
 
-      <div
-        className="flex-1 w-full overflow-auto p-8 flex flex-col items-center gap-4"
-        ref={containerRef}
-      >
-        {pdf &&
-          Array.from({ length: pdf.numPages }, (_, i) => (
-            <div
-              key={i}
-              ref={(el) => {
-                pageRefs.current[i] = el;
-              }}
-            >
-              <PDFPage
-                pdf={pdf}
-                pageNum={i + 1}
-                scale={scale}
-                highlights={highlights[i] || []}
-              />
+      <div className="flex-1 w-full overflow-auto" ref={containerRef}>
+        <div className="max-w-4xl mx-auto px-8 py-12 flex flex-col items-center gap-4">
+          {!pdf && (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <div className="w-8 h-8 border-2 border-neutral-300 dark:border-neutral-600 border-t-neutral-900 dark:border-t-neutral-100 rounded-full animate-spin" />
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                Loading document...
+              </p>
             </div>
-          ))}
+          )}
+          {pdf &&
+            Array.from({ length: pdf.numPages }, (_, i) => (
+              <div
+                key={i}
+                ref={(el) => {
+                  pageRefs.current[i] = el;
+                }}
+              >
+                <PDFPage
+                  pdf={pdf}
+                  pageNum={i + 1}
+                  scale={scale}
+                  highlights={highlights[i] || []}
+                  isCurrentPage={i === currentPage}
+                />
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );
@@ -110,9 +192,16 @@ interface PDFPageProps {
   pageNum: number;
   scale: number;
   highlights: Highlight[];
+  isCurrentPage: boolean;
 }
 
-const PDFPage = ({ pdf, pageNum, scale, highlights }: PDFPageProps) => {
+const PDFPage = ({
+  pdf,
+  pageNum,
+  scale,
+  highlights,
+  isCurrentPage,
+}: PDFPageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isRendered, setIsRendered] = useState(false);
 
@@ -142,8 +231,8 @@ const PDFPage = ({ pdf, pageNum, scale, highlights }: PDFPageProps) => {
   }, [pdf, pageNum, scale]);
 
   return (
-    <div className="relative shadow-lg bg-white">
-      <canvas ref={canvasRef} />
+    <div className="relative border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
+      <canvas ref={canvasRef} className="block" />
       {isRendered && highlights.length > 0 && (
         <div className="absolute inset-0 pointer-events-none">
           {highlights.map((h, i) => (
@@ -155,12 +244,16 @@ const PDFPage = ({ pdf, pageNum, scale, highlights }: PDFPageProps) => {
                 top: `${h.y * scale}px`,
                 width: `${h.width * scale}px`,
                 height: `${h.height * scale}px`,
-                backgroundColor: "rgba(255, 226, 52, 0.4)",
-                mixBlendMode: "multiply",
-                borderBottom: "2px solid rgba(255, 180, 0, 0.8)",
+                backgroundColor: "rgba(0, 98, 255, 0.31)",
+                borderRadius: "2px",
               }}
             />
           ))}
+        </div>
+      )}
+      {highlights.length > 0 && (
+        <div className="absolute top-2 right-2 px-2 py-0.5 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-xs rounded">
+          {highlights.length}
         </div>
       )}
     </div>

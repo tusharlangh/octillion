@@ -27,7 +27,7 @@ export async function normalizeKeywordResults(keywordResults, chunks) {
           score: fileData.score,
           source: "keyword",
           match_count: pageResult.total,
-          rects: pageResult.rects,
+          text_spans: pageResult.text_spans || [],
         });
       }
     }
@@ -54,7 +54,7 @@ export async function normalizeSemanticResults(semanticResults, chunks) {
         score: result.score || 0,
         source: "semantic",
         text: chunk.text,
-        rects: chunk.rects || [], // Add rects from chunk for PDF highlighting
+        text_spans: chunk.text_spans || [],
       };
     })
     .filter((r) => r !== null);
