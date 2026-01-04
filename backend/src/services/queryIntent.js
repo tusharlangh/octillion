@@ -8,19 +8,42 @@ export function detectIntent(query) {
     return "definition";
   }
 
-  if (q.includes("why") || q.includes("importance") || q.includes("benefits") || q.includes("significance")) {
+  if (
+    q.includes("why") ||
+    q.includes("importance") ||
+    q.includes("benefits") ||
+    q.includes("significance")
+  ) {
     return "importance";
   }
 
-  if (q.startsWith("how to") || q.startsWith("how do") || q.includes("steps") || q.includes("process") || q.includes("procedure")) {
+  if (
+    q.startsWith("how to") ||
+    q.startsWith("how do") ||
+    q.includes("steps") ||
+    q.includes("process") ||
+    q.includes("procedure")
+  ) {
     return "procedural";
   }
 
-  if (q.includes(" vs ") || q.includes(" vs. ") || q.includes("difference between") || q.includes("compare") || q.includes("versus")) {
+  if (
+    q.includes(" vs ") ||
+    q.includes(" vs. ") ||
+    q.includes("difference between") ||
+    q.includes("compare") ||
+    q.includes("versus")
+  ) {
     return "comparison";
   }
 
-  if (q.includes("study") || q.includes("research") || q.includes("evidence") || q.includes("findings") || q.includes("results")) {
+  if (
+    q.includes("study") ||
+    q.includes("research") ||
+    q.includes("evidence") ||
+    q.includes("findings") ||
+    q.includes("results")
+  ) {
     return "evidence";
   }
 
@@ -28,7 +51,11 @@ export function detectIntent(query) {
     return "factual";
   }
 
-  if (q.includes("example") || q.includes("instance") || q.includes("demonstrate")) {
+  if (
+    q.includes("example") ||
+    q.includes("instance") ||
+    q.includes("demonstrate")
+  ) {
     return "example";
   }
 
@@ -54,29 +81,31 @@ export function expandQuery(query, intent) {
   const expansions = [query];
 
   const acronyms = {
-    'api': 'application programming interface',
-    'ml': 'machine learning',
-    'ai': 'artificial intelligence',
-    'nlp': 'natural language processing',
-    'sql': 'structured query language',
-    'rest': 'representational state transfer',
-    'http': 'hypertext transfer protocol',
-    'json': 'javascript object notation',
+    api: "application programming interface",
+    ml: "machine learning",
+    ai: "artificial intelligence",
+    nlp: "natural language processing",
+    sql: "structured query language",
+    rest: "representational state transfer",
+    http: "hypertext transfer protocol",
+    json: "javascript object notation",
   };
 
   for (const [acronym, expansion] of Object.entries(acronyms)) {
     if (q.includes(acronym)) {
-      expansions.push(query.replace(new RegExp(`\\b${acronym}\\b`, 'gi'), expansion));
+      expansions.push(
+        query.replace(new RegExp(`\\b${acronym}\\b`, "gi"), expansion)
+      );
     }
   }
 
-  if (intent === 'importance') {
-    if (!q.includes('why')) expansions.push(`why ${query}`);
-    if (!q.includes('importance')) expansions.push(`importance of ${query}`);
+  if (intent === "importance") {
+    if (!q.includes("why")) expansions.push(`why ${query}`);
+    if (!q.includes("importance")) expansions.push(`importance of ${query}`);
   }
 
-  if (intent === 'procedural') {
-    if (!q.startsWith('how')) expansions.push(`how to ${query}`);
+  if (intent === "procedural") {
+    if (!q.startsWith("how")) expansions.push(`how to ${query}`);
   }
 
   return expansions;

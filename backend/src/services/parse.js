@@ -21,6 +21,7 @@ import {
 } from "../utils/searchMetrics.js";
 import { PreciseHighlighter } from "./parse/preciseHighlighter.js";
 import * as queryIntent from "./queryIntent.js";
+import { scoreChunkByIntent } from "./intentScoring.js";
 
 dotenv.config();
 
@@ -312,13 +313,23 @@ async function hybridSearch(
     });
   }
 
-  const mergedResults = Array.from(rrfScores.values())
+  const mergedResults = Array.from(rrfScores.values());
+
+  mergedResults.forEach((result) => {
+    const chunk = chunks.find((c) => c.id === result.chunk_id);
+    if (chunk) {
+      result.rrf_score = scoreChunkByIntent(chunk, query, result.rrf_score);
+      result.intent_boosted = true;
+    }
+  });
+
+  const finalResults = mergedResults
     .sort((a, b) => b.rrf_score - a.rrf_score)
     .slice(0, topK);
 
   const highlighter = new PreciseHighlighter();
   const resultsWithPreciseHighlights = await Promise.all(
-    mergedResults.map(async (result) => {
+    finalResults.map(async (result) => {
       if (!result.text) return result;
 
       const highlight = await highlighter.extractPreciseHighlight(
@@ -334,9 +345,11 @@ async function hybridSearch(
     })
   );
 
+  console.log("resultsWithPreciseHighlights", resultsWithPreciseHighlights);
+
   const totalLatency = overallTimer.stop();
 
-  const scores = mergedResults.map((r) => r.rrf_score);
+  const scores = finalResults.map((r) => r.rrf_score);
   const sortedScores = [...scores].sort((a, b) => b - a);
   const scoreDistribution =
     scores.length > 0

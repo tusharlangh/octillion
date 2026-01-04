@@ -27,7 +27,6 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
           previousSentences.push(...sentences.map((s) => s.trim()));
           previousSentences = previousSentences.slice(-overlapSentences);
 
-          // Add text_spans for each line in this block
           for (const line of rect.lines) {
             currentTextSpans.push({
               span_text_id: spanIdCounter++,
@@ -59,6 +58,7 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
                 contains_list: containsList(currentChunk),
               },
               text_spans: currentTextSpans,
+              staticSignals: computeStaticSignals(currentChunk),
             });
           }
 
@@ -123,6 +123,7 @@ export function createContextualChunks_v2(sitesContent, options = {}) {
             contains_list: containsList(currentChunk),
           },
           text_spans: currentTextSpans,
+          staticSignals: computeStaticSignals(currentChunk),
         });
       }
     }
@@ -213,6 +214,7 @@ function splitLargeParagraph(
             contains_list: containsList(chunk),
           },
           text_spans: [],
+          staticSignals: computeStaticSignals(chunk.trim()),
         });
       }
 
@@ -275,6 +277,165 @@ function splitLargeParagraph(
   }
 
   return chunks;
+}
+
+function splitSentences(text) {
+  return text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+/g) || [];
+}
+
+function computeStaticSignals(text) {
+  const sentences = splitSentences(text);
+  const sentenceCount = sentences.length;
+  const avgSentenceLength = computeAvgSentenceWordLength(sentences);
+
+  const definitionScore = detectDefinitionScore(text);
+  const causalScore = detectCausalScore(text);
+  const proceduralScore = detectProceduralScore(text);
+  const comparativeScore = detectComparativeScore(text);
+
+  const citationDensity = computeCitationDensity(text);
+  const sectionType = detectSectionType(text);
+
+  return {
+    sentenceCount,
+    avgSentenceLength,
+
+    hasDefinitionLanguage: definitionScore >= 2,
+    hasCausalLanguage: causalScore >= 2,
+    hasProceduralLanguage: proceduralScore >= 2,
+    hasComparativeLanguage: comparativeScore >= 2,
+
+    definitionScore,
+    causalScore,
+    proceduralScore,
+    comparativeScore,
+
+    citationDensity,
+    sectionType,
+  };
+}
+
+function computeAvgSentenceWordLength(sentences) {
+  if (!sentences.length) return 0;
+
+  const totalWords = sentences.reduce((sum, s) => {
+    return sum + s.split(/\s+/).filter(Boolean).length;
+  }, 0);
+
+  return Math.round(totalWords / sentences.length);
+}
+
+function detectDefinitionScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(is defined as|refers to|means that|is the process of|is how)\b/i,
+    /\b(can be defined as|is known as)\b/i,
+  ];
+
+  const weakPatterns = [/\b(is a|are a)\s+\w+/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectCausalScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(because|therefore|thus|hence|consequently)\b/i,
+    /\b(as a result|leads to|results in|causes)\b/i,
+  ];
+
+  const weakPatterns = [/\b(due to|since)\b/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectProceduralScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(step\s+\d+|step by step)\b/i,
+    /\b(how to|instructions for|procedure for)\b/i,
+  ];
+
+  const weakPatterns = [
+    /\b(first|second|third|finally|next|then)\b/i,
+    /\b(begin by|start by|complete the process)\b/i,
+  ];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function detectComparativeScore(text) {
+  let score = 0;
+
+  const strongPatterns = [
+    /\b(compared to|in contrast to|as opposed to)\b/i,
+    /\b(more|less|better|worse)\b.*\bthan\b/i,
+  ];
+
+  const weakPatterns = [/\b(whereas|however|on the other hand)\b/i];
+
+  strongPatterns.forEach((p) => p.test(text) && (score += 2));
+  weakPatterns.forEach((p) => p.test(text) && (score += 1));
+
+  return score;
+}
+
+function computeCitationDensity(text) {
+  const citationPatterns = [/\[\d+\]/g, /\(\d{4}\)/g, /\bet al\.\b/gi];
+
+  let citationCount = 0;
+  citationPatterns.forEach((p) => {
+    const matches = text.match(p);
+    if (matches) citationCount += matches.length;
+  });
+
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return words > 0 ? citationCount / words : 0;
+}
+
+function detectSectionType(text) {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const firstLine = lines[0]?.toLowerCase() || "";
+  const lower = text.toLowerCase();
+
+  if (/\b(introduction|background|overview|abstract)\b/.test(firstLine)) {
+    return "intro";
+  }
+
+  if (
+    /\b(reference|bibliography|works cited)\b/.test(firstLine) ||
+    lines.filter((l) => /\[\d+\]/.test(l)).length >= 3
+  ) {
+    return "reference";
+  }
+
+  if (
+    /\b(conclusion|summary|discussion|future work)\b/.test(firstLine) ||
+    /\b(in conclusion|to summarize|in summary)\b/.test(lower)
+  ) {
+    return "conclusion";
+  }
+
+  if (lines.some((l) => /^[A-Z][A-Za-z\s]{3,}:$/.test(l))) {
+    return "mixed";
+  }
+
+  return "body";
 }
 
 function detectStructureType(text) {
