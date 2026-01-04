@@ -313,7 +313,7 @@ export default function Result() {
                   Page {item.page_number}
                 </span>
 
-                <ResultBadges item={item} totalResults={result.length} />
+                <ResultBadges item={item} totalResults={result.length} index={index} />
               </div>
 
               <div className="mb-4">

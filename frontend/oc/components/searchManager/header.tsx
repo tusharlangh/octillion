@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { queryContext } from "./searchManger";
 import { Search, Home } from "lucide-react";
-import { DM_Sans } from "next/font/google";
 import { SidebarContext } from "../ConditionalLayout";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
+import { DM_Sans } from "next/font/google";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
