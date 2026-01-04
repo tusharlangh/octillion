@@ -331,11 +331,13 @@ async function hybridSearch(
   const resultsWithPreciseHighlights = await Promise.all(
     finalResults.map(async (result) => {
       if (!result.text) return result;
+      const chunk = chunks.find((c) => c.id === result.chunk_id);
 
       const highlight = await highlighter.extractPreciseHighlight(
         result.text,
         query,
-        result
+        chunk,
+        analysis.intent.toLowerCase()
       );
 
       return {
@@ -345,7 +347,7 @@ async function hybridSearch(
     })
   );
 
-  console.log("resultsWithPreciseHighlights", resultsWithPreciseHighlights);
+  console.log(resultsWithPreciseHighlights);
 
   const totalLatency = overallTimer.stop();
 

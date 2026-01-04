@@ -8,7 +8,7 @@ export class PreciseHighlighter {
     this.confidenceThreshold = 12;
   }
 
-  async extractPreciseHighlight(chunkText, query, chunkMetadata) {
+  async extractPreciseHighlight(chunkText, query, chunkMetadata, intent) {
     const algorithmicSpan = this.spanExtractor.extractBestSpan(
       chunkText,
       query

@@ -27,6 +27,11 @@ export async function callToEmbed(text, model = "text-embedding-3-small") {
     }
 
     const data = await response.json();
+
+    if (Array.isArray(text)) {
+      return data.data.map((item) => item.embedding);
+    }
+
     return data.data[0].embedding;
   } catch (error) {
     console.error("Error creating embedding:", error);
