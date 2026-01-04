@@ -62,7 +62,11 @@ export async function searchBuildIndex(
             const transformed = results.map((r) => ({
               file_name: fileName,
               page: r.page,
-              rects: r.rects,
+              text_spans: r.rects.map((rect, idx) => ({
+                span_text_id: idx,
+                span: "",
+                span_bbox: rect,
+              })),
               total: r.total || r.rects.length,
             }));
 

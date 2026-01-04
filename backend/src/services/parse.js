@@ -19,6 +19,8 @@ import {
   trackComponentPerformance,
   SearchTimer,
 } from "../utils/searchMetrics.js";
+import { PreciseHighlighter } from "./parse/preciseHighlighter.js";
+import * as queryIntent from "./queryIntent.js";
 
 dotenv.config();
 
@@ -183,10 +185,21 @@ async function hybridSearch(
 
   const overallTimer = new SearchTimer("Overall Search");
 
-  const analysis = analyzeQuery(query);
+  const intentAnalysis = queryIntent.analyzeQuery(query);
+
+  const legacyAnalysis = analyzeQuery(query);
+
+  const analysis = {
+    ...legacyAnalysis,
+    intent: intentAnalysis.intent,
+    semanticWeight: intentAnalysis.semanticWeight,
+    keywordWeight: intentAnalysis.keywordWeight,
+    expansions: intentAnalysis.expansions,
+  };
 
   console.log("\nQUERY ANALYSIS:");
   console.log(`  Original: "${query}"`);
+  console.log(`  Intent: ${analysis.intent.toUpperCase()}`);
   console.log(`  Content words: ${analysis.contentWords.join(", ")}`);
   console.log(`  Type: ${analysis.queryType.toUpperCase()}`);
   console.log(
@@ -198,6 +211,7 @@ async function hybridSearch(
   trackQueryAnalysis({
     query,
     queryType: analysis.queryType,
+    intent: analysis.intent,
     contentWords: analysis.contentWords,
     semanticWeight: analysis.semanticWeight,
     keywordWeight: analysis.keywordWeight,
@@ -205,6 +219,7 @@ async function hybridSearch(
   });
 
   const keywordQuery = analysis.contentWords.join(" ") || query;
+  const primarySemanticQuery = query;
 
   const keywordTimer = new SearchTimer("Keyword Search");
   const semanticTimer = new SearchTimer("Semantic Search");
@@ -216,12 +231,12 @@ async function hybridSearch(
       keywordTimer.stop();
       return result;
     }),
-    semanticSearch(query, parseId, userId, { topK: topK * 2 }).then(
-      (result) => {
-        semanticTimer.stop();
-        return result;
-      }
-    ),
+    semanticSearch(primarySemanticQuery, parseId, userId, {
+      topK: topK * 2,
+    }).then((result) => {
+      semanticTimer.stop();
+      return result;
+    }),
   ]);
 
   const keywordLatency = keywordTimer.stop();
@@ -301,6 +316,24 @@ async function hybridSearch(
     .sort((a, b) => b.rrf_score - a.rrf_score)
     .slice(0, topK);
 
+  const highlighter = new PreciseHighlighter();
+  const resultsWithPreciseHighlights = await Promise.all(
+    mergedResults.map(async (result) => {
+      if (!result.text) return result;
+
+      const highlight = await highlighter.extractPreciseHighlight(
+        result.text,
+        query,
+        result
+      );
+
+      return {
+        ...result,
+        preciseHighlight: highlight,
+      };
+    })
+  );
+
   const totalLatency = overallTimer.stop();
 
   const scores = mergedResults.map((r) => r.rrf_score);
@@ -315,19 +348,16 @@ async function hybridSearch(
         }
       : null;
 
-  const avgScore =
-    scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-
   trackSearchMetrics({
     query,
     queryType: analysis.queryType,
     userId,
     parseId,
 
-    totalResults: mergedResults.length,
+    totalResults: resultsWithPreciseHighlights.length,
     keywordResultCount: keywordResults.length,
     semanticResultCount: semanticResults.length,
-    mergedResultCount: mergedResults.length,
+    mergedResultCount: resultsWithPreciseHighlights.length,
 
     totalLatency,
     keywordLatency,
@@ -337,11 +367,11 @@ async function hybridSearch(
     semanticWeight: analysis.semanticWeight,
     keywordWeight: analysis.keywordWeight,
 
-    hasResults: mergedResults.length > 0,
+    hasResults: resultsWithPreciseHighlights.length > 0,
     scoreDistribution,
   });
 
-  if (mergedResults.length === 0) {
+  if (resultsWithPreciseHighlights.length === 0) {
     trackZeroResults({
       query,
       queryType: analysis.queryType,
@@ -352,11 +382,11 @@ async function hybridSearch(
     });
   }
 
-  if (mergedResults.length > 0) {
+  if (resultsWithPreciseHighlights.length > 0) {
     trackResultQuality({
       query,
       queryType: analysis.queryType,
-      results: mergedResults,
+      results: resultsWithPreciseHighlights,
       userId,
     });
   }
@@ -376,8 +406,8 @@ async function hybridSearch(
     `   Keyword: ${keywordLatency}ms | Semantic: ${semanticLatency}ms`
   );
   console.log(
-    `   Results: ${mergedResults.length} (${keywordResults.length} keyword, ${semanticResults.length} semantic)`
+    `   Results: ${resultsWithPreciseHighlights.length} (${keywordResults.length} keyword, ${semanticResults.length} semantic)`
   );
 
-  return [mergedResults, analysis.queryType];
+  return [resultsWithPreciseHighlights, analysis.queryType];
 }

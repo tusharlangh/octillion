@@ -151,14 +151,9 @@ export default function Result() {
       console.warn("Missing presigned URL for", item.file_name);
       return;
     }
+    console.log(item);
 
-    const rects =
-      item.rects?.map((r) => ({
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-      })) || [];
+    const rects = item.preciseHighlight.boundingBoxes;
 
     const fileHighlights: Record<
       number,
