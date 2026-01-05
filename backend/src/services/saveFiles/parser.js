@@ -1,5 +1,71 @@
 import { AppError } from "../../middleware/errorHandler.js";
 import { PDFExtract } from "pdf.js-extract";
+import pRetry from "p-retry";
+
+async function fetchPdfWithRetry(
+  link,
+  file,
+  MAX_RETRIES = 3,
+  RETRY_DELAY = 1000
+) {
+  return pRetry(
+    async () => {
+      if (file && file.buffer) {
+        return file.buffer;
+      } else if (link.startsWith("http://") || link.startsWith("https://")) {
+        const res = await fetch(link);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        return Buffer.from(await res.arrayBuffer());
+      } else {
+        const fs = await import("fs/promises");
+        return await fs.readFile(link);
+      }
+    },
+    {
+      retries: MAX_RETRIES,
+      minTimeout: RETRY_DELAY,
+      onFailedAttempt: (error) => {
+        console.warn(
+          `PDF fetch attempt ${error.attemptNumber} failed for ${link}. ${error.retriesLeft} retries left.`
+        );
+      },
+    }
+  );
+}
+
+async function extractPdfWithRetry(
+  pdfBuffer,
+  options,
+  MAX_RETRIES = 2,
+  RETRY_DELAY = 500
+) {
+  const pdfExtract = new PDFExtract();
+
+  return pRetry(
+    async () => {
+      return new Promise((resolve, reject) => {
+        pdfExtract.extractBuffer(pdfBuffer, options, (err, data) => {
+          if (err) return reject(err);
+          if (!data || !data.pages || data.pages.length === 0) {
+            return reject(new Error("PDF extraction returned empty data"));
+          }
+          resolve(data);
+        });
+      });
+    },
+    {
+      retries: MAX_RETRIES,
+      minTimeout: RETRY_DELAY,
+      onFailedAttempt: (error) => {
+        console.warn(
+          `PDF extraction attempt ${error.attemptNumber} failed. ${error.retriesLeft} retries left.`
+        );
+      },
+    }
+  );
+}
 
 function formatResponse(res) {
   return res
@@ -86,77 +152,82 @@ async function processSinglePage(page, pageNum, fileIndex, fileName) {
   }
 }
 
-async function processSinglePDF(link, fileIndex, fileName, file) {
-  const results = [];
-  if (!link) {
-    return [
-      {
-        id: `${fileIndex + 1}.error`,
-        name: fileName,
-        error: "No link provided",
-        site_content: "",
-        total_words: 0,
-        mapping: [],
-      },
-    ];
-  }
+async function processSinglePDF(
+  link,
+  fileIndex,
+  fileName,
+  file,
+  MAX_RETRIES = 3,
+  RETRY_DELAY = 1000
+) {
+  await pRetry(
+    async () => {
+      const results = [];
+      if (!link) {
+        return [
+          {
+            id: `${fileIndex + 1}.error`,
+            name: fileName,
+            error: "No link provided",
+            site_content: "",
+            total_words: 0,
+            mapping: [],
+          },
+        ];
+      }
 
-  let pdfBuffer;
-  try {
-    if (file && file.buffer) {
-      pdfBuffer = file.buffer;
-    } else if (link.startsWith("http://") || link.startsWith("https://")) {
-      const res = await fetch(link);
-      pdfBuffer = Buffer.from(await res.arrayBuffer());
-    } else {
-      const fs = await import("fs/promises");
-      pdfBuffer = await fs.readFile(link);
+      let pdfBuffer;
+      try {
+        pdfBuffer = await fetchPdfWithRetry(link, file);
+      } catch (err) {
+        return [
+          {
+            id: `${fileIndex + 1}.error`,
+            name: fileName,
+            error: "Failed to load PDF",
+            site_content: "",
+            total_words: 0,
+            mapping: [],
+          },
+        ];
+      }
+      const options = {
+        disableCombineTextItems: true,
+      };
+      let data;
+      try {
+        data = await extractPdfWithRetry(pdfBuffer, options);
+      } catch (err) {
+        return [
+          {
+            id: `${fileIndex + 1}.error`,
+            name: fileName,
+            error: "Failed to extract PDF",
+            site_content: "",
+            total_words: 0,
+            mapping: [],
+          },
+        ];
+      }
+      const pagePromises = data.pages.map((page, i) =>
+        processSinglePage(page, i + 1, fileIndex, fileName)
+      );
+      const pageResults = await Promise.all(pagePromises);
+      results.push(...pageResults);
+
+      pdfBuffer = null;
+      return results;
+    },
+    {
+      retries: MAX_RETRIES,
+      minTimeout: RETRY_DELAY,
+      onFailedAttempt: (error) => {
+        console.warn(
+          `PDF fetch attempt ${error.attemptNumber} failed for ${link}. ${error.retriesLeft} retries left.`
+        );
+      },
     }
-  } catch (err) {
-    return [
-      {
-        id: `${fileIndex + 1}.error`,
-        name: fileName,
-        error: "Failed to load PDF",
-        site_content: "",
-        total_words: 0,
-        mapping: [],
-      },
-    ];
-  }
-  const pdfExtract = new PDFExtract();
-  const options = {
-    disableCombineTextItems: true,
-  };
-  let data;
-  try {
-    data = await new Promise((resolve, reject) => {
-      pdfExtract.extractBuffer(pdfBuffer, options, (err, data) => {
-        if (err) return reject(err);
-        resolve(data);
-      });
-    });
-  } catch (err) {
-    return [
-      {
-        id: `${fileIndex + 1}.error`,
-        name: fileName,
-        error: "Failed to extract PDF",
-        site_content: "",
-        total_words: 0,
-        mapping: [],
-      },
-    ];
-  }
-
-  const pagePromises = data.pages.map((page, i) =>
-    processSinglePage(page, i + 1, fileIndex, fileName)
   );
-  const pageResults = await Promise.all(pagePromises);
-  results.push(...pageResults);
-
-  pdfBuffer = null;
-  return results;
 }
 
 export async function extractPagesContent(links, files) {
