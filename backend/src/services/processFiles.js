@@ -13,6 +13,7 @@ import {
 } from "../utils/processMetrics.js";
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws/s3Client.js";
+import pRetry from "p-retry";
 
 dotenv.config();
 
@@ -239,17 +240,34 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
   const fileStartTime = Date.now();
 
   try {
-    const response = await fetch("http://localhost:8000/parse_to_json", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const data = await pRetry(
+      async () => {
+        const response = await fetch("http://localhost:8000/parse_to_json", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: presignedUrl, file_name: fileName }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return await response.json();
       },
-      body: JSON.stringify({ url: presignedUrl, file_name: fileName }),
-    });
+      {
+        retries: 3,
+        minTimeout: 2000,
+        onFailedAttempt: (error) => {
+          console.warn(
+            `Python parser call attempt ${error.attemptNumber} failed for ${fileName}. ${error.retriesLeft} retries left.`
+          );
+        },
+      }
+    );
 
-    const data = await response.json();
     const fileDuration = Date.now() - fileStartTime;
-
     const storageMb = parseFloat(calculateJsonSizeMb(data));
 
     trackFileProcessing({
