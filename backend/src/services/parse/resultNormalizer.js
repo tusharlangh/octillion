@@ -28,6 +28,7 @@ export async function normalizeKeywordResults(keywordResults, chunks) {
           source: "keyword",
           match_count: pageResult.total,
           text_spans: pageResult.text_spans || [],
+          rects: pageResult.rects,
         });
       }
     }

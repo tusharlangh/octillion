@@ -151,9 +151,11 @@ export default function Result() {
       console.warn("Missing presigned URL for", item.file_name);
       return;
     }
-    console.log(item);
 
-    const rects = item.preciseHighlight.boundingBoxes;
+    const rects =
+      item.source === "keyword"
+        ? item.rects!
+        : item.preciseHighlight.boundingBoxes;
 
     const fileHighlights: Record<
       number,
@@ -313,7 +315,11 @@ export default function Result() {
                   Page {item.page_number}
                 </span>
 
-                <ResultBadges item={item} totalResults={result.length} index={index} />
+                <ResultBadges
+                  item={item}
+                  totalResults={result.length}
+                  index={index}
+                />
               </div>
 
               <div className="mb-4">
