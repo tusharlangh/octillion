@@ -1,13 +1,13 @@
 import supabase from "../utils/supabase/client.js";
 import { AppError } from "../middleware/errorHandler.js";
-import { retry } from "../utils/retry.js";
+import pRetry from "p-retry";
 
 export async function getPfp(userId) {
   try {
     if (!userId) {
       throw new AppError("User ID is required", 400, "USER_ID_ERROR");
     }
-    const result = await retry(
+    const result = await pRetry(
       async () => {
         const {
           data: { user },
@@ -25,12 +25,10 @@ export async function getPfp(userId) {
         return user;
       },
       {
-        maxRetries: 3,
-        delay: 1000,
-        backoff: 2,
-        onRetry: (error, attempt) => {
+        retries: 3,
+        onFailedAttempt: (error) => {
           console.warn(
-            `getPfp: retry attempt ${attempt}/3 for userId: ${userId}, error is: ${error}`
+            `getPfp: retry attempt ${error.attemptNumber}/3 for userId: ${userId}, error is: ${error}`
           );
         },
       }

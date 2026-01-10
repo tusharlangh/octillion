@@ -23,6 +23,19 @@ const libreBaskerville = Libre_Baskerville({
   subsets: ["latin"],
 });
 
+const greetingVariations = [
+  "Hey {name}! Start uploading files",
+  "Welcome back, {name}! Ready to upload?",
+  "Hi {name}! Drop your files here",
+  "{name}, let's get started!",
+  "Good to see you, {name}! Upload away",
+  "Hey {name}! Time to add some files",
+  "What's up, {name}? Let's upload",
+  "{name}! Your files await",
+  "Hello {name}! Start building your library",
+  "Hey there, {name}! Upload your documents",
+];
+
 export default function FileManager() {
   const {
     selectedFiles,
@@ -37,9 +50,13 @@ export default function FileManager() {
   const { setNotis } = context;
   const [loading, setLoading] = useState<boolean>(false);
   const [text, setText] = useState<string>("");
+  const [greeting, setGreeting] = useState<string>("");
   const router = useRouter();
 
   useEffect(() => {
+    const randomIndex = Math.floor(Math.random() * greetingVariations.length);
+    setGreeting(greetingVariations[randomIndex]);
+
     async function get() {
       setLoading(true);
       try {
@@ -109,7 +126,7 @@ export default function FileManager() {
               }}
               className={`${libreBaskerville.className} text-2xl md:text-3xl lg:text-4xl text-center`}
             >
-              Hey {text.split(" ")[0]}! Start uploading files
+              {greeting.replace("{name}", text.split(" ")[0])}
             </motion.p>
           )}
         </AnimatePresence>

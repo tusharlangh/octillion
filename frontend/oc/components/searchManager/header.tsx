@@ -4,10 +4,16 @@ import React, { useState, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { handleTokenAction } from "@/utils/supabase/handleTokenAction";
 import { queryContext } from "./searchManger";
-import { Search, Home } from "lucide-react";
+import { Search, CircleX } from "lucide-react";
 import { SidebarContext } from "../ConditionalLayout";
 import { getErrorMessageByStatus } from "@/utils/errorHandler/getErrorMessageByStatus";
 import { DM_Sans } from "next/font/google";
+import { Libre_Baskerville } from "next/font/google";
+
+const libreBaskerville = Libre_Baskerville({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+});
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -88,6 +94,7 @@ export default function Header({ id }: Props) {
         return;
       }
 
+      console.log("data: ", data.result);
       setQuery(data.result || {}, data.fileMapping || {});
     } catch (error) {
       console.error("Search error: ", error);
@@ -121,7 +128,7 @@ export default function Header({ id }: Props) {
   };
 
   return (
-    <section className="w-full pt-0.5 px-2 md:px-8 sticky -top-20 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
+    <section className="w-full pt-0.5 px-2 md:px-8 sticky -top-18 bg-white dark:bg-[#0B0B0C] z-1 transition-colors duration-200">
       <div className="px-2 relative w-full mt-20 group flex flex-col md:flex-row border-b border-neutral-200 dark:border-neutral-800">
         <div className="relative flex-1 flex items-center">
           <Search
@@ -137,7 +144,7 @@ export default function Header({ id }: Props) {
           />
           <input
             placeholder="Search files"
-            className={`${dmSans.className} w-full 
+            className={`${libreBaskerville.className} w-full 
             p-2 pl-7 text-base md:text-lg outline-none 
             placeholder:text-neutral-400 dark:placeholder:text-neutral-600
             ${
@@ -153,6 +160,22 @@ export default function Header({ id }: Props) {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
           />
+          {search !== "" && (
+            <button onClick={() => setSearch("")}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="size-5 cursor-pointer"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm-1.72 6.97a.75.75 0 1 0-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 1 0 1.06 1.06L12 13.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L13.06 12l1.72-1.72a.75.75 0 1 0-1.06-1.06L12 10.94l-1.72-1.72Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </section>

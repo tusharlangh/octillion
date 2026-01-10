@@ -1,29 +1,4 @@
 import { AppError } from "../../middleware/errorHandler.js";
-import { OptimizedKeywordIndex } from "../../utils/OptimizedKeywordIndex.js";
-
-export function createInvertedSearch(pagesContent) {
-  try {
-    const inverted = {};
-
-    for (const { id, site_content } of pagesContent) {
-      for (const word of site_content.split(" ")) {
-        if (!inverted[word]) {
-          inverted[word] = {};
-        }
-        const termMap = inverted[word];
-        termMap[id] = (termMap[id] || 0) + 1;
-      }
-    }
-
-    return inverted;
-  } catch {
-    throw new AppError(
-      "Building Inverted index failed",
-      500,
-      "INVERTED_INDEX_FAILED_ERROR"
-    );
-  }
-}
 
 function normalizeToken(token) {
   if (!token || typeof token !== "string") return token;
@@ -36,23 +11,63 @@ function normalizeToken(token) {
 
 export function createInvertedSearch_V2_1(docs) {
   try {
+    if (!docs || !Array.isArray(docs)) {
+      console.warn("Invalid docs input:", typeof docs);
+      return {};
+    }
+
     const inverted = {};
 
     for (let doc of docs) {
+      if (!doc || !doc.pages || !Array.isArray(doc.pages)) {
+        console.warn("Invalid doc structure, skipping:", {
+          hasDoc: !!doc,
+          hasPages: !!doc?.pages,
+          pagesType: typeof doc?.pages,
+        });
+        continue;
+      }
+
       for (const page of doc.pages) {
+        if (!page || typeof page.page_number === 'undefined' || !page.file_name) {
+          console.warn("Invalid page structure, skipping:", {
+            hasPage: !!page,
+            hasPageNumber: page && typeof page.page_number !== 'undefined',
+            hasFileName: !!page?.file_name,
+          });
+          continue;
+        }
+
         const pageNo = page.page_number;
         const fileName = page.file_name;
 
+        if (!page.blocks || !Array.isArray(page.blocks)) {
+          console.warn(`Page ${pageNo} in ${fileName} has no blocks, skipping`);
+          continue;
+        }
+
         for (const block of page.blocks) {
+          if (!block || !block.lines || !Array.isArray(block.lines)) {
+            continue;
+          }
+
           for (const line of block.lines) {
-            const normalizedText = line.spans.map((s) => s.text).join(" ");
+            if (!line || !line.spans || !Array.isArray(line.spans)) {
+              continue;
+            }
+
+            const normalizedText = line.spans.map((s) => s?.text || "").join(" ");
 
             const words = normalizedText.toLowerCase().split(/\s+/);
 
-            if (!words) continue;
+            if (!words || words.length === 0) continue;
 
             for (const word of words) {
+              if (!word) continue;
+              
               const tokenized = normalizeToken(word);
+
+              if (!tokenized) continue;
 
               if (!inverted[tokenized]) inverted[tokenized] = {};
               if (!inverted[tokenized][fileName])
@@ -73,83 +88,17 @@ export function createInvertedSearch_V2_1(docs) {
     }
 
     return inverted;
-  } catch {
+  } catch (error) {
+    console.error("Inverted index creation error:", {
+      message: error.message,
+      stack: error.stack,
+      docsLength: docs?.length,
+      docsType: typeof docs,
+    });
     throw new AppError(
-      "Building Inverted index failed",
+      `Building Inverted index failed: ${error.message}`,
       500,
       "INVERTED_INDEX_FAILED_ERROR"
     );
-  }
-}
-
-export function buildOptimizedIndex(pagesContent) {
-  try {
-    const index = new OptimizedKeywordIndex();
-
-    for (const page of pagesContent) {
-      const pageId = page.id;
-      const mapping = new Map(page.mapping);
-
-      for (const [y, row] of mapping) {
-        for (const wordObj of row) {
-          const word = wordObj.word;
-          if (word) {
-            index.add(word, pageId, y);
-          }
-        }
-      }
-    }
-
-    if (index.getStorageSize && index.getStorageSize() === 0) {
-      throw new AppError(
-        "Keyword index is empty",
-        500,
-        "EMPTY_KEYWORD_INDEX_ERROR",
-        {
-          pagesContent: pagesContent,
-          index: index.toJSON,
-        }
-      );
-    }
-
-    index.finalize();
-
-    return index;
-  } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
-
-    throw new AppError(
-      `Building keyword index failed: ${error}`,
-      500,
-      "KEYWORD_INDEX_FAILED_ERROR"
-    );
-  }
-}
-
-export async function generateChunks(pagesContent) {
-  try {
-    for (const page of pagesContent) {
-      try {
-        const chunks = createContextualChunks(page.mapping);
-        page.chunks = chunks;
-      } catch (error) {
-        if (error.isOperational) {
-          throw error;
-        }
-        throw new AppError(
-          `Failed generating chunks for page id: ${page.id}`,
-          500,
-          "FAILED_CHUNKS_ERROR"
-        );
-      }
-    }
-    return pagesContent;
-  } catch (error) {
-    if (error.isOperational) {
-      throw error;
-    }
-    throw new AppError("Failed generating chunks", 500, "FAILED_CHUNKS_ERROR");
   }
 }
