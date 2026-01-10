@@ -140,7 +140,7 @@ export default function Result() {
     }
 
     if (result.length !== 0) {
-      GET();
+      //GET();
     }
   }, [result]);
 

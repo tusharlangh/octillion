@@ -24,6 +24,10 @@ import * as queryIntent from "./queryIntent.js";
 import { analyzeAndBoost } from "./parse/scoreSentenceIntent.js";
 import { explanationDensityBoost } from "./parse/explanationDensity.js";
 import { sentenceLevelReRanking } from "./parse/sentenceReRanker.js";
+import {
+  getCachedKeywordSearch,
+  setCacheKeywordSearch,
+} from "../utils/callsCache/upstashKeywordCache.js";
 
 dotenv.config();
 
@@ -175,8 +179,15 @@ async function keywordSearch(
   pagesContent,
   inverted,
   fileMapping,
+  parseId,
+  userId,
   options = {}
 ) {
+  const cached = await getCachedKeywordSearch(parseId, userId, search);
+  if (cached) {
+    return cached;
+  }
+
   const { topK } = options;
   const searchContentTimer = new SearchTimer("Search Content");
   const scores = await searchContent_v2(pagesContent, inverted, search);
@@ -190,6 +201,10 @@ async function keywordSearch(
     searchContentLatency: ${searchContentLatency}
     searchBuildIndexLatency: ${searchBuildIndexLatency}
   `);
+
+  setCacheKeywordSearch(parseId, userId, search, result).catch((err) =>
+    console.error("Failed to cache keyword search:", err)
+  );
 
   return result;
 }
@@ -259,6 +274,8 @@ async function hybridSearch(
       pagesContent,
       inverted,
       fileMapping,
+      parseId,
+      userId,
       {
         topK: topK * 2,
       }
@@ -279,9 +296,17 @@ async function hybridSearch(
   } else {
     queryEmbedding = await callToEmbed(primarySemanticQuery);
     const [kwResults, semResults] = await Promise.all([
-      keywordSearch(keywordQuery, pagesContent, inverted, fileMapping, {
-        topK: topK * 2,
-      }).then((result) => {
+      keywordSearch(
+        keywordQuery,
+        pagesContent,
+        inverted,
+        fileMapping,
+        parseId,
+        userId,
+        {
+          topK: topK * 2,
+        }
+      ).then((result) => {
         keywordTimer.stop();
         return result;
       }),
@@ -479,7 +504,7 @@ async function hybridSearch(
     };
   });
 
-  console.log(resultsWithPreciseHighlights);
+  //console.log(resultsWithPreciseHighlights);
 
   const totalLatency = overallTimer.stop();
 

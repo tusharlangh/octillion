@@ -1,4 +1,8 @@
 import dotenv from "dotenv";
+import {
+  getCachedReranker,
+  setCacheReranker,
+} from "../../utils/callsCache/upstashRerankerCache.js";
 dotenv.config();
 
 export async function sentenceLevelReRanking(items, query) {
@@ -65,6 +69,11 @@ export async function sentenceLevelReRanking(items, query) {
 }
 
 async function callMain(query, passages) {
+  const cached = await getCachedReranker(query, passages);
+  if (cached) {
+    return cached;
+  }
+
   const response = await fetch("http://127.0.0.1:8000/sentence_level_ranking", {
     method: "POST",
     headers: {
@@ -76,5 +85,11 @@ async function callMain(query, passages) {
     }),
   });
 
-  return response.json();
+  const scores = await response.json();
+
+  setCacheReranker(query, passages, scores).catch((err) =>
+    console.error("Failed to cache reranker scores:", err)
+  );
+
+  return scores;
 }

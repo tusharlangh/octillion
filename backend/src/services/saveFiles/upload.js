@@ -3,6 +3,10 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3 } from "../../utils/aws/s3Client.js";
 import { AppError, NotFoundError } from "../../middleware/errorHandler.js";
 import pRetry from "p-retry";
+import {
+  getCachedJsonFromS3,
+  setCacheJsonFromS3,
+} from "../../utils/callsCache/upstashS3Cache.js";
 
 export async function uploadToS3(id, index, file) {
   try {
@@ -173,6 +177,11 @@ export async function uploadJsonToS3(id, name, data) {
 
 export async function getJsonFromS3(key) {
   try {
+    const cached = await getCachedJsonFromS3(key);
+    if (cached) {
+      return cached;
+    }
+
     const data = await pRetry(
       async () => {
         const command = new GetObjectCommand({
@@ -182,6 +191,7 @@ export async function getJsonFromS3(key) {
 
         const response = await s3.send(command);
         const str = await response.Body.transformToString();
+
         return JSON.parse(str);
       },
       {
@@ -193,6 +203,10 @@ export async function getJsonFromS3(key) {
           );
         },
       }
+    );
+
+    setCacheJsonFromS3(key, data).catch((err) =>
+      console.error("Failed to cache json from s3:", err)
     );
 
     return data;
