@@ -4,7 +4,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws/s3Client.js";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError, NotFoundError } from "../middleware/errorHandler.js";
-import { retry } from "../utils/retry.js";
+import pRetry from "p-retry";
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ export async function getViewFiles(userId) {
       throw new AppError("User ID is required", 400, "USER_ID_ERROR");
     }
 
-    const result = await retry(
+    const result = await pRetry(
       async () => {
         const { data, error } = await supabase
           .from("files")
@@ -33,12 +33,10 @@ export async function getViewFiles(userId) {
         return data;
       },
       {
-        maxRetries: 3,
-        delay: 1000,
-        backoff: 2,
-        onRetry: (error, attempt) => {
+        retries: 3,
+        onFailedAttempt: (error) => {
           console.warn(
-            `getViewFiles: retry attempt ${attempt}/3 for userId: ${userId}, error is: ${error}`
+            `getViewFiles: retry attempt ${error.attemptNumber}/3 for userId: ${userId}, error is: ${error}`
           );
         },
       }
@@ -76,7 +74,7 @@ export async function getViewFiles(userId) {
         }
 
         try {
-          const urlData = await retry(
+          const urlData = await pRetry(
             async () => {
               const command = new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET_NAME,
@@ -84,7 +82,7 @@ export async function getViewFiles(userId) {
               });
 
               const url = await getSignedUrl(s3, command, {
-                expiresIn: 60 * 60 * 24 * 1, // 1 day
+                expiresIn: 60 * 60 * 24 * 1,
               });
 
               return {
@@ -96,12 +94,10 @@ export async function getViewFiles(userId) {
               };
             },
             {
-              maxRetries: 3,
-              delay: 1000,
-              backoff: 2,
-              onRetry: (error, attempt) => {
+              retries: 3,
+              onFailedAttempt: (error) => {
                 console.warn(
-                  `getViewFiles: retry attempt ${attempt}/3 for userId: ${userId}, error is: ${error}`
+                  `getViewFiles: retry attempt ${error.attemptNumber}/3 for userId: ${userId}, error is: ${error}`
                 );
               },
             }

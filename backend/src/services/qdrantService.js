@@ -53,7 +53,9 @@ export async function searchQdrant(
       searchResults = await qdrantClient.search(collectionName, {
         vector: queryEmbedding,
         limit: topK,
-        with_payload: true,
+        with_payload: {
+          include: ["chunk_id", "stats"]
+        },
         with_vector: false,
       });
     } catch (error) {

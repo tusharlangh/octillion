@@ -19,9 +19,11 @@ import {
   trackComponentPerformance,
   SearchTimer,
 } from "../utils/searchMetrics.js";
-import { PreciseHighlighter } from "./parse/preciseHighlighter.js";
+
 import * as queryIntent from "./queryIntent.js";
-import { scoreChunkByIntent } from "./intentScoring.js";
+import { analyzeAndBoost } from "./parse/scoreSentenceIntent.js";
+import { explanationDensityBoost } from "./parse/explanationDensity.js";
+import { sentenceLevelReRanking } from "./parse/sentenceReRanker.js";
 
 dotenv.config();
 
@@ -151,11 +153,21 @@ export async function parse_v2(id, search, userId, options = {}) {
 }
 
 async function semanticSearch(search, id, userId, options = {}) {
-  const { topK } = options;
-  const embeddings = await callToEmbed(search);
-  const result = await searchQdrant(id, userId, embeddings, { topK });
+  const { topK, cachedEmbedding } = options;
+  const embeddingsTimer = new SearchTimer("Embeddings");
+  const embeddings = cachedEmbedding || (await callToEmbed(search));
+  const embeddingsTimerLatency = embeddingsTimer.stop();
 
-  return result;
+  const searchQdrantTimer = new SearchTimer("Search Qdrant");
+  const result = await searchQdrant(id, userId, embeddings, { topK });
+  const searchQdrantLatency = searchQdrantTimer.stop();
+
+  console.log(`
+    searchQdrantLatency: ${searchQdrantLatency}
+    embeddingsTimerLatency: ${embeddingsTimerLatency}
+  `);
+
+  return { result, embedding: embeddings };
 }
 
 async function keywordSearch(
@@ -166,8 +178,18 @@ async function keywordSearch(
   options = {}
 ) {
   const { topK } = options;
+  const searchContentTimer = new SearchTimer("Search Content");
   const scores = await searchContent_v2(pagesContent, inverted, search);
+  const searchContentLatency = searchContentTimer.stop();
+
+  const searchBuildIndexTimer = new SearchTimer("Search Content");
   const result = await searchBuildIndex_v2(scores, fileMapping);
+  const searchBuildIndexLatency = searchBuildIndexTimer.stop();
+
+  console.log(`
+    searchContentLatency: ${searchContentLatency}
+    searchBuildIndexLatency: ${searchBuildIndexLatency}
+  `);
 
   return result;
 }
@@ -225,44 +247,88 @@ async function hybridSearch(
   const keywordTimer = new SearchTimer("Keyword Search");
   const semanticTimer = new SearchTimer("Semantic Search");
 
-  const [keywordResultsRaw, semanticResultsRaw] = await Promise.all([
-    keywordSearch(keywordQuery, pagesContent, inverted, fileMapping, {
-      topK: topK * 2,
-    }).then((result) => {
-      keywordTimer.stop();
-      return result;
-    }),
-    semanticSearch(primarySemanticQuery, parseId, userId, {
-      topK: topK * 2,
-    }).then((result) => {
-      semanticTimer.stop();
-      return result;
-    }),
-  ]);
+  let queryEmbedding = null;
+  let keywordResultsRaw = {};
+  let semanticSearchResponse = { result: [], embedding: null };
+  let keywordLatency = 0;
+  let semanticLatency = 0;
 
-  const keywordLatency = keywordTimer.stop();
-  const semanticLatency = semanticTimer.stop();
+  if (analysis.queryType === "keyword") {
+    keywordResultsRaw = await keywordSearch(
+      keywordQuery,
+      pagesContent,
+      inverted,
+      fileMapping,
+      {
+        topK: topK * 2,
+      }
+    );
+    keywordLatency = keywordTimer.stop();
+  } else if (analysis.queryType === "semantic") {
+    queryEmbedding = await callToEmbed(primarySemanticQuery);
+    semanticSearchResponse = await semanticSearch(
+      primarySemanticQuery,
+      parseId,
+      userId,
+      {
+        topK: topK * 2,
+        cachedEmbedding: queryEmbedding,
+      }
+    );
+    semanticLatency = semanticTimer.stop();
+  } else {
+    queryEmbedding = await callToEmbed(primarySemanticQuery);
+    const [kwResults, semResults] = await Promise.all([
+      keywordSearch(keywordQuery, pagesContent, inverted, fileMapping, {
+        topK: topK * 2,
+      }).then((result) => {
+        keywordTimer.stop();
+        return result;
+      }),
+      semanticSearch(primarySemanticQuery, parseId, userId, {
+        topK: topK * 2,
+        cachedEmbedding: queryEmbedding,
+      }).then((result) => {
+        semanticTimer.stop();
+        return result;
+      }),
+    ]);
+    keywordResultsRaw = kwResults;
+    semanticSearchResponse = semResults;
+    keywordLatency = keywordTimer.stop();
+    semanticLatency = semanticTimer.stop();
+  }
 
-  const keywordResults = await normalizeKeywordResults(
-    keywordResultsRaw,
-    chunks
-  );
-  const semanticResults = await normalizeSemanticResults(
-    semanticResultsRaw,
-    chunks
-  );
+  const semanticResultsRaw = semanticSearchResponse.result;
 
-  const keywordRanked = keywordResults
-    .sort((a, b) => b.score - a.score)
-    .map((result, index) => ({ ...result, rank: index }));
-
-  const semanticRanked = semanticResults
-    .sort((a, b) => b.score - a.score)
-    .map((result, index) => ({ ...result, rank: index }));
-
-  const rrfScores = new Map();
-
+  let keywordResults = [];
+  let keywordRanked = [];
   if (analysis.queryType === "keyword" || analysis.queryType === "hybrid") {
+    keywordResults = await normalizeKeywordResults(keywordResultsRaw, chunks);
+
+    keywordRanked = keywordResults
+      .sort((a, b) => b.score - a.score)
+      .map((result, index) => ({ ...result, rank: index }));
+  }
+
+  let semanticResults = [];
+  let semanticRanked = [];
+  if (analysis.queryType === "semantic" || analysis.queryType === "hybrid") {
+    semanticResults = await normalizeSemanticResults(
+      semanticResultsRaw,
+      chunks
+    );
+
+    semanticRanked = semanticResults
+      .sort((a, b) => b.score - a.score)
+      .map((result, index) => ({ ...result, rank: index }));
+  }
+
+  let mergedResults;
+
+  if (analysis.queryType === "hybrid") {
+    const rrfScores = new Map();
+
     keywordRanked.forEach((result) => {
       const key = `${result.chunk_id}`;
       const rrfScore = analysis.keywordWeight * (1 / (k + result.rank));
@@ -286,9 +352,7 @@ async function hybridSearch(
       entry.match_count = result.match_count;
       entry.rects = result.rects;
     });
-  }
 
-  if (analysis.queryType === "semantic" || analysis.queryType === "hybrid") {
     semanticRanked.forEach((result) => {
       const key = `${result.chunk_id}`;
       const rrfScore = analysis.semanticWeight * (1 / (k + result.rank));
@@ -311,41 +375,109 @@ async function hybridSearch(
       entry.semantic_weight = analysis.semanticWeight;
       entry.text = result.text;
     });
-  }
 
-  const mergedResults = Array.from(rrfScores.values());
+    mergedResults = Array.from(rrfScores.values());
+  } else if (analysis.queryType === "keyword") {
+    mergedResults = keywordRanked.map((result) => ({
+      ...result,
+      rrf_score: result.score,
+    }));
+  } else {
+    mergedResults = semanticRanked.map((result) => ({
+      ...result,
+      rrf_score: result.score,
+    }));
+  }
 
   mergedResults.forEach((result) => {
     const chunk = chunks.find((c) => c.id === result.chunk_id);
     if (chunk) {
-      result.rrf_score = scoreChunkByIntent(chunk, query, result.rrf_score);
-      result.intent_boosted = true;
+      const intentBoost = analyzeAndBoost(
+        result.chunk_id,
+        query,
+        chunk.text,
+        result.rrf_score
+      );
+      result.rrf_score = intentBoost.new_score;
+      result.intent_boost = intentBoost.boostWeight;
+
+      const densityBoost = explanationDensityBoost(
+        result.chunk_id,
+        chunk.text,
+        result.rrf_score,
+        analysis.intent
+      );
+      result.rrf_score = densityBoost.new_score;
+      result.density_boost = densityBoost.explanation.boost;
     }
   });
+
+  if (analysis.queryType === "semantic" || analysis.queryType === "hybrid") {
+    const topCandidates = mergedResults
+      .sort((a, b) => b.rrf_score - a.rrf_score)
+      .slice(0, 30);
+
+    await sentenceLevelReRanking(topCandidates, query);
+
+    mergedResults = [...topCandidates, ...mergedResults.slice(30)];
+  }
 
   const finalResults = mergedResults
     .sort((a, b) => b.rrf_score - a.rrf_score)
     .slice(0, topK);
 
-  const highlighter = new PreciseHighlighter();
-  const resultsWithPreciseHighlights = await Promise.all(
-    finalResults.map(async (result) => {
-      if (!result.text) return result;
-      const chunk = chunks.find((c) => c.id === result.chunk_id);
+  let resultsWithPreciseHighlights;
 
-      const highlight = await highlighter.extractPreciseHighlight(
-        result.text,
-        query,
-        chunk,
-        analysis.intent.toLowerCase()
-      );
+  resultsWithPreciseHighlights = finalResults.map((result) => {
+    let bboxes = result.rects || [];
 
-      return {
-        ...result,
-        preciseHighlight: highlight,
-      };
-    })
-  );
+    if (result.text && result.best_sentence) {
+      const startChar = result.text.indexOf(result.best_sentence);
+      if (startChar !== -1) {
+        const endChar = startChar + result.best_sentence.length;
+        const calculatedBBoxes = mapCharsToBBoxes(
+          result.text_spans,
+          result.text,
+          startChar,
+          endChar
+        );
+
+        if (calculatedBBoxes.length > 0) {
+          bboxes = calculatedBBoxes;
+        }
+      }
+    }
+
+    return {
+      chunk_id: result.chunk_id,
+      file_name: result.file_name,
+      page_number: result.page_number,
+      score: result.score !== undefined ? result.score : result.rrf_score,
+      source: result.source,
+      text: result.text,
+      rects: bboxes,
+      rank: result.rank,
+      metadata: {
+        intent_boost: result.intent_boost,
+        density_boost: result.density_boost,
+        best_sentence: result.best_sentence,
+        texts_span: result.text_spans,
+        ...(result.metadata?.terms && { terms: result.metadata.terms }),
+        ...(result.metadata?.match_count !== undefined && {
+          match_count: result.metadata.match_count,
+        }),
+        ...(result.metadata?.term_breakdown && {
+          term_breakdown: result.metadata.term_breakdown,
+        }),
+        ...(result.keyword_rank !== undefined && {
+          keyword_rank: result.keyword_rank,
+        }),
+        ...(result.semantic_rank !== undefined && {
+          semantic_rank: result.semantic_rank,
+        }),
+      },
+    };
+  });
 
   console.log(resultsWithPreciseHighlights);
 
@@ -425,4 +557,35 @@ async function hybridSearch(
   );
 
   return [resultsWithPreciseHighlights, analysis.queryType];
+}
+
+function mapCharsToBBoxes(textSpans, chunkText, startChar, endChar) {
+  if (!textSpans || textSpans.length === 0) {
+    return [];
+  }
+
+  let charPosition = 0;
+  const spanRanges = [];
+
+  for (const span of textSpans) {
+    const spanText = span.span;
+    const spanStart = charPosition;
+    const spanEnd = charPosition + spanText.length;
+
+    spanRanges.push({
+      span_text_id: span.span_text_id,
+      span: spanText,
+      span_bbox: span.span_bbox,
+      startChar: spanStart,
+      endChar: spanEnd,
+    });
+
+    charPosition = spanEnd + 1;
+  }
+
+  const relevantSpans = spanRanges.filter((spanRange) => {
+    return spanRange.endChar > startChar && spanRange.startChar < endChar;
+  });
+
+  return relevantSpans.map((spanRange) => spanRange.span_bbox);
 }

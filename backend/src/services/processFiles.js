@@ -111,8 +111,21 @@ export async function processFiles(id, keys, userId) {
   let invertedIndex_v2;
   const invertedIndexLatency = new SearchTimer("Inverted Index");
   try {
+    console.log("Canonical data structure:", {
+      type: typeof canonicalData,
+      isArray: Array.isArray(canonicalData),
+      length: canonicalData?.length,
+      firstDocSample: canonicalData?.[0]
+        ? {
+            hasPages: !!canonicalData[0].pages,
+            pagesType: typeof canonicalData[0].pages,
+            pagesLength: canonicalData[0].pages?.length,
+          }
+        : null,
+    });
+    
     invertedIndex_v2 = createInvertedSearch_V2_1(canonicalData);
-    console.log("end here: ", invertedIndex_v2);
+    console.log("Inverted index created successfully with", Object.keys(invertedIndex_v2).length, "keys");
     const invertedDuration = invertedIndexLatency.stop();
 
     trackProcessingStage({
@@ -123,9 +136,14 @@ export async function processFiles(id, keys, userId) {
       itemCount: Object.keys(invertedIndex_v2).length,
       metadata: {},
     });
-  } catch {
+  } catch (error) {
+    console.error("Failed to create inverted index:", {
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorStack: error.stack,
+    });
     throw new AppError(
-      "Failed to get inverted index",
+      `Failed to get inverted index: ${error.message}`,
       500,
       "FAILED_INVERTED_INDEX_ERROR"
     );

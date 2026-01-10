@@ -1,4 +1,3 @@
-// types/search.ts
 export interface SearchRect {
   x: number;
   y: number;
@@ -6,6 +5,12 @@ export interface SearchRect {
   height: number;
   base: string;
   surface: string;
+}
+
+export interface TextSpan {
+  span_text_id: number;
+  span: string;
+  span_bbox: any;
 }
 
 export interface PreciseHighlights {
@@ -18,23 +23,39 @@ export interface PreciseHighlights {
   boundingBoxes: any[];
 }
 
+export interface TermBreakdown {
+  count: number;
+  score: number;
+  rects: SearchRect[];
+  text_spans: TextSpan[];
+}
+
+export interface ResultMetadata {
+  terms?: string[];
+  match_count?: number;
+  term_breakdown?: Record<string, TermBreakdown>;
+}
+
 export interface HybridSearchResult {
   chunk_id: number;
-  chunk_index: number;
   file_name: string;
   page_number: number;
-  rrf_score: number;
-  source: "keyword" | "semantic" | "both";
-  keyword_rank: number | null;
-  keyword_score: number | null;
-  keyword_weight?: number;
-  match_count?: number;
-  rects?: SearchRect[];
-  semantic_rank: number | null;
-  semantic_score: number | null;
-  semantic_weight?: number;
-  text?: string;
-  preciseHighlight: PreciseHighlights;
+  score: number;
+  source: string;
+  text: string;
+  rects: SearchRect[];
+  rank: number;
+  metadata: {
+    intent_boost?: number;
+    density_boost?: number;
+    best_sentence?: string;
+    texts_span?: TextSpan[];
+    terms?: string[];
+    match_count?: number;
+    term_breakdown?: Record<string, TermBreakdown>;
+    keyword_rank?: number | null;
+    semantic_rank?: number | null;
+  };
 }
 
 export interface SearchContextProps {

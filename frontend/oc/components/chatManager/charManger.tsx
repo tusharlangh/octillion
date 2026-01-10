@@ -1,8 +1,7 @@
 "use client";
 
 import { useChatQuery, Message } from "@/hooks/useChatQuery";
-import { Home } from "lucide-react";
-import { createContext, useEffect } from "react";
+import { createContext } from "react";
 
 interface QueryContextProps {
   search: string;

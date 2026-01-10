@@ -3,7 +3,7 @@
 import { useContext, useEffect, useState } from "react";
 import { queryContext } from "./searchManger";
 import SearchLoading from "../animations/searchLoading";
-import { ChevronDown, FileText, Hash, Sparkle, Sparkles } from "lucide-react";
+import { Sparkle } from "lucide-react";
 import { DM_Sans } from "next/font/google";
 import SmartPDFViewer from "../fileManager/SmartPDFViewer";
 import { HybridSearchResult } from "@/types/search";
@@ -25,11 +25,9 @@ type ViewerState = {
   isOpen: boolean;
   url: string;
   fileName: string;
-  highlights: Record<
-    number,
-    { x: number; y: number; width: number; height: number }[]
-  >;
+  highlights: Record<number, HybridSearchResult["rects"]>;
   initialPage: number;
+  isKeywordResult: boolean;
 };
 
 export default function Result() {
@@ -51,6 +49,7 @@ export default function Result() {
     fileName: "",
     highlights: {},
     initialPage: 0,
+    isKeywordResult: false,
   });
 
   const [overview, setOverview] = useState("");
@@ -141,9 +140,26 @@ export default function Result() {
     }
 
     if (result.length !== 0) {
-      //GET();
+      GET();
     }
   }, [result]);
+
+  const termColorMap: Record<string, string> = {};
+
+  function colorForTerm(term: string, index: number) {
+    if (!termColorMap[term]) {
+      const hue = (index * 137.508) % 360;
+      termColorMap[term] = `hsla(${hue}, 70%, 55%, 0.31)`;
+    }
+    return termColorMap[term];
+  }
+
+  function buildTermColors(terms: string[]) {
+    return terms.reduce<Record<string, string>>((acc, term, index) => {
+      acc[term] = colorForTerm(term, index);
+      return acc;
+    }, {});
+  }
 
   const handleOpenViewer = (item: HybridSearchResult) => {
     const url = fileMapping[item.file_name];
@@ -152,15 +168,17 @@ export default function Result() {
       return;
     }
 
-    const rects =
-      item.source === "keyword"
-        ? item.rects!
-        : item.preciseHighlight.boundingBoxes;
+    const terms = lastSuccessfulSearch
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
 
-    const fileHighlights: Record<
-      number,
-      { x: number; y: number; width: number; height: number }[]
-    > =
+    const termColors = buildTermColors(terms);
+    console.log(termColors);
+
+    const rects = item.rects || [];
+
+    const fileHighlights: Record<number, typeof rects> =
       rects.length > 0
         ? {
             [item.page_number - 1]: rects,
@@ -173,10 +191,11 @@ export default function Result() {
       fileName: item.file_name,
       highlights: fileHighlights,
       initialPage: item.page_number - 1,
+      isKeywordResult: item.source === "keyword" || item.source === "both",
     });
   };
 
-  if (lastSuccessfulSearch.trim() === "" && result.length === 0) {
+  if (lastSuccessfulSearch.trim() === "" && result.length === 0 && !isLoading) {
     return (
       <div className="">
         <div className="pt-2 px-4 md:px-13 flex flex-col items-center justify-center gap-5 h-[60vh] animate-[fadeIn_0.5s_ease-out]">
@@ -225,7 +244,7 @@ export default function Result() {
   if (isLoading) return <SearchLoading />;
 
   return (
-    <div className="relative h-full pt-12 pb-24">
+    <div className="relative h-full pt-12 pb-16">
       <div className="mx-auto max-w-[680px] px-6 pb-50">
         {overview !== "NA" && (
           <article className="mb-16 animate-[fadeIn_0.6s_ease-out]">
@@ -303,7 +322,7 @@ export default function Result() {
               >
                 <span
                   className={`${dmSans.className} text-[15px] font-medium
-                  text-black dark:text-white`}
+                  text-black dark:text-white truncate max-w-80`}
                 >
                   {item.file_name}
                 </span>
@@ -333,21 +352,24 @@ export default function Result() {
                 transition-all duration-300
                 translate-y-[-4px] group-hover:translate-y-0"
               >
-                {item.keyword_rank !== null && (
-                  <span className={`${dmSans.className} font-normal`}>
-                    Keyword #{item.keyword_rank + 1}
-                  </span>
-                )}
-                {item.semantic_rank !== null && (
-                  <>
-                    {item.keyword_rank !== null && (
-                      <span className="opacity-40">·</span>
-                    )}
+                {item.metadata.keyword_rank !== null &&
+                  item.metadata.keyword_rank !== undefined && (
                     <span className={`${dmSans.className} font-normal`}>
-                      Semantic #{item.semantic_rank + 1}
+                      Keyword #{item.metadata.keyword_rank! + 1}
                     </span>
-                  </>
-                )}
+                  )}
+                {item.metadata.semantic_rank !== null &&
+                  item.metadata.semantic_rank !== undefined && (
+                    <>
+                      {item.metadata.keyword_rank !== null &&
+                        item.metadata.keyword_rank !== undefined && (
+                          <span className="opacity-40">·</span>
+                        )}
+                      <span className={`${dmSans.className} font-normal`}>
+                        Semantic #{item.metadata.semantic_rank! + 1}
+                      </span>
+                    </>
+                  )}
               </div>
             </article>
           ))}
@@ -360,6 +382,17 @@ export default function Result() {
           fileName={viewerState.fileName}
           initialPage={viewerState.initialPage}
           highlights={viewerState.highlights}
+          termColors={
+            viewerState.isKeywordResult
+              ? buildTermColors(
+                  lastSuccessfulSearch
+                    .toLowerCase()
+                    .split(/\s+/)
+                    .filter(Boolean)
+                )
+              : {}
+          }
+          isKeywordResult={viewerState.isKeywordResult}
           onClose={() => setViewerState((s) => ({ ...s, isOpen: false }))}
         />
       )}

@@ -10,7 +10,7 @@ const dmSans = DM_Sans({
 
 export default function SearchLoading() {
   return (
-    <div className="pt-2 px-4 md:px-13 overflow-y-hidden">
+    <div className="mx-auto max-w-[680px] pt-2 px-6 overflow-y-hidden">
       <div className="pt-5 pb-16">
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => (
@@ -23,8 +23,7 @@ export default function SearchLoading() {
                 delay: i * 0.1,
                 ease: "easeOut",
               }}
-              className="group backdrop-blur-xl border border-[#E5E5E5] dark:border-[#1C1C1E] 
-                       rounded-[20px] p-8"
+              className="group backdrop-blur-xl rounded-[20px] p-4"
             >
               <div className="space-y-3">
                 {[...Array(3)].map((_, j) => (
