@@ -3,6 +3,9 @@ venv/
 __pycache__/
 *.pyc
 
+geometry-service/venv/
+.cache
+
 .serverless
 .serverless/
 .serverless_plugins/
