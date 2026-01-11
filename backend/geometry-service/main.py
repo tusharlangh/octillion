@@ -6,6 +6,9 @@ from functools import lru_cache
 import hashlib
 from datetime import datetime, timedelta
 from sentence_transformers import CrossEncoder
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 app = Flask(__name__)
@@ -35,7 +38,13 @@ def get_cached_pdf(url):
 
 @app.route("/geometry_v2/batch", methods=["POST"])
 def geometry_v2_batch():
+    import time
+    request_start = time.time()
+    
     try:
+        from geometry_extractor import get_doc_id
+        from geometry_persistence import get_batch_page_geometry_from_redis, get_page_geometry
+        
         data = request.get_json()
         
         file_name = data.get("file_name")
@@ -47,37 +56,63 @@ def geometry_v2_batch():
 
         pdf_bytes = get_cached_pdf(presigned_url)
         pdf_bytes.seek(0)
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pdf_content = pdf_bytes.read()
+        
+        doc_id = get_doc_id(pdf_content)
+        print(f"\n📄 {file_name}: {len(pages_data)} pages | doc_id={doc_id[:8]}")
 
-        all_results = []
-
+        # Extract all page indices
+        page_indices = []
+        page_data_map = {}
         for page_data in pages_data:
             page_input = page_data.get("page")
-            terms = page_data.get("terms")
-
-            if page_input is None or not isinstance(terms, list):
+            if page_input is None:
                 continue
-
+                
             if isinstance(page_input, str) and page_input.lower().startswith("p"):
                 page_index = int(page_input[1:]) - 1
             else:
                 page_index = int(page_input) - 1
+            
+            page_indices.append(page_index)
+            page_data_map[page_index] = page_data
 
-            if page_index < 0 or page_index >= len(doc):
+        # Batch fetch from Redis (1 call instead of N calls!)
+        geom_start = time.time()
+        cached_geometries = get_batch_page_geometry_from_redis(doc_id, page_indices)
+        geometry_batch_time = (time.time() - geom_start) * 1000
+
+        all_results = []
+        compute_time = 0
+
+        for page_index in page_indices:
+            page_data = page_data_map[page_index]
+            page_input = page_data.get("page")
+            terms = page_data.get("terms")
+
+            if not isinstance(terms, list):
                 continue
 
-            page = doc[page_index]
-            page_rect = page.rect
-
-            words = page.get_text("words")
-            words_by_rect = [
-                {
-                    "rect": fitz.Rect(w[:4]),
-                    "text": w[4].lower(),
-                    "raw": w
-                }
-                for w in words
-            ]
+            # Get from cache or compute
+            page_geometry = cached_geometries.get(page_index)
+            if not page_geometry:
+                comp_start = time.time()
+                page_geometry = get_page_geometry(doc_id, page_index, pdf_content)
+                compute_time += (time.time() - comp_start) * 1000
+            
+            # Use cached geometry for term matching
+            words_by_text = {}
+            for word in page_geometry.words:
+                text_lower = word.text.lower()
+                if text_lower not in words_by_text:
+                    words_by_text[text_lower] = []
+                words_by_text[text_lower].append({
+                    "x": word.x,
+                    "y": word.y,
+                    "x1": word.x + word.w,
+                    "y1": word.y + word.h,
+                    "text": text_lower
+                })
 
             page_results = []
 
@@ -95,24 +130,22 @@ def geometry_v2_batch():
                     if not isinstance(bbox, list) or len(bbox) != 4:
                         continue
 
-                    row_rect = fitz.Rect(*bbox) & page_rect
-                    if row_rect.is_empty:
-                        continue
-
-                    for w in words_by_rect:
-                        if not w["rect"].intersects(row_rect):
-                            continue
-
-                        if w["text"] == surface:
-                            x0, y0, x1, y1 = w["raw"][:4]
-                            rects.append({
-                                "x": x0,
-                                "y": y0,
-                                "width": x1 - x0,
-                                "height": y1 - y0,
-                                "surface": surface,
-                                "base": base
-                            })
+                    if surface in words_by_text:
+                        for word_geom in words_by_text[surface]:
+                            line_x0, line_y0, line_x1, line_y1 = bbox
+                            word_x0, word_y0 = word_geom["x"], word_geom["y"]
+                            word_x1, word_y1 = word_geom["x1"], word_geom["y1"]
+                            
+                            if not (word_x1 < line_x0 or word_x0 > line_x1 or 
+                                    word_y1 < line_y0 or word_y0 > line_y1):
+                                rects.append({
+                                    "x": word_x0,
+                                    "y": word_y0,
+                                    "width": word_x1 - word_x0,
+                                    "height": word_y1 - word_y0,
+                                    "surface": surface,
+                                    "base": base
+                                })
 
                 page_results.append({
                     "term": term,
@@ -125,8 +158,9 @@ def geometry_v2_batch():
                 "results": page_results
             })
 
-        doc.close()
-
+        total_time = (time.time() - request_start) * 1000
+        print(f"⏱️  Request: {total_time:.0f}ms | Batch Redis: {geometry_batch_time:.0f}ms | Compute: {compute_time:.0f}ms\n")
+        
         return jsonify({
             "file_name": file_name,
             "results": all_results
@@ -134,7 +168,10 @@ def geometry_v2_batch():
 
     except Exception as e:
         print(f"Error processing geometry_v2_batch: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route("/parse_to_json", methods=["POST"])
