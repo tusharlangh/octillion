@@ -7,6 +7,8 @@ import hashlib
 from datetime import datetime, timedelta
 from sentence_transformers import CrossEncoder
 from dotenv import load_dotenv
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 load_dotenv()
 
@@ -18,21 +20,24 @@ PDF_CACHE = {}
 CACHE_TTL = timedelta(minutes=10)
 
 def get_cached_pdf(url):
-    url_hash = hashlib.md5(url.encode()).hexdigest()
+    # Strip query parameters to get a stable S3 path for caching
+    stable_url = url.split('?')[0]
+    url_hash = hashlib.md5(stable_url.encode()).hexdigest()
     
     if url_hash in PDF_CACHE:
         cached_data, timestamp = PDF_CACHE[url_hash]
         if datetime.now() - timestamp < CACHE_TTL:
+            cached_data.seek(0)
             return cached_data
         else:
             del PDF_CACHE[url_hash]
     
+    print(f"Downloading PDF: {stable_url}")
     resp = requests.get(url, stream=True)
     resp.raise_for_status()
     pdf_bytes = io.BytesIO(resp.content)
     
     PDF_CACHE[url_hash] = (pdf_bytes, datetime.now())
-    
     return pdf_bytes
 
 
@@ -59,9 +64,8 @@ def geometry_v2_batch():
         pdf_content = pdf_bytes.read()
         
         doc_id = get_doc_id(pdf_content)
-        print(f"\n📄 {file_name}: {len(pages_data)} pages | doc_id={doc_id[:8]}")
+        print(f"\n{file_name}: {len(pages_data)} pages | doc_id={doc_id[:8]}")
 
-        # Extract all page indices
         page_indices = []
         page_data_map = {}
         for page_data in pages_data:
@@ -77,13 +81,23 @@ def geometry_v2_batch():
             page_indices.append(page_index)
             page_data_map[page_index] = page_data
 
-        # Batch fetch from Redis (1 call instead of N calls!)
         geom_start = time.time()
         cached_geometries = get_batch_page_geometry_from_redis(doc_id, page_indices)
         geometry_batch_time = (time.time() - geom_start) * 1000
 
         all_results = []
-        compute_time = 0
+        
+        missing_indices = [idx for idx in page_indices if not cached_geometries.get(idx)]
+        if missing_indices:
+            print(f"{len(missing_indices)} cache misses - computing in parallel")
+            def compute_one(idx):
+                return idx, get_page_geometry(doc_id, idx, pdf_content)
+            
+            with ThreadPoolExecutor(max_workers=min(len(missing_indices), 10)) as executor:
+                futures = [executor.submit(compute_one, idx) for idx in missing_indices]
+                for future in as_completed(futures):
+                    idx, geom = future.result()
+                    cached_geometries[idx] = geom
 
         for page_index in page_indices:
             page_data = page_data_map[page_index]
@@ -93,14 +107,10 @@ def geometry_v2_batch():
             if not isinstance(terms, list):
                 continue
 
-            # Get from cache or compute
             page_geometry = cached_geometries.get(page_index)
             if not page_geometry:
-                comp_start = time.time()
-                page_geometry = get_page_geometry(doc_id, page_index, pdf_content)
-                compute_time += (time.time() - comp_start) * 1000
+                continue
             
-            # Use cached geometry for term matching
             words_by_text = {}
             for word in page_geometry.words:
                 text_lower = word.text.lower()
@@ -159,7 +169,8 @@ def geometry_v2_batch():
             })
 
         total_time = (time.time() - request_start) * 1000
-        print(f"⏱️  Request: {total_time:.0f}ms | Batch Redis: {geometry_batch_time:.0f}ms | Compute: {compute_time:.0f}ms\n")
+        total_compute = sum(page_results_meta.get('compute', 0) for page_results_meta in all_results if isinstance(page_results_meta, dict))
+        print(f"Request: {total_time:.0f}ms | Batch Redis: {geometry_batch_time:.0f}ms | Compute: {total_compute:.0f}ms\n")
         
         return jsonify({
             "file_name": file_name,
@@ -171,6 +182,69 @@ def geometry_v2_batch():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/precompute_geometry", methods=["POST"])
+def precompute_geometry():
+    try:
+        data = request.get_json()
+        presigned_url = data.get("url")
+        
+        if not presigned_url:
+            return jsonify({"error": "Missing url parameter"}), 400
+        
+        threading.Thread(
+            target=_precompute_all_pages,
+            args=(presigned_url,),
+            daemon=True
+        ).start()
+        
+        return jsonify({"status": "queued"})
+        
+    except Exception as e:
+        print(f"Error in precompute_geometry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def _precompute_all_pages(presigned_url):
+    try:
+        from geometry_extractor import get_doc_id
+        from geometry_persistence import get_page_geometry
+        
+        pdf_bytes = get_cached_pdf(presigned_url)
+        pdf_bytes.seek(0)
+        pdf_content = pdf_bytes.read()
+        doc_id = get_doc_id(pdf_content)
+        
+        pdf_bytes_io = io.BytesIO(pdf_content)
+        doc = fitz.open(stream=pdf_bytes_io, filetype="pdf")
+        total_pages = len(doc)
+        doc.close()
+        
+        print(f"Starting pre-computation: {doc_id} ({total_pages} pages)")
+        
+        def compute_page(page_index):
+            try:
+                get_page_geometry(doc_id, page_index, pdf_content)
+                return page_index, True
+            except Exception as e:
+                print(f"Failed to compute page {page_index}: {e}")
+                return page_index, False
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(compute_page, i) for i in range(total_pages)]
+            completed = 0
+            for future in as_completed(futures):
+                page_idx, success = future.result()
+                if success:
+                    completed += 1
+        
+        print(f"Pre-computation complete: {doc_id} ({completed}/{total_pages} pages)")
+        
+    except Exception as e:
+        print(f"Pre-computation failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 

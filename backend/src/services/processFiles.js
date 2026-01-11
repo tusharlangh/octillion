@@ -285,6 +285,12 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
       }
     );
 
+    fetch("http://localhost:8000/precompute_geometry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: presignedUrl }),
+    }).catch(err => console.warn(`Geometry precompute failed for ${fileName}:`, err.message));
+
     const fileDuration = Date.now() - fileStartTime;
     const storageMb = parseFloat(calculateJsonSizeMb(data));
 

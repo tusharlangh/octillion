@@ -8,11 +8,17 @@ dotenv.config();
 
 const apiKey = process.env.OPENAI_API_KEY;
 
-export async function callToEmbed(text, model = "text-embedding-3-small") {
+export async function callToEmbed(
+  text,
+  model = "text-embedding-3-small",
+  skipCache = false
+) {
   try {
-    const cachedEmbedding = await getEmbedding(text);
-    if (cachedEmbedding) {
-      return cachedEmbedding;
+    if (!skipCache) {
+      const cachedEmbedding = await getEmbedding(text);
+      if (cachedEmbedding) {
+        return cachedEmbedding;
+      }
     }
 
     const response = await fetch("https://api.openai.com/v1/embeddings", {
@@ -45,9 +51,11 @@ export async function callToEmbed(text, model = "text-embedding-3-small") {
       embedding = data.data[0].embedding;
     }
 
-    setEmbedding(text, embedding).catch((err) =>
-      console.error("Failed to cache embedding:", err)
-    );
+    if (!skipCache) {
+      setEmbedding(text, embedding).catch((err) =>
+        console.error("Failed to cache embedding:", err)
+      );
+    }
 
     return embedding;
   } catch (error) {

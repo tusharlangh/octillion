@@ -5,7 +5,7 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
   try {
     const results = {};
     const geometryBatchMap = new Map();
-    const limit = pLimit(20);
+    const limit = pLimit(50);
 
     for (let result of scores.results) {
       const url = fileMapping[result.fileName];
@@ -29,7 +29,11 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
           let pageEntry = fileEntry.pages.find((p) => p.page === pageNo);
 
           if (!pageEntry) {
-            pageEntry = { page: pageNo, terms: [] };
+            pageEntry = { 
+              page: pageNo, 
+              terms: [],
+              matchCount: 0 
+            };
             fileEntry.pages.push(pageEntry);
           }
 
@@ -37,7 +41,14 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
             term,
             matches: metadata.matches,
           });
+          pageEntry.matchCount += (metadata.matches?.length || 0);
         }
+      }
+
+      // Optimization: For huge documents, only fetch geometry for the Top 20 most relevant pages
+      if (fileEntry.pages.length > 20) {
+        fileEntry.pages.sort((a, b) => b.matchCount - a.matchCount);
+        fileEntry.pages = fileEntry.pages.slice(0, 20);
       }
     }
 

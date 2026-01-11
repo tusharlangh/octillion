@@ -183,12 +183,17 @@ async function keywordSearch(
   userId,
   options = {}
 ) {
-  const { topK } = options;
+  const { topK = 10 } = options;
   const searchContentTimer = new SearchTimer("Search Content");
   const scores = await searchContent_v2(pagesContent, inverted, search);
   const searchContentLatency = searchContentTimer.stop();
 
-  const searchBuildIndexTimer = new SearchTimer("Search Content");
+  // Optimization: Only compute geometry for the most relevant documents
+  if (scores.results && scores.results.length > topK * 2) {
+    scores.results = scores.results.slice(0, topK * 2);
+  }
+
+  const searchBuildIndexTimer = new SearchTimer("Search Build Index");
   const result = await searchBuildIndex_v2(scores, fileMapping);
   const searchBuildIndexLatency = searchBuildIndexTimer.stop();
 
