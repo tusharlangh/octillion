@@ -25,9 +25,9 @@ import { analyzeAndBoost } from "./parse/scoreSentenceIntent.js";
 import { explanationDensityBoost } from "./parse/explanationDensity.js";
 import { sentenceLevelReRanking } from "./parse/sentenceReRanker.js";
 import {
-  getCachedKeywordSearch,
-  setCacheKeywordSearch,
-} from "../utils/callsCache/upstashKeywordCache.js";
+  getQueryAnalysis,
+  setQueryAnalysis,
+} from "../utils/callsCache/queryAnalysisCache.js";
 
 dotenv.config();
 
@@ -183,11 +183,6 @@ async function keywordSearch(
   userId,
   options = {}
 ) {
-  const cached = await getCachedKeywordSearch(parseId, userId, search);
-  if (cached) {
-    return cached;
-  }
-
   const { topK } = options;
   const searchContentTimer = new SearchTimer("Search Content");
   const scores = await searchContent_v2(pagesContent, inverted, search);
@@ -201,10 +196,6 @@ async function keywordSearch(
     searchContentLatency: ${searchContentLatency}
     searchBuildIndexLatency: ${searchBuildIndexLatency}
   `);
-
-  setCacheKeywordSearch(parseId, userId, search, result).catch((err) =>
-    console.error("Failed to cache keyword search:", err)
-  );
 
   return result;
 }
@@ -223,17 +214,23 @@ async function hybridSearch(
 
   const overallTimer = new SearchTimer("Overall Search");
 
-  const intentAnalysis = queryIntent.analyzeQuery(query);
+  let analysis = await getQueryAnalysis(query);
+  
+  if (!analysis) {
+    const intentAnalysis = queryIntent.analyzeQuery(query);
+    const legacyAnalysis = analyzeQuery(query);
 
-  const legacyAnalysis = analyzeQuery(query);
-
-  const analysis = {
-    ...legacyAnalysis,
-    intent: intentAnalysis.intent,
-    semanticWeight: intentAnalysis.semanticWeight,
-    keywordWeight: intentAnalysis.keywordWeight,
-    expansions: intentAnalysis.expansions,
-  };
+    analysis = {
+      ...legacyAnalysis,
+      intent: intentAnalysis.intent,
+      semanticWeight: intentAnalysis.semanticWeight,
+      keywordWeight: intentAnalysis.keywordWeight,
+      expansions: intentAnalysis.expansions,
+    };
+    
+    // Fire and forget cache set
+    setQueryAnalysis(query, analysis).catch(console.error);
+  }
 
   console.log("\nQUERY ANALYSIS:");
   console.log(`  Original: "${query}"`);

@@ -104,7 +104,9 @@ async function callMainBatch({ fileName, url, pages }) {
     }),
   });
 
-  return response.json();
+  const data = await response.json();
+
+  return data;
 }
 
 export async function searchContent_v2(sitesContent, inverted, search) {
