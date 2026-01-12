@@ -56,14 +56,14 @@ export function ResultBadges({ item, totalResults, index }: ResultBadgesProps) {
         </>
       )}
 
-      {item.match_count !== undefined && item.match_count > 0 && (
+      {item.rects.length !== undefined && item.rects.length > 0 && (
         <>
           <span className="opacity-40">·</span>
           <span
             className={`${dmSans.className} font-normal tabular-nums
               text-neutral-500 dark:text-neutral-500`}
           >
-            {item.match_count}
+            {item.rects.length}
           </span>
         </>
       )}
