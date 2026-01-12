@@ -92,8 +92,6 @@ export default function Result() {
         const data = await res.json();
         setOverview(data.response);
 
-        console.log(data.response);
-
         if (!res.ok) {
           const errorMessage =
             data.error?.message ||
@@ -162,7 +160,6 @@ export default function Result() {
   }
 
   const handleOpenViewer = (item: HybridSearchResult) => {
-    console.log(item.metadata);
     const url = fileMapping[item.file_name];
     if (!url) {
       console.warn("Missing presigned URL for", item.file_name);
@@ -175,7 +172,6 @@ export default function Result() {
       .filter(Boolean);
 
     const termColors = buildTermColors(terms);
-    console.log(termColors);
 
     const rects = item.rects || [];
 

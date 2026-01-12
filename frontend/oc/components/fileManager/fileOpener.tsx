@@ -4,14 +4,11 @@ import { useEffect, useState, useRef } from "react";
 import Portal from "../portal";
 import { X, ExternalLink, Minus, Plus, Download } from "lucide-react";
 import { DM_Sans } from "next/font/google";
-import * as pdfjs from "pdfjs-dist";
 
 const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
 });
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ModalProps {
   isOpen: boolean;
@@ -36,6 +33,9 @@ export default function FileOpener({
     if (isOpen) {
       const loadPdf = async () => {
         try {
+          const pdfjs = await import("pdfjs-dist");
+          pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+          
           const loadingTask = pdfjs.getDocument(url);
           const loadedPdf = await loadingTask.promise;
           setPdf(loadedPdf);
