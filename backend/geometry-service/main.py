@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, json, request, jsonify
 import fitz
 import requests
 import io
@@ -20,7 +20,6 @@ PDF_CACHE = {}
 CACHE_TTL = timedelta(minutes=10)
 
 def get_cached_pdf(url):
-    # Strip query parameters to get a stable S3 path for caching
     stable_url = url.split('?')[0]
     url_hash = hashlib.md5(stable_url.encode()).hexdigest()
     
@@ -339,6 +338,44 @@ def sentence_level_ranking():
     scores = model.predict(model_input)
 
     return jsonify(scores.tolist())
+
+
+def lambda_handler(event, context):
+    path = event.get('path')
+    body = event.get('body')
+    
+    if isinstance(body, str):
+        body = json.loads(body)
+
+    with app.test_request_context(path=path, method='POST', json=body):
+        try:
+            if path == '/geometry_v2/batch':
+                rv = geometry_v2_batch()
+            elif path == '/precompute_geometry':
+                rv = precompute_geometry()
+            elif path == '/parse_to_json':
+                rv = generate_canonical_json()
+            elif path == '/sentence_level_ranking':
+                rv = sentence_level_ranking()
+            else:
+                return {'statusCode': 404, 'body': json.dumps({'error': 'Not Found'})}
+
+            status_code = 200
+            if isinstance(rv, tuple):
+                response, status_code = rv
+            else:
+                response = rv
+
+            return {
+                'statusCode': status_code,
+                'body': response.get_data(as_text=True)
+            }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': str(e)})
+            }
+
 
 
 if __name__ == "__main__":

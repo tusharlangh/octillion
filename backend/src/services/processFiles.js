@@ -14,6 +14,7 @@ import {
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../utils/aws/s3Client.js";
 import pRetry from "p-retry";
+import { invokeGeometry } from "../utils/geometryClient.js";
 
 dotenv.config();
 
@@ -259,21 +260,7 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
 
   try {
     const data = await pRetry(
-      async () => {
-        const response = await fetch("http://localhost:8000/parse_to_json", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ url: presignedUrl, file_name: fileName }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        return await response.json();
-      },
+      () => invokeGeometry("/parse_to_json", { url: presignedUrl, file_name: fileName }),
       {
         retries: 3,
         minTimeout: 2000,
@@ -285,11 +272,8 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
       }
     );
 
-    fetch("http://localhost:8000/precompute_geometry", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: presignedUrl }),
-    }).catch(err => console.warn(`Geometry precompute failed for ${fileName}:`, err.message));
+    invokeGeometry("/precompute_geometry", { url: presignedUrl }, true)
+      .catch(err => console.warn(`Geometry precompute failed for ${fileName}:`, err.message));
 
     const fileDuration = Date.now() - fileStartTime;
     const storageMb = parseFloat(calculateJsonSizeMb(data));

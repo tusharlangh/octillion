@@ -1,5 +1,6 @@
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
 import pLimit from "p-limit";
+import { invokeGeometry } from "../../utils/geometryClient.js";
 
 export async function searchBuildIndex_v2(scores, fileMapping) {
   try {
@@ -103,19 +104,11 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
 }
 
 async function callMainBatch({ fileName, url, pages }) {
-  const response = await fetch("http://localhost:8000/geometry_v2/batch", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      file_name: fileName,
-      url,
-      pages,
-    }),
+  const data = await invokeGeometry("/geometry_v2/batch", {
+    file_name: fileName,
+    url,
+    pages,
   });
-
-  const data = await response.json();
 
   return data;
 }

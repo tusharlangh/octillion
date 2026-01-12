@@ -5,11 +5,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+  url: process.env.UPSTASH_REDIS_URL,
+  token: process.env.UPSTASH_REDIS_TOKEN,
 });
 
-const ANALYSIS_TTL = 60 * 60 * 24 * 7; // 1 week
+const ANALYSIS_TTL = 60 * 60 * 24 * 7;
 const CACHE_PREFIX = "analysis:";
 
 function getCacheKey(text) {
