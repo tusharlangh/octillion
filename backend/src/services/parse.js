@@ -24,6 +24,10 @@ import * as queryIntent from "./queryIntent.js";
 import { analyzeAndBoost } from "./parse/scoreSentenceIntent.js";
 import { explanationDensityBoost } from "./parse/explanationDensity.js";
 import { sentenceLevelReRanking } from "./parse/sentenceReRanker.js";
+import {
+  getQueryAnalysis,
+  setQueryAnalysis,
+} from "../utils/callsCache/queryAnalysisCache.js";
 
 dotenv.config();
 
@@ -175,14 +179,21 @@ async function keywordSearch(
   pagesContent,
   inverted,
   fileMapping,
+  parseId,
+  userId,
   options = {}
 ) {
-  const { topK } = options;
+  const { topK = 10 } = options;
   const searchContentTimer = new SearchTimer("Search Content");
   const scores = await searchContent_v2(pagesContent, inverted, search);
   const searchContentLatency = searchContentTimer.stop();
 
-  const searchBuildIndexTimer = new SearchTimer("Search Content");
+  // Optimization: Only compute geometry for the most relevant documents
+  if (scores.results && scores.results.length > topK * 2) {
+    scores.results = scores.results.slice(0, topK * 2);
+  }
+
+  const searchBuildIndexTimer = new SearchTimer("Search Build Index");
   const result = await searchBuildIndex_v2(scores, fileMapping);
   const searchBuildIndexLatency = searchBuildIndexTimer.stop();
 
@@ -208,17 +219,23 @@ async function hybridSearch(
 
   const overallTimer = new SearchTimer("Overall Search");
 
-  const intentAnalysis = queryIntent.analyzeQuery(query);
+  let analysis = await getQueryAnalysis(query);
+  
+  if (!analysis) {
+    const intentAnalysis = queryIntent.analyzeQuery(query);
+    const legacyAnalysis = analyzeQuery(query);
 
-  const legacyAnalysis = analyzeQuery(query);
-
-  const analysis = {
-    ...legacyAnalysis,
-    intent: intentAnalysis.intent,
-    semanticWeight: intentAnalysis.semanticWeight,
-    keywordWeight: intentAnalysis.keywordWeight,
-    expansions: intentAnalysis.expansions,
-  };
+    analysis = {
+      ...legacyAnalysis,
+      intent: intentAnalysis.intent,
+      semanticWeight: intentAnalysis.semanticWeight,
+      keywordWeight: intentAnalysis.keywordWeight,
+      expansions: intentAnalysis.expansions,
+    };
+    
+    // Fire and forget cache set
+    setQueryAnalysis(query, analysis).catch(console.error);
+  }
 
   console.log("\nQUERY ANALYSIS:");
   console.log(`  Original: "${query}"`);
@@ -259,6 +276,8 @@ async function hybridSearch(
       pagesContent,
       inverted,
       fileMapping,
+      parseId,
+      userId,
       {
         topK: topK * 2,
       }
@@ -279,9 +298,17 @@ async function hybridSearch(
   } else {
     queryEmbedding = await callToEmbed(primarySemanticQuery);
     const [kwResults, semResults] = await Promise.all([
-      keywordSearch(keywordQuery, pagesContent, inverted, fileMapping, {
-        topK: topK * 2,
-      }).then((result) => {
+      keywordSearch(
+        keywordQuery,
+        pagesContent,
+        inverted,
+        fileMapping,
+        parseId,
+        userId,
+        {
+          topK: topK * 2,
+        }
+      ).then((result) => {
         keywordTimer.stop();
         return result;
       }),
@@ -479,7 +506,7 @@ async function hybridSearch(
     };
   });
 
-  console.log(resultsWithPreciseHighlights);
+  //console.log(resultsWithPreciseHighlights);
 
   const totalLatency = overallTimer.stop();
 

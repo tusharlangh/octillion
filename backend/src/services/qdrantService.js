@@ -34,6 +34,12 @@ export async function searchQdrant(
 
     const { topK = 10 } = options;
 
+    /*
+    const cached = await getCachedQdrant(parseId, userId, queryEmbedding);
+    if (cached) {
+      return cached;
+    }
+    */
     let collectionName;
     try {
       collectionName = getCollectionName(parseId, userId);
@@ -54,7 +60,7 @@ export async function searchQdrant(
         vector: queryEmbedding,
         limit: topK,
         with_payload: {
-          include: ["chunk_id", "stats"]
+          include: ["chunk_id", "stats"],
         },
         with_vector: false,
       });

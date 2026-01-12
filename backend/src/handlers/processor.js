@@ -5,7 +5,7 @@ export const handler = async (event) => {
   const { id, keys, userId } = event;
   const startTime = Date.now();
 
-  console.log(`🚀 Lambda processor started for parse_id: ${id}`, {
+  console.log(`Lambda processor started for parse_id: ${id}`, {
     userId,
     fileCount: keys?.length || 0,
     keys: keys?.slice(0, 3),
@@ -16,7 +16,7 @@ export const handler = async (event) => {
     await processFiles(id, keys, userId);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`✅ Lambda processor succeeded for parse_id: ${id}`, {
+    console.log(`Lambda processor succeeded for parse_id: ${id}`, {
       duration: `${duration}s`,
       fileCount: keys?.length || 0,
     });
@@ -29,7 +29,7 @@ export const handler = async (event) => {
   } catch (error) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    console.error(`❌ Lambda processor failed for parse_id: ${id}`, {
+    console.error(`Lambda processor failed for parse_id: ${id}`, {
       error: error.message,
       errorCode: error.code || error.name,
       errorType: error.isOperational ? "Operational" : "Unexpected",
@@ -57,23 +57,18 @@ export const handler = async (event) => {
 
       if (updateError) {
         console.error(
-          `⚠️ Failed to update database with error status for parse_id: ${id}`,
+          `Failed to update database with error status for parse_id: ${id}`,
           {
             updateError: updateError.message,
           }
         );
       } else {
-        console.log(
-          `📝 Database updated with FAILED status for parse_id: ${id}`
-        );
+        console.log(`Database updated with FAILED status for parse_id: ${id}`);
       }
     } catch (dbError) {
-      console.error(
-        `⚠️ Exception while updating database for parse_id: ${id}`,
-        {
-          dbError: dbError.message,
-        }
-      );
+      console.error(`Exception while updating database for parse_id: ${id}`, {
+        dbError: dbError.message,
+      });
     }
 
     return {

@@ -1,10 +1,26 @@
 import dotenv from "dotenv";
+import {
+  getEmbedding,
+  setEmbedding,
+} from "../callsCache/upstashEmbeddingCache.js";
+
 dotenv.config();
 
 const apiKey = process.env.OPENAI_API_KEY;
 
-export async function callToEmbed(text, model = "text-embedding-3-small") {
+export async function callToEmbed(
+  text,
+  model = "text-embedding-3-small",
+  skipCache = false
+) {
   try {
+    if (!skipCache) {
+      const cachedEmbedding = await getEmbedding(text);
+      if (cachedEmbedding) {
+        return cachedEmbedding;
+      }
+    }
+
     const response = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
@@ -28,11 +44,20 @@ export async function callToEmbed(text, model = "text-embedding-3-small") {
 
     const data = await response.json();
 
+    let embedding;
     if (Array.isArray(text)) {
-      return data.data.map((item) => item.embedding);
+      embedding = data.data.map((item) => item.embedding);
+    } else {
+      embedding = data.data[0].embedding;
     }
 
-    return data.data[0].embedding;
+    if (!skipCache) {
+      setEmbedding(text, embedding).catch((err) =>
+        console.error("Failed to cache embedding:", err)
+      );
+    }
+
+    return embedding;
   } catch (error) {
     console.error("Error creating embedding:", error);
     throw error;

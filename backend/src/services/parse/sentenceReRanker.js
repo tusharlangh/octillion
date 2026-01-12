@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { invokeGeometry } from "../../utils/geometryClient.js";
 dotenv.config();
 
 export async function sentenceLevelReRanking(items, query) {
@@ -65,16 +66,10 @@ export async function sentenceLevelReRanking(items, query) {
 }
 
 async function callMain(query, passages) {
-  const response = await fetch("http://127.0.0.1:8000/sentence_level_ranking", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      query,
-      passages,
-    }),
+  const scores = await invokeGeometry("/sentence_level_ranking", {
+    query,
+    passages,
   });
 
-  return response.json();
+  return scores;
 }

@@ -162,6 +162,7 @@ export default function Result() {
   }
 
   const handleOpenViewer = (item: HybridSearchResult) => {
+    console.log(item.metadata);
     const url = fileMapping[item.file_name];
     if (!url) {
       console.warn("Missing presigned URL for", item.file_name);
@@ -352,24 +353,9 @@ export default function Result() {
                 transition-all duration-300
                 translate-y-[-4px] group-hover:translate-y-0"
               >
-                {item.metadata.keyword_rank !== null &&
-                  item.metadata.keyword_rank !== undefined && (
-                    <span className={`${dmSans.className} font-normal`}>
-                      Keyword #{item.metadata.keyword_rank! + 1}
-                    </span>
-                  )}
-                {item.metadata.semantic_rank !== null &&
-                  item.metadata.semantic_rank !== undefined && (
-                    <>
-                      {item.metadata.keyword_rank !== null &&
-                        item.metadata.keyword_rank !== undefined && (
-                          <span className="opacity-40">·</span>
-                        )}
-                      <span className={`${dmSans.className} font-normal`}>
-                        Semantic #{item.metadata.semantic_rank! + 1}
-                      </span>
-                    </>
-                  )}
+                <span className={`${dmSans.className} font-normal`}>
+                  #{item.rank! + 1}
+                </span>
               </div>
             </article>
           ))}

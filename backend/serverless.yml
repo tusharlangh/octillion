@@ -21,7 +21,9 @@ provider:
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
-          Resource: "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${sls:stage}-processor"
+          Resource:
+            - "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${sls:stage}-processor"
+            - "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${sls:stage}-geometry"
   environment:
     PORT: ${env:PORT, '5002'}
     SUPABASE_URL: ${env:SUPABASE_URL}
@@ -33,13 +35,19 @@ provider:
     QDRANT_API_KEY: ${env:QDRANT_API_KEY}
     OPENAI_API_KEY: ${env:OPENAI_API_KEY}
     WORKER_FUNCTION_NAME: octillion-backend-dev-processor
+    GEOMETRY_LAMBDA_NAME: octillion-backend-dev-geometry
+    GROQ_API_KEY: ${env:GROQ_API_KEY}
+    AXIOM_API_TOKEN: ${env:AXIOM_API_TOKEN}
+    AXIOM_DATASET: ${env:AXIOM_DATASET}
+    GEOMETRY_SERVICE_URL: ${env:GEOMETRY_SERVICE_URL}
+    UPSTASH_REDIS_URL: ${env:UPSTASH_REDIS_URL}
+    UPSTASH_REDIS_TOKEN: ${env:UPSTASH_REDIS_TOKEN}
     NODE_ENV: ${env:NODE_ENV}
-    TRANSFORMERS_CACHE: /var/task/.cache/huggingface
 
 functions:
   api:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:658d8101666a9e65918053e0d8e1ea638a36af0aecf6078c0c6a149f0b8294db
-    timeout: 29
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:0393ac61d272805237a425b4b512544955fac34bd0a413d14602ecf803b24dab
+    timeout: 30
     memorySize: 2048
     events:
       - http:
@@ -50,5 +58,11 @@ functions:
           method: ANY
 
   processor:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:658d8101666a9e65918053e0d8e1ea638a36af0aecf6078c0c6a149f0b8294db
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:0393ac61d272805237a425b4b512544955fac34bd0a413d14602ecf803b24dab
+    timeout: 900
+    memorySize: 3008
+
+  geometry:
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-geometry-dev@sha256:b35054ef732364e9cc942d39df96091b147b930170dbe3ca292b1b22b26d1697
+    timeout: 300
     memorySize: 3008

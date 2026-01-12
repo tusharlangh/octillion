@@ -182,6 +182,7 @@ export async function getJsonFromS3(key) {
 
         const response = await s3.send(command);
         const str = await response.Body.transformToString();
+
         return JSON.parse(str);
       },
       {

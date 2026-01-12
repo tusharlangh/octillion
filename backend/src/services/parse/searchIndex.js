@@ -1,11 +1,12 @@
 import { AppError, ValidationError } from "../../middleware/errorHandler.js";
 import pLimit from "p-limit";
+import { invokeGeometry } from "../../utils/geometryClient.js";
 
 export async function searchBuildIndex_v2(scores, fileMapping) {
   try {
     const results = {};
     const geometryBatchMap = new Map();
-    const limit = pLimit(20);
+    const limit = pLimit(50);
 
     for (let result of scores.results) {
       const url = fileMapping[result.fileName];
@@ -29,7 +30,11 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
           let pageEntry = fileEntry.pages.find((p) => p.page === pageNo);
 
           if (!pageEntry) {
-            pageEntry = { page: pageNo, terms: [] };
+            pageEntry = { 
+              page: pageNo, 
+              terms: [],
+              matchCount: 0 
+            };
             fileEntry.pages.push(pageEntry);
           }
 
@@ -37,7 +42,14 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
             term,
             matches: metadata.matches,
           });
+          pageEntry.matchCount += (metadata.matches?.length || 0);
         }
+      }
+
+      // Optimization: For huge documents, only fetch geometry for the Top 20 most relevant pages
+      if (fileEntry.pages.length > 20) {
+        fileEntry.pages.sort((a, b) => b.matchCount - a.matchCount);
+        fileEntry.pages = fileEntry.pages.slice(0, 20);
       }
     }
 
@@ -92,19 +104,13 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
 }
 
 async function callMainBatch({ fileName, url, pages }) {
-  const response = await fetch("http://localhost:8000/geometry_v2/batch", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      file_name: fileName,
-      url,
-      pages,
-    }),
+  const data = await invokeGeometry("/geometry_v2/batch", {
+    file_name: fileName,
+    url,
+    pages,
   });
 
-  return response.json();
+  return data;
 }
 
 export async function searchContent_v2(sitesContent, inverted, search) {

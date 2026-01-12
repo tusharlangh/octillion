@@ -1,5 +1,4 @@
 import supabase from "../../utils/supabase/client.js";
-import { AppError } from "../../middleware/errorHandler.js";
 import pRetry from "p-retry";
 
 export async function saveFilesRecord(

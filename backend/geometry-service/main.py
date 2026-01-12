@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, json, request, jsonify
 import fitz
 import requests
 import io
@@ -6,6 +6,11 @@ from functools import lru_cache
 import hashlib
 from datetime import datetime, timedelta
 from sentence_transformers import CrossEncoder
+from dotenv import load_dotenv
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+load_dotenv()
 
 
 app = Flask(__name__)
@@ -15,27 +20,35 @@ PDF_CACHE = {}
 CACHE_TTL = timedelta(minutes=10)
 
 def get_cached_pdf(url):
-    url_hash = hashlib.md5(url.encode()).hexdigest()
+    stable_url = url.split('?')[0]
+    url_hash = hashlib.md5(stable_url.encode()).hexdigest()
     
     if url_hash in PDF_CACHE:
         cached_data, timestamp = PDF_CACHE[url_hash]
         if datetime.now() - timestamp < CACHE_TTL:
+            cached_data.seek(0)
             return cached_data
         else:
             del PDF_CACHE[url_hash]
     
+    print(f"Downloading PDF: {stable_url}")
     resp = requests.get(url, stream=True)
     resp.raise_for_status()
     pdf_bytes = io.BytesIO(resp.content)
     
     PDF_CACHE[url_hash] = (pdf_bytes, datetime.now())
-    
     return pdf_bytes
 
 
 @app.route("/geometry_v2/batch", methods=["POST"])
 def geometry_v2_batch():
+    import time
+    request_start = time.time()
+    
     try:
+        from geometry_extractor import get_doc_id
+        from geometry_persistence import get_batch_page_geometry_from_redis, get_page_geometry
+        
         data = request.get_json()
         
         file_name = data.get("file_name")
@@ -47,37 +60,68 @@ def geometry_v2_batch():
 
         pdf_bytes = get_cached_pdf(presigned_url)
         pdf_bytes.seek(0)
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pdf_content = pdf_bytes.read()
+        
+        doc_id = get_doc_id(pdf_content)
+        print(f"\n{file_name}: {len(pages_data)} pages | doc_id={doc_id[:8]}")
 
-        all_results = []
-
+        page_indices = []
+        page_data_map = {}
         for page_data in pages_data:
             page_input = page_data.get("page")
-            terms = page_data.get("terms")
-
-            if page_input is None or not isinstance(terms, list):
+            if page_input is None:
                 continue
-
+                
             if isinstance(page_input, str) and page_input.lower().startswith("p"):
                 page_index = int(page_input[1:]) - 1
             else:
                 page_index = int(page_input) - 1
+            
+            page_indices.append(page_index)
+            page_data_map[page_index] = page_data
 
-            if page_index < 0 or page_index >= len(doc):
+        geom_start = time.time()
+        cached_geometries = get_batch_page_geometry_from_redis(doc_id, page_indices)
+        geometry_batch_time = (time.time() - geom_start) * 1000
+
+        all_results = []
+        
+        missing_indices = [idx for idx in page_indices if not cached_geometries.get(idx)]
+        if missing_indices:
+            print(f"{len(missing_indices)} cache misses - computing in parallel")
+            def compute_one(idx):
+                return idx, get_page_geometry(doc_id, idx, pdf_content)
+            
+            with ThreadPoolExecutor(max_workers=min(len(missing_indices), 10)) as executor:
+                futures = [executor.submit(compute_one, idx) for idx in missing_indices]
+                for future in as_completed(futures):
+                    idx, geom = future.result()
+                    cached_geometries[idx] = geom
+
+        for page_index in page_indices:
+            page_data = page_data_map[page_index]
+            page_input = page_data.get("page")
+            terms = page_data.get("terms")
+
+            if not isinstance(terms, list):
                 continue
 
-            page = doc[page_index]
-            page_rect = page.rect
-
-            words = page.get_text("words")
-            words_by_rect = [
-                {
-                    "rect": fitz.Rect(w[:4]),
-                    "text": w[4].lower(),
-                    "raw": w
-                }
-                for w in words
-            ]
+            page_geometry = cached_geometries.get(page_index)
+            if not page_geometry:
+                continue
+            
+            words_by_text = {}
+            for word in page_geometry.words:
+                text_lower = word.text.lower()
+                if text_lower not in words_by_text:
+                    words_by_text[text_lower] = []
+                words_by_text[text_lower].append({
+                    "x": word.x,
+                    "y": word.y,
+                    "x1": word.x + word.w,
+                    "y1": word.y + word.h,
+                    "text": text_lower
+                })
 
             page_results = []
 
@@ -95,24 +139,22 @@ def geometry_v2_batch():
                     if not isinstance(bbox, list) or len(bbox) != 4:
                         continue
 
-                    row_rect = fitz.Rect(*bbox) & page_rect
-                    if row_rect.is_empty:
-                        continue
-
-                    for w in words_by_rect:
-                        if not w["rect"].intersects(row_rect):
-                            continue
-
-                        if w["text"] == surface:
-                            x0, y0, x1, y1 = w["raw"][:4]
-                            rects.append({
-                                "x": x0,
-                                "y": y0,
-                                "width": x1 - x0,
-                                "height": y1 - y0,
-                                "surface": surface,
-                                "base": base
-                            })
+                    if surface in words_by_text:
+                        for word_geom in words_by_text[surface]:
+                            line_x0, line_y0, line_x1, line_y1 = bbox
+                            word_x0, word_y0 = word_geom["x"], word_geom["y"]
+                            word_x1, word_y1 = word_geom["x1"], word_geom["y1"]
+                            
+                            if not (word_x1 < line_x0 or word_x0 > line_x1 or 
+                                    word_y1 < line_y0 or word_y0 > line_y1):
+                                rects.append({
+                                    "x": word_x0,
+                                    "y": word_y0,
+                                    "width": word_x1 - word_x0,
+                                    "height": word_y1 - word_y0,
+                                    "surface": surface,
+                                    "base": base
+                                })
 
                 page_results.append({
                     "term": term,
@@ -125,8 +167,10 @@ def geometry_v2_batch():
                 "results": page_results
             })
 
-        doc.close()
-
+        total_time = (time.time() - request_start) * 1000
+        total_compute = sum(page_results_meta.get('compute', 0) for page_results_meta in all_results if isinstance(page_results_meta, dict))
+        print(f"Request: {total_time:.0f}ms | Batch Redis: {geometry_batch_time:.0f}ms | Compute: {total_compute:.0f}ms\n")
+        
         return jsonify({
             "file_name": file_name,
             "results": all_results
@@ -134,7 +178,73 @@ def geometry_v2_batch():
 
     except Exception as e:
         print(f"Error processing geometry_v2_batch: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/precompute_geometry", methods=["POST"])
+def precompute_geometry():
+    try:
+        data = request.get_json()
+        presigned_url = data.get("url")
+        
+        if not presigned_url:
+            return jsonify({"error": "Missing url parameter"}), 400
+        
+        threading.Thread(
+            target=_precompute_all_pages,
+            args=(presigned_url,),
+            daemon=True
+        ).start()
+        
+        return jsonify({"status": "queued"})
+        
+    except Exception as e:
+        print(f"Error in precompute_geometry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+def _precompute_all_pages(presigned_url):
+    try:
+        from geometry_extractor import get_doc_id
+        from geometry_persistence import get_page_geometry
+        
+        pdf_bytes = get_cached_pdf(presigned_url)
+        pdf_bytes.seek(0)
+        pdf_content = pdf_bytes.read()
+        doc_id = get_doc_id(pdf_content)
+        
+        pdf_bytes_io = io.BytesIO(pdf_content)
+        doc = fitz.open(stream=pdf_bytes_io, filetype="pdf")
+        total_pages = len(doc)
+        doc.close()
+        
+        print(f"Starting pre-computation: {doc_id} ({total_pages} pages)")
+        
+        def compute_page(page_index):
+            try:
+                get_page_geometry(doc_id, page_index, pdf_content)
+                return page_index, True
+            except Exception as e:
+                print(f"Failed to compute page {page_index}: {e}")
+                return page_index, False
+        
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(compute_page, i) for i in range(total_pages)]
+            completed = 0
+            for future in as_completed(futures):
+                page_idx, success = future.result()
+                if success:
+                    completed += 1
+        
+        print(f"Pre-computation complete: {doc_id} ({completed}/{total_pages} pages)")
+        
+    except Exception as e:
+        print(f"Pre-computation failed: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 
 @app.route("/parse_to_json", methods=["POST"])
@@ -228,6 +338,44 @@ def sentence_level_ranking():
     scores = model.predict(model_input)
 
     return jsonify(scores.tolist())
+
+
+def lambda_handler(event, context):
+    path = event.get('path')
+    body = event.get('body')
+    
+    if isinstance(body, str):
+        body = json.loads(body)
+
+    with app.test_request_context(path=path, method='POST', json=body):
+        try:
+            if path == '/geometry_v2/batch':
+                rv = geometry_v2_batch()
+            elif path == '/precompute_geometry':
+                rv = precompute_geometry()
+            elif path == '/parse_to_json':
+                rv = generate_canonical_json()
+            elif path == '/sentence_level_ranking':
+                rv = sentence_level_ranking()
+            else:
+                return {'statusCode': 404, 'body': json.dumps({'error': 'Not Found'})}
+
+            status_code = 200
+            if isinstance(rv, tuple):
+                response, status_code = rv
+            else:
+                response = rv
+
+            return {
+                'statusCode': status_code,
+                'body': response.get_data(as_text=True)
+            }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'body': json.dumps({'error': str(e)})
+            }
+
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ async function ensureCollection(collectionName, vectorSize = 1536) {
 async function callToEmbedWithRetry(text, MAX_RETRIES, RETRY_DELAY) {
   return pRetry(
     async () => {
-      const embedding = await callToEmbed(text);
+      const embedding = await callToEmbed(text, "text-embedding-3-small", true);
 
       if (!Array.isArray(embedding) || embedding.length === 0) {
         throw new Error("Invalid embedding response");
