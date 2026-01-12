@@ -188,7 +188,6 @@ async function keywordSearch(
   const scores = await searchContent_v2(pagesContent, inverted, search);
   const searchContentLatency = searchContentTimer.stop();
 
-  // Optimization: Only compute geometry for the most relevant documents
   if (scores.results && scores.results.length > topK * 2) {
     scores.results = scores.results.slice(0, topK * 2);
   }
@@ -220,7 +219,7 @@ async function hybridSearch(
   const overallTimer = new SearchTimer("Overall Search");
 
   let analysis = await getQueryAnalysis(query);
-  
+
   if (!analysis) {
     const intentAnalysis = queryIntent.analyzeQuery(query);
     const legacyAnalysis = analyzeQuery(query);
@@ -232,8 +231,7 @@ async function hybridSearch(
       keywordWeight: intentAnalysis.keywordWeight,
       expansions: intentAnalysis.expansions,
     };
-    
-    // Fire and forget cache set
+
     setQueryAnalysis(query, analysis).catch(console.error);
   }
 
@@ -458,7 +456,7 @@ async function hybridSearch(
   resultsWithPreciseHighlights = finalResults.map((result) => {
     let bboxes = result.rects || [];
 
-    if (result.text && result.best_sentence) {
+    if (result.text && result.best_sentence && result.source === "semantic") {
       const startChar = result.text.indexOf(result.best_sentence);
       if (startChar !== -1) {
         const endChar = startChar + result.best_sentence.length;
@@ -506,7 +504,7 @@ async function hybridSearch(
     };
   });
 
-  //console.log(resultsWithPreciseHighlights);
+  console.log(resultsWithPreciseHighlights);
 
   const totalLatency = overallTimer.stop();
 

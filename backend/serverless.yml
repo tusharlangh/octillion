@@ -34,8 +34,8 @@ provider:
     QDRANT_URL: ${env:QDRANT_URL}
     QDRANT_API_KEY: ${env:QDRANT_API_KEY}
     OPENAI_API_KEY: ${env:OPENAI_API_KEY}
-    WORKER_FUNCTION_NAME: octillion-backend-dev-processor
-    GEOMETRY_LAMBDA_NAME: octillion-backend-dev-geometry
+    WORKER_FUNCTION_NAME: ${env:WORKER_FUNCTION_NAME}
+    GEOMETRY_LAMBDA_NAME: ${env:GEOMETRY_LAMBDA_NAME}
     GROQ_API_KEY: ${env:GROQ_API_KEY}
     AXIOM_API_TOKEN: ${env:AXIOM_API_TOKEN}
     AXIOM_DATASET: ${env:AXIOM_DATASET}
@@ -43,10 +43,13 @@ provider:
     UPSTASH_REDIS_URL: ${env:UPSTASH_REDIS_URL}
     UPSTASH_REDIS_TOKEN: ${env:UPSTASH_REDIS_TOKEN}
     NODE_ENV: ${env:NODE_ENV}
+    GEOMETRY_PROMOTION_THRESHOLD: ${env:GEOMETRY_PROMOTION_THRESHOLD, '100'}
+    GEOMETRY_REDIS_TTL: ${env:GEOMETRY_REDIS_TTL, '86400'}
+    S3_REGION: ${env:S3_REGION}
 
 functions:
   api:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:0393ac61d272805237a425b4b512544955fac34bd0a413d14602ecf803b24dab
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:de401f888b593d73ca0155acf8d28b7d672af5dc76fb573a1814497b6b1ad2bd
     timeout: 30
     memorySize: 2048
     events:
@@ -58,11 +61,15 @@ functions:
           method: ANY
 
   processor:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:0393ac61d272805237a425b4b512544955fac34bd0a413d14602ecf803b24dab
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:de401f888b593d73ca0155acf8d28b7d672af5dc76fb573a1814497b6b1ad2bd
     timeout: 900
     memorySize: 3008
 
   geometry:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-geometry-dev@sha256:b35054ef732364e9cc942d39df96091b147b930170dbe3ca292b1b22b26d1697
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-geometry-dev@sha256:c52a357216194103979800d26feb580864d9bb57fde05775a695e541b1610fb3
     timeout: 300
     memorySize: 3008
+    environment:
+      TRANSFORMERS_CACHE: /tmp/transformers_cache
+      HF_HOME: /tmp/huggingface
+      TORCH_HOME: /tmp/torch

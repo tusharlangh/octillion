@@ -226,9 +226,18 @@ export default function FilePreviewList({
         },
         body: JSON.stringify({
           id: id,
-          keys: keys.map(
-            (url: { uploadUrl: string; key: string }, index: number) => url.key
-          ),
+          keys: keys?.map?.(
+            (url: { uploadUrl: string; key: string }) => {
+              if (typeof url === 'string') {
+                return url; // Already a string
+              }
+              if (url && typeof url === 'object' && 'key' in url) {
+                return url.key; // Extract key from object
+              }
+              console.error('Invalid key format:', url);
+              return null; // Invalid format
+            }
+          ).filter((k: string | null) => k !== null) || [],
         }),
       });
 
