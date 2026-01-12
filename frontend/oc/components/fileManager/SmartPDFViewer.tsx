@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import * as pdfjs from "pdfjs-dist";
 import { DM_Sans } from "next/font/google";
 import { ChevronLeft, Highlighter, Minus, Plus, X } from "lucide-react";
 import SurfingLoading from "../animations/surfingLoading";
@@ -11,8 +10,6 @@ const dmSans = DM_Sans({
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
 });
-
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface Highlight {
   x: number;
@@ -52,6 +49,9 @@ export default function SmartPDFViewer({
 
   useEffect(() => {
     const loadPdf = async () => {
+      const pdfjs = await import("pdfjs-dist");
+      pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+      
       const loadingTask = pdfjs.getDocument(url);
       const loadedPdf = await loadingTask.promise;
       setPdf(loadedPdf);
