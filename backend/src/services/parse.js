@@ -22,7 +22,6 @@ import {
 
 import * as queryIntent from "./queryIntent.js";
 import { analyzeAndBoost } from "./parse/scoreSentenceIntent.js";
-import { explanationDensityBoost } from "./parse/explanationDensity.js";
 import { sentenceLevelReRanking } from "./parse/sentenceReRanker.js";
 import {
   getQueryAnalysis,
@@ -156,7 +155,7 @@ export async function parse_v2(id, search, userId, options = {}) {
   }
 }
 
-async function semanticSearch(search, id, userId, options = {}) {
+async function rawSemanticSearch(search, id, userId, options = {}) {
   const { topK, cachedEmbedding } = options;
   const embeddingsTimer = new SearchTimer("Embeddings");
   const embeddings = cachedEmbedding || (await callToEmbed(search));
@@ -174,7 +173,7 @@ async function semanticSearch(search, id, userId, options = {}) {
   return { result, embedding: embeddings };
 }
 
-async function keywordSearch(
+async function rawKeywordSearch(
   search,
   pagesContent,
   inverted,
@@ -202,6 +201,116 @@ async function keywordSearch(
   `);
 
   return result;
+}
+
+async function executeKeywordFlow(
+  query,
+  pagesContent,
+  inverted,
+  fileMapping,
+  parseId,
+  userId,
+  topK,
+  chunks
+) {
+  const rawResults = await rawKeywordSearch(
+    query,
+    pagesContent,
+    inverted,
+    fileMapping,
+    parseId,
+    userId,
+    { topK: topK * 2 }
+  );
+
+  let results = await normalizeKeywordResults(rawResults, chunks);
+
+  results.sort((a, b) => b.score - a.score);
+
+  results = results.map((result, index) => ({
+    ...result,
+    rank: index,
+  }));
+
+  return results;
+}
+
+async function executeSemanticFlow(
+  query,
+  parseId,
+  userId,
+  topK,
+  chunks,
+  cachedEmbedding = null
+) {
+  const { result: rawResults, embedding } = await rawSemanticSearch(
+    query,
+    parseId,
+    userId,
+    { topK: topK * 2, cachedEmbedding }
+  );
+
+  let results = await normalizeSemanticResults(rawResults, chunks);
+
+  results = results.map((result) => {
+    const chunk = chunks.find((c) => c.id === result.chunk_id);
+    if (chunk) {
+      const intentBoost = analyzeAndBoost(
+        result.chunk_id,
+        query,
+        chunk.text,
+        result.score
+      );
+      return {
+        ...result,
+        score: intentBoost.new_score,
+        metadata: {
+          ...result.metadata,
+          intent_boost: intentBoost.boostWeight,
+        },
+      };
+    }
+    return result;
+  });
+
+  if (results.length > 0) {
+    await sentenceLevelReRanking(results, query);
+    results = results.map((r) => {
+      if (r.rrf_score !== undefined) {
+        r.score = r.rrf_score;
+      }
+      return r;
+    });
+  }
+
+  results = results.map((result) => {
+    let bboxes = result.rects || [];
+    if (result.text && result.best_sentence) {
+      const startChar = result.text.indexOf(result.best_sentence);
+      if (startChar !== -1) {
+        const endChar = startChar + result.best_sentence.length;
+        const calculatedBBoxes = mapCharsToBBoxes(
+          result.text_spans,
+          result.text,
+          startChar,
+          endChar
+        );
+        if (calculatedBBoxes.length > 0) {
+          bboxes = calculatedBBoxes;
+        }
+      }
+    }
+    return { ...result, rects: bboxes };
+  });
+
+  results.sort((a, b) => b.score - a.score);
+
+  results = results.map((result, index) => ({
+    ...result,
+    rank: index,
+  }));
+
+  return { results, embedding };
 }
 
 async function hybridSearch(
@@ -240,11 +349,6 @@ async function hybridSearch(
   console.log(`  Intent: ${analysis.intent.toUpperCase()}`);
   console.log(`  Content words: ${analysis.contentWords.join(", ")}`);
   console.log(`  Type: ${analysis.queryType.toUpperCase()}`);
-  console.log(
-    `  Weights: ${(analysis.semanticWeight * 100).toFixed(0)}% semantic, ${(
-      analysis.keywordWeight * 100
-    ).toFixed(0)}% keyword`
-  );
 
   trackQueryAnalysis({
     query,
@@ -259,102 +363,63 @@ async function hybridSearch(
   const keywordQuery = analysis.contentWords.join(" ") || query;
   const primarySemanticQuery = query;
 
-  const keywordTimer = new SearchTimer("Keyword Search");
-  const semanticTimer = new SearchTimer("Semantic Search");
-
-  let queryEmbedding = null;
-  let keywordResultsRaw = {};
-  let semanticSearchResponse = { result: [], embedding: null };
-  let keywordLatency = 0;
-  let semanticLatency = 0;
+  let finalResults = [];
+  let keywordResultsForMetrics = [];
+  let semanticResultsForMetrics = [];
+  const queryEmbedding = await callToEmbed(primarySemanticQuery);
 
   if (analysis.queryType === "keyword") {
-    keywordResultsRaw = await keywordSearch(
+    finalResults = await executeKeywordFlow(
       keywordQuery,
       pagesContent,
       inverted,
       fileMapping,
       parseId,
       userId,
-      {
-        topK: topK * 2,
-      }
+      topK,
+      chunks
     );
-    keywordLatency = keywordTimer.stop();
+    keywordResultsForMetrics = finalResults;
   } else if (analysis.queryType === "semantic") {
-    queryEmbedding = await callToEmbed(primarySemanticQuery);
-    semanticSearchResponse = await semanticSearch(
+    const { results } = await executeSemanticFlow(
       primarySemanticQuery,
       parseId,
       userId,
-      {
-        topK: topK * 2,
-        cachedEmbedding: queryEmbedding,
-      }
+      topK,
+      chunks,
+      queryEmbedding
     );
-    semanticLatency = semanticTimer.stop();
+    finalResults = results;
+    semanticResultsForMetrics = finalResults;
   } else {
-    queryEmbedding = await callToEmbed(primarySemanticQuery);
-    const [kwResults, semResults] = await Promise.all([
-      keywordSearch(
+    const [kwRanked, semRankedData] = await Promise.all([
+      executeKeywordFlow(
         keywordQuery,
         pagesContent,
         inverted,
         fileMapping,
         parseId,
         userId,
-        {
-          topK: topK * 2,
-        }
-      ).then((result) => {
-        keywordTimer.stop();
-        return result;
-      }),
-      semanticSearch(primarySemanticQuery, parseId, userId, {
-        topK: topK * 2,
-        cachedEmbedding: queryEmbedding,
-      }).then((result) => {
-        semanticTimer.stop();
-        return result;
-      }),
+        topK,
+        chunks
+      ),
+      executeSemanticFlow(
+        primarySemanticQuery,
+        parseId,
+        userId,
+        topK,
+        chunks,
+        queryEmbedding
+      ),
     ]);
-    keywordResultsRaw = kwResults;
-    semanticSearchResponse = semResults;
-    keywordLatency = keywordTimer.stop();
-    semanticLatency = semanticTimer.stop();
-  }
 
-  const semanticResultsRaw = semanticSearchResponse.result;
+    const semRanked = semRankedData.results;
+    keywordResultsForMetrics = kwRanked;
+    semanticResultsForMetrics = semRanked;
 
-  let keywordResults = [];
-  let keywordRanked = [];
-  if (analysis.queryType === "keyword" || analysis.queryType === "hybrid") {
-    keywordResults = await normalizeKeywordResults(keywordResultsRaw, chunks);
-
-    keywordRanked = keywordResults
-      .sort((a, b) => b.score - a.score)
-      .map((result, index) => ({ ...result, rank: index }));
-  }
-
-  let semanticResults = [];
-  let semanticRanked = [];
-  if (analysis.queryType === "semantic" || analysis.queryType === "hybrid") {
-    semanticResults = await normalizeSemanticResults(
-      semanticResultsRaw,
-      chunks
-    );
-
-    semanticRanked = semanticResults
-      .sort((a, b) => b.score - a.score)
-      .map((result, index) => ({ ...result, rank: index }));
-  }
-
-  let mergedResults;
-
-  if (analysis.queryType === "hybrid") {
     const rrfScores = new Map();
 
-    keywordRanked.forEach((result) => {
+    kwRanked.forEach((result) => {
       const key = `${result.chunk_id}`;
       const rrfScore = analysis.keywordWeight * (1 / (k + result.rank));
 
@@ -364,21 +429,15 @@ async function hybridSearch(
           rrf_score: 0,
           keyword_rank: null,
           semantic_rank: null,
-          keyword_score: null,
-          semantic_score: null,
         });
       }
-
       const entry = rrfScores.get(key);
       entry.rrf_score += rrfScore;
       entry.keyword_rank = result.rank;
       entry.keyword_score = result.score;
-      entry.keyword_weight = analysis.keywordWeight;
-      entry.match_count = result.match_count;
-      entry.rects = result.rects;
     });
 
-    semanticRanked.forEach((result) => {
+    semRanked.forEach((result) => {
       const key = `${result.chunk_id}`;
       const rrfScore = analysis.semanticWeight * (1 / (k + result.rank));
 
@@ -388,103 +447,43 @@ async function hybridSearch(
           rrf_score: 0,
           keyword_rank: null,
           semantic_rank: null,
-          keyword_score: null,
-          semantic_score: null,
         });
       }
-
       const entry = rrfScores.get(key);
       entry.rrf_score += rrfScore;
       entry.semantic_rank = result.rank;
       entry.semantic_score = result.score;
-      entry.semantic_weight = analysis.semanticWeight;
+      if (result.rects && result.rects.length > 0) {
+        entry.rects = result.rects;
+      }
+      if (result.best_sentence) {
+        entry.best_sentence = result.best_sentence;
+      }
       entry.text = result.text;
     });
 
-    mergedResults = Array.from(rrfScores.values());
-  } else if (analysis.queryType === "keyword") {
-    mergedResults = keywordRanked.map((result) => ({
-      ...result,
-      rrf_score: result.score,
-    }));
-  } else {
-    mergedResults = semanticRanked.map((result) => ({
-      ...result,
-      rrf_score: result.score,
-    }));
+    finalResults = Array.from(rrfScores.values());
+
+    finalResults.sort((a, b) => b.rrf_score - a.rrf_score);
   }
 
-  mergedResults.forEach((result) => {
-    const chunk = chunks.find((c) => c.id === result.chunk_id);
-    if (chunk) {
-      const intentBoost = analyzeAndBoost(
-        result.chunk_id,
-        query,
-        chunk.text,
-        result.rrf_score
-      );
-      result.rrf_score = intentBoost.new_score;
-      result.intent_boost = intentBoost.boostWeight;
+  const finalResultsSliced = finalResults.slice(0, topK);
 
-      const densityBoost = explanationDensityBoost(
-        result.chunk_id,
-        chunk.text,
-        result.rrf_score,
-        analysis.intent
-      );
-      result.rrf_score = densityBoost.new_score;
-      result.density_boost = densityBoost.explanation.boost;
-    }
-  });
-
-  if (analysis.queryType === "semantic" || analysis.queryType === "hybrid") {
-    const topCandidates = mergedResults
-      .sort((a, b) => b.rrf_score - a.rrf_score)
-      .slice(0, 30);
-
-    await sentenceLevelReRanking(topCandidates, query);
-
-    mergedResults = [...topCandidates, ...mergedResults.slice(30)];
-  }
-
-  const finalResults = mergedResults
-    .sort((a, b) => b.rrf_score - a.rrf_score)
-    .slice(0, topK);
-
-  let resultsWithPreciseHighlights;
-
-  resultsWithPreciseHighlights = finalResults.map((result) => {
-    let bboxes = result.rects || [];
-
-    if (result.text && result.best_sentence && result.source === "semantic") {
-      const startChar = result.text.indexOf(result.best_sentence);
-      if (startChar !== -1) {
-        const endChar = startChar + result.best_sentence.length;
-        const calculatedBBoxes = mapCharsToBBoxes(
-          result.text_spans,
-          result.text,
-          startChar,
-          endChar
-        );
-
-        if (calculatedBBoxes.length > 0) {
-          bboxes = calculatedBBoxes;
-        }
-      }
-    }
+  const resultsFormatted = finalResultsSliced.map((result) => {
+    const finalScore =
+      result.rrf_score !== undefined ? result.rrf_score : result.score;
 
     return {
       chunk_id: result.chunk_id,
       file_name: result.file_name,
       page_number: result.page_number,
-      score: result.score !== undefined ? result.score : result.rrf_score,
+      score: finalScore,
       source: result.source,
       text: result.text,
-      rects: bboxes,
+      rects: result.rects || [],
       rank: result.rank,
       metadata: {
-        intent_boost: result.intent_boost,
-        density_boost: result.density_boost,
+        intent_boost: result.metadata?.intent_boost,
         best_sentence: result.best_sentence,
         texts_span: result.text_spans,
         ...(result.metadata?.terms && { terms: result.metadata.terms }),
@@ -504,46 +503,28 @@ async function hybridSearch(
     };
   });
 
-  console.log(resultsWithPreciseHighlights);
-
   const totalLatency = overallTimer.stop();
-
-  const scores = finalResults.map((r) => r.rrf_score);
-  const sortedScores = [...scores].sort((a, b) => b - a);
-  const scoreDistribution =
-    scores.length > 0
-      ? {
-          min: Math.min(...scores),
-          max: Math.max(...scores),
-          p50: sortedScores[Math.floor(sortedScores.length * 0.5)] || 0,
-          p95: sortedScores[Math.floor(sortedScores.length * 0.95)] || 0,
-        }
-      : null;
 
   trackSearchMetrics({
     query,
     queryType: analysis.queryType,
     userId,
     parseId,
-
-    totalResults: resultsWithPreciseHighlights.length,
-    keywordResultCount: keywordResults.length,
-    semanticResultCount: semanticResults.length,
-    mergedResultCount: resultsWithPreciseHighlights.length,
-
+    totalResults: resultsFormatted.length,
+    keywordResultCount: keywordResultsForMetrics.length,
+    semanticResultCount: semanticResultsForMetrics.length,
+    mergedResultCount: resultsFormatted.length,
     totalLatency,
-    keywordLatency,
-    semanticLatency,
-
+    keywordLatency: 0,
+    semanticLatency: 0,
     contentWords: analysis.contentWords,
     semanticWeight: analysis.semanticWeight,
     keywordWeight: analysis.keywordWeight,
-
-    hasResults: resultsWithPreciseHighlights.length > 0,
-    scoreDistribution,
+    hasResults: resultsFormatted.length > 0,
+    scoreDistribution: null,
   });
 
-  if (resultsWithPreciseHighlights.length === 0) {
+  if (resultsFormatted.length === 0) {
     trackZeroResults({
       query,
       queryType: analysis.queryType,
@@ -554,34 +535,7 @@ async function hybridSearch(
     });
   }
 
-  if (resultsWithPreciseHighlights.length > 0) {
-    trackResultQuality({
-      query,
-      queryType: analysis.queryType,
-      results: resultsWithPreciseHighlights,
-      userId,
-    });
-  }
-
-  trackComponentPerformance({
-    query,
-    queryType: analysis.queryType,
-    userId,
-    components: {
-      keyword: keywordLatency,
-      semantic: semanticLatency,
-    },
-  });
-
-  console.log(`\n📊 Search completed in ${totalLatency}ms`);
-  console.log(
-    `   Keyword: ${keywordLatency}ms | Semantic: ${semanticLatency}ms`
-  );
-  console.log(
-    `   Results: ${resultsWithPreciseHighlights.length} (${keywordResults.length} keyword, ${semanticResults.length} semantic)`
-  );
-
-  return [resultsWithPreciseHighlights, analysis.queryType];
+  return [resultsFormatted, analysis.queryType];
 }
 
 function mapCharsToBBoxes(textSpans, chunkText, startChar, endChar) {

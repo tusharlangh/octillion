@@ -93,14 +93,11 @@ export function analyzeQuery(query) {
     hasQuotes,
     semanticWeight: semanticScore,
     keywordWeight: 1 - semanticScore,
-    /*
     queryType:
       semanticScore > 0.6
         ? "semantic"
         : semanticScore < 0.3
         ? "keyword"
         : "hybrid",
-    */
-    queryType: "hybrid",
   };
 }

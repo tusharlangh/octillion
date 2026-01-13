@@ -51,9 +51,10 @@ export default function SmartPDFViewer({
     const loadPdf = async () => {
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-      
+
       const loadingTask = pdfjs.getDocument(url);
       const loadedPdf = await loadingTask.promise;
+
       setPdf(loadedPdf);
     };
     loadPdf();
@@ -284,10 +285,15 @@ const PDFPage = ({
   isKeywordResult,
 }: PDFPageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const renderTaskRef = useRef<any>(null);
   const [isRendered, setIsRendered] = useState(false);
 
   useEffect(() => {
     const renderPage = async () => {
+      if (renderTaskRef.current) {
+        await renderTaskRef.current.cancel();
+      }
+
       const page = await pdf.getPage(pageNum);
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -304,16 +310,27 @@ const PDFPage = ({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      setIsRendered(true);
+      const renderTask = page.render({ canvasContext: ctx, viewport });
+      renderTaskRef.current = renderTask;
+
+      try {
+        await renderTask.promise;
+        setIsRendered(true);
+      } catch (error: any) {
+        if (error.name !== "RenderingCancelledException") {
+          console.error("Render error:", error);
+        }
+      }
     };
 
     renderPage();
-  }, [pdf, pageNum, scale]);
 
-  useEffect(() => {
-    console.log("highlights: ", highlights);
-  }, []);
+    return () => {
+      if (renderTaskRef.current) {
+        renderTaskRef.current.cancel();
+      }
+    };
+  }, [pdf, pageNum, scale]);
 
   return (
     <div className="relative border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">

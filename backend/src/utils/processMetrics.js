@@ -216,8 +216,7 @@ export function trackLLMPerformance({
     max_tokens: maxTokens,
     success: success,
     error_message: errorMessage || null,
-    cost_estimate_usd:
-      totalTokens > 0 ? (totalTokens / 1000000) * 0.5 : 0,
+    cost_estimate_usd: totalTokens > 0 ? (totalTokens / 1000000) * 0.5 : 0,
   });
 }
 
