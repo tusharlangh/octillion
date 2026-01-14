@@ -15,13 +15,12 @@ function save_files_controller(_x, _x2, _x3) {
 }
 function _save_files_controller() {
   _save_files_controller = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee(req, res, next) {
-    var id, files, userId, uploadedUrls, _t;
+    var _req$body, id, keys, userId, invalidKeys, uploadedUrls, _t;
     return _regenerator().w(function (_context) {
       while (1) switch (_context.p = _context.n) {
         case 0:
           _context.p = 0;
-          id = req.body.id;
-          files = req.files;
+          _req$body = req.body, id = _req$body.id, keys = _req$body.keys;
           userId = req.user;
           if (userId) {
             _context.n = 1;
@@ -29,44 +28,62 @@ function _save_files_controller() {
           }
           throw new _errorHandler.UnauthorizedError("Authorization required");
         case 1:
-          if (id) {
+          if (keys) {
             _context.n = 2;
             break;
           }
-          throw new _errorHandler.ValidationError("Id is required");
+          throw new _errorHandler.ValidationError("Keys are required");
         case 2:
-          if (files) {
+          if (id) {
             _context.n = 3;
             break;
           }
-          throw new _errorHandler.ValidationError("No files uploaded");
+          throw new _errorHandler.ValidationError("Id is required");
         case 3:
-          if (!(files.length > 10)) {
+          if (Array.isArray(keys)) {
             _context.n = 4;
             break;
           }
-          throw new _errorHandler.ValidationError("Too many files uploaded", {
-            maxFiles: 10,
-            uploadedFiles: files.length
-          });
+          throw new _errorHandler.ValidationError("Keys must be an array");
         case 4:
-          _context.n = 5;
-          return (0, _saveFiles.saveFiles)(id, files, userId);
+          // Validate that all keys are strings
+          invalidKeys = keys.filter(function (key) {
+            return typeof key !== 'string';
+          });
+          if (!(invalidKeys.length > 0)) {
+            _context.n = 5;
+            break;
+          }
+          console.error('Invalid keys received:', {
+            invalidKeys: invalidKeys,
+            allKeys: keys,
+            parseId: id,
+            userId: userId
+          });
+          throw new _errorHandler.ValidationError("Keys array contains ".concat(invalidKeys.length, " non-string value(s)"));
         case 5:
-          uploadedUrls = _context.v;
-          return _context.a(2, res.status(201).json({
-            success: true,
-            data: null,
-            message: "Files uploaded successfully"
-          }));
+          if (!(keys.length === 0)) {
+            _context.n = 6;
+            break;
+          }
+          throw new _errorHandler.ValidationError("Keys array cannot be empty");
         case 6:
-          _context.p = 6;
+          _context.n = 7;
+          return (0, _saveFiles.saveFiles)(id, keys, userId);
+        case 7:
+          uploadedUrls = _context.v;
+          return _context.a(2, res.status(200).json({
+            success: true,
+            message: "Files queued for processing"
+          }));
+        case 8:
+          _context.p = 8;
           _t = _context.v;
           next(_t);
-        case 7:
+        case 9:
           return _context.a(2);
       }
-    }, _callee, null, [[0, 6]]);
+    }, _callee, null, [[0, 8]]);
   }));
   return _save_files_controller.apply(this, arguments);
 }

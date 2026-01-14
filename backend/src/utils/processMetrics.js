@@ -1,11 +1,15 @@
 import { Axiom } from "@axiomhq/js";
 
-const axiom =
-  process.env.AXIOM_API_TOKEN && process.env.AXIOM_DATASET
-    ? new Axiom({
-        token: process.env.AXIOM_API_TOKEN,
-      })
-    : null;
+let axiom = null;
+if (process.env.AXIOM_API_TOKEN && process.env.AXIOM_DATASET) {
+  try {
+    axiom = new Axiom({
+      token: process.env.AXIOM_API_TOKEN,
+    });
+  } catch (error) {
+    console.error("❌ Failed to initialize Axiom client:", error.message);
+  }
+}
 
 const AXIOM_DATASET = process.env.AXIOM_DATASET || "octillion-search-metrics";
 
@@ -21,7 +25,7 @@ function logMetric(metric) {
     try {
       axiom.ingest(AXIOM_DATASET, [logEntry]);
     } catch (error) {
-      console.error("Failed to send metric to Axiom:", error.message);
+      console.error("❌ Failed to send metric to Axiom:", error.message);
     }
   }
 }
@@ -216,8 +220,7 @@ export function trackLLMPerformance({
     max_tokens: maxTokens,
     success: success,
     error_message: errorMessage || null,
-    cost_estimate_usd:
-      totalTokens > 0 ? (totalTokens / 1000000) * 0.5 : 0,
+    cost_estimate_usd: totalTokens > 0 ? (totalTokens / 1000000) * 0.5 : 0,
   });
 }
 

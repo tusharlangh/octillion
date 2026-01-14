@@ -44,11 +44,47 @@ export async function invokeGeometry(path, payload, isAsync = false) {
 
   if (isAsync) return { status: "queued" };
 
-  const result = JSON.parse(Buffer.from(response.Payload).toString());
+  const payloadString = Buffer.from(response.Payload).toString();
+
+  let result;
+  try {
+    result = JSON.parse(payloadString);
+  } catch (parseError) {
+    console.error("Failed to parse Lambda payload:", {
+      error: parseError.message,
+      payload: payloadString.substring(0, 1000),
+      path,
+      functionName,
+    });
+    throw new Error(`Failed to parse Lambda response: ${parseError.message}`);
+  }
 
   if (result.statusCode && result.statusCode >= 400) {
     throw new Error(`Lambda Error ${result.statusCode}: ${result.body}`);
   }
 
-  return JSON.parse(result.body);
+  if (!result.body) {
+    console.error("Lambda returned no body:", {
+      result,
+      path,
+      functionName,
+    });
+    throw new Error("Lambda returned empty body");
+  }
+
+  try {
+    return JSON.parse(result.body);
+  } catch (parseError) {
+    console.error("Failed to parse result.body:", {
+      error: parseError.message,
+      body:
+        typeof result.body === "string"
+          ? result.body.substring(0, 1000)
+          : result.body,
+      bodyType: typeof result.body,
+      path,
+      functionName,
+    });
+    throw new Error(`Failed to parse Lambda body: ${parseError.message}`);
+  }
 }

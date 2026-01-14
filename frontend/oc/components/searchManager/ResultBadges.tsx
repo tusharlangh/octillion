@@ -56,17 +56,19 @@ export function ResultBadges({ item, totalResults, index }: ResultBadgesProps) {
         </>
       )}
 
-      {item.rects.length !== undefined && item.rects.length > 0 && (
-        <>
-          <span className="opacity-40">·</span>
-          <span
-            className={`${dmSans.className} font-normal tabular-nums
+      {item.source === "keyword" &&
+        item.rects.length !== undefined &&
+        item.rects.length > 0 && (
+          <>
+            <span className="opacity-40">·</span>
+            <span
+              className={`${dmSans.className} font-normal tabular-nums
               text-neutral-500 dark:text-neutral-500`}
-          >
-            {item.rects.length}
-          </span>
-        </>
-      )}
+            >
+              {item.rects.length}
+            </span>
+          </>
+        )}
     </div>
   );
 }

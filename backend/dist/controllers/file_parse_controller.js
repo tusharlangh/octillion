@@ -15,12 +15,12 @@ function file_parse_controller(_x, _x2, _x3) {
 }
 function _file_parse_controller() {
   _file_parse_controller = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee(req, res, next) {
-    var _req$query, id, searchType, search, topK, userId, topKNum, parsed, _t;
+    var _req$query, id, search, userId, parsed, _t;
     return _regenerator().w(function (_context) {
       while (1) switch (_context.p = _context.n) {
         case 0:
           _context.p = 0;
-          _req$query = req.query, id = _req$query.id, searchType = _req$query.searchType, search = _req$query.search, topK = _req$query.topK;
+          _req$query = req.query, id = _req$query.id, search = _req$query.search;
           userId = req.user;
           if (userId) {
             _context.n = 1;
@@ -40,39 +40,31 @@ function _file_parse_controller() {
           }
           throw new _errorHandler.ValidationError("Search not found");
         case 3:
-          if (!(!searchType || !searchType.trim())) {
-            _context.n = 4;
-            break;
-          }
-          throw new _errorHandler.ValidationError("SearchType not found");
+          _context.n = 4;
+          return (0, _parse.parse_v2)(id, search, userId);
         case 4:
-          topKNum = topK ? parseInt(topK, 10) : undefined;
-          _context.n = 5;
-          return (0, _parse.parse)(id, search, userId, {
-            searchMode: searchType === "enhanced" ? "semantic" : searchType === "hybrid" ? "hybrid" : "tfidf",
-            topK: topKNum
-          });
-        case 5:
           parsed = _context.v;
           if (parsed.success) {
-            _context.n = 6;
+            _context.n = 5;
             break;
           }
           throw new _errorHandler.AppError(parsed.error || "Failed to process parsing", 500, "PARSE_ERROR");
-        case 6:
+        case 5:
           return _context.a(2, res.status(200).json({
             success: true,
-            searchResults: parsed.searchResults,
+            result: parsed.result,
+            fileMapping: parsed.fileMapping,
+            overview: parsed.overview,
             message: "Successfully parsed results"
           }));
-        case 7:
-          _context.p = 7;
+        case 6:
+          _context.p = 6;
           _t = _context.v;
           next(_t);
-        case 8:
+        case 7:
           return _context.a(2);
       }
-    }, _callee, null, [[0, 7]]);
+    }, _callee, null, [[0, 6]]);
   }));
   return _file_parse_controller.apply(this, arguments);
 }

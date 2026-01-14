@@ -308,8 +308,8 @@ describe("parse()", function () {
         case 0:
           generateEmbedding.mockResolvedValue([0.2]);
           searchQdrant.mockResolvedValue([]);
-          searchContent.mockResolvedValue({}); //returns promise due to async
-          searchBuildIndex.mockReturnValue([]); //returns actual value
+          searchContent.mockResolvedValue({});
+          searchBuildIndex.mockReturnValue([]);
           _context0.n = 1;
           return parse(mockId, mockSearchText, mockUser, {
             searchMode: "hybrid"

@@ -42,6 +42,60 @@ export async function processFiles(id, keys, userId) {
   const batchStartTime = Date.now();
   let totalSizeBytes = 0;
 
+  if (!Array.isArray(keys)) {
+    console.error('❌ processFiles: keys is not an array', {
+      type: typeof keys,
+      value: keys,
+      parseId: id,
+      userId
+    });
+    throw new AppError(
+      'Invalid keys parameter: expected array',
+      400,
+      'INVALID_KEYS_TYPE'
+    );
+  }
+
+  // Filter out non-string keys and log them
+  const invalidKeys = keys.filter(key => typeof key !== 'string');
+  if (invalidKeys.length > 0) {
+    console.error('❌ processFiles: found non-string keys', {
+      invalidKeys,
+      invalidCount: invalidKeys.length,
+      totalCount: keys.length,
+      parseId: id,
+      userId
+    });
+  }
+
+  // Use only valid string keys
+  const validKeys = keys.filter(key => typeof key === 'string' && key.trim().length > 0);
+  
+  if (validKeys.length === 0) {
+    console.error('❌ processFiles: no valid keys found', {
+      originalKeys: keys,
+      parseId: id,
+      userId
+    });
+    throw new AppError(
+      'No valid file keys provided',
+      400,
+      'NO_VALID_KEYS'
+    );
+  }
+
+  if (validKeys.length !== keys.length) {
+    console.warn('⚠️ processFiles: filtered out invalid keys', {
+      originalCount: keys.length,
+      validCount: validKeys.length,
+      removedCount: keys.length - validKeys.length,
+      parseId: id
+    });
+  }
+
+  // Replace keys with validKeys for the rest of the function
+  keys = validKeys;
+
   const fileSizes = await Promise.all(keys.map((key) => getFileSize(key)));
   totalSizeBytes = fileSizes.reduce((sum, size) => sum + size, 0);
 

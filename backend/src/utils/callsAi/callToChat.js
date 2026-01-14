@@ -2,7 +2,8 @@ import dotenv from "dotenv";
 import { trackLLMPerformance } from "../processMetrics.js";
 dotenv.config();
 
-const apiKey = process.env.GROQ_API_KEY;
+const groqApiKey = process.env.GROQ_API_KEY;
+const openaiApiKey = process.env.OPENAI_API_KEY;
 
 export async function callToChat(
   messages,
@@ -19,7 +20,7 @@ export async function callToChat(
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${groqApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -34,6 +35,88 @@ export async function callToChat(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const latency = Date.now() - startTime;
+
+      if (response.status === 429 && model === "llama-3.3-70b-versatile") {
+        trackLLMPerformance({
+          userId,
+          modelUsed: model,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          latency,
+          temperature,
+          maxTokens,
+          success: false,
+          errorMessage: `Groq API rate limit: ${response.status} - Falling back to openai-4o-mini`,
+        });
+
+        const fallbackStartTime = Date.now();
+        const openaiResponse = await fetch(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${openaiApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "gpt-4o-mini",
+              messages,
+              temperature,
+              max_tokens: maxTokens,
+            }),
+          }
+        );
+
+        if (!openaiResponse.ok) {
+          const openaiErrorData = await openaiResponse.json().catch(() => ({}));
+          const fallbackLatency = Date.now() - fallbackStartTime;
+
+          trackLLMPerformance({
+            userId,
+            modelUsed: "gpt-4o-mini",
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0,
+            latency: fallbackLatency,
+            temperature,
+            maxTokens,
+            success: false,
+            errorMessage: `OpenAI API error: ${openaiResponse.status} - ${
+              openaiErrorData.error?.message || openaiResponse.statusText
+            }`,
+          });
+
+          throw new Error(
+            `OpenAI API error: ${openaiResponse.status} - ${
+              openaiErrorData.error?.message || openaiResponse.statusText
+            }`
+          );
+        }
+
+        const openaiData = await openaiResponse.json();
+        const fallbackLatency = Date.now() - fallbackStartTime;
+        const raw = openaiData.choices[0].message.content;
+
+        const promptTokens = openaiData.usage?.prompt_tokens || 0;
+        const completionTokens = openaiData.usage?.completion_tokens || 0;
+        const totalTokens = openaiData.usage?.total_tokens || 0;
+
+        trackLLMPerformance({
+          userId,
+          modelUsed: "gpt-4o-mini",
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          latency: fallbackLatency,
+          temperature,
+          maxTokens,
+          success: true,
+          errorMessage: null,
+        });
+
+        return raw;
+      }
 
       trackLLMPerformance({
         userId,

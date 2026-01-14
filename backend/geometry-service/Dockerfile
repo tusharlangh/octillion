@@ -2,6 +2,11 @@ FROM public.ecr.aws/lambda/python:3.11
 
 WORKDIR ${LAMBDA_TASK_ROOT}
 
+# Set cache directories to /tmp for Lambda
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/huggingface
+ENV TORCH_HOME=/tmp/torch
+
 # Install build dependencies
 RUN yum install -y gcc gcc-c++ && \
     yum clean all
