@@ -47,8 +47,6 @@ _globals.jest.unstable_mockModule("./chat/systemPrompt.js", function () {
     createSystemPrompt: _globals.jest.fn()
   };
 });
-
-// Import after mocking
 var supabase = (await Promise.resolve().then(function () {
   return _interopRequireWildcard(require("../utils/supabase/client.js"));
 }))["default"];
