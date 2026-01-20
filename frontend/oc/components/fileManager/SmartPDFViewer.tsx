@@ -41,7 +41,7 @@ export default function SmartPDFViewer({
 }: SmartPDFViewerProps) {
   const getResponsiveScale = () => {
     const width = window.innerWidth;
-    if (width < 640) return 0.6;
+    if (width < 640) return 0.8;
     if (width < 1024) return 1.4;
     if (width < 1440) return 1.6;
     return 1.8;
@@ -52,18 +52,11 @@ export default function SmartPDFViewer({
   const [currentPage, setCurrentPage] = useState<number>(initialPage);
   const [isHighlightsPanelOpen, setIsHighlightsPanelOpen] =
     useState<boolean>(true);
-  const [loadedPages, setLoadedPages] = useState<Set<number>>(
-    new Set([initialPage])
-  );
   const [pageDimensions, setPageDimensions] = useState<Map<number, any>>(
     new Map()
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-
-  // Limit loaded pages to prevent memory crashes on mobile
-  const MAX_LOADED_PAGES = typeof window !== 'undefined' && window.innerWidth < 768 ? 5 : 10;
 
   useEffect(() => {
     const loadPdf = async () => {
@@ -78,12 +71,11 @@ export default function SmartPDFViewer({
     loadPdf();
   }, [url]);
 
-  // Responsive scale on window resize
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
       let newScale: number;
-      if (width < 640) newScale = 1.2;
+      if (width < 640) newScale = 0.8;
       else if (width < 1024) newScale = 1.4;
       else if (width < 1440) newScale = 1.6;
       else newScale = 1.8;
@@ -94,65 +86,6 @@ export default function SmartPDFViewer({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  useEffect(() => {
-    if (pdf && pageRefs.current[initialPage]) {
-      setTimeout(() => {
-        pageRefs.current[initialPage]?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }, 300);
-    }
-  }, [pdf, initialPage]);
-
-  useEffect(() => {
-    if (!pdf) return;
-
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const pageIndex = parseInt(
-              entry.target.getAttribute("data-page-index") || "0"
-            );
-            setLoadedPages((prev) => {
-              const newSet = new Set(prev);
-              newSet.add(pageIndex);
-              
-              // If we exceed the limit, remove pages far from current view
-              if (newSet.size > MAX_LOADED_PAGES) {
-                const sortedPages = Array.from(newSet).sort((a, b) => 
-                  Math.abs(a - pageIndex) - Math.abs(b - pageIndex)
-                );
-                // Keep only the closest pages
-                return new Set(sortedPages.slice(0, MAX_LOADED_PAGES));
-              }
-              
-              return newSet;
-            });
-          }
-        });
-      },
-      {
-        root: containerRef.current,
-        rootMargin: "200px",
-        threshold: 0.01,
-      }
-    );
-
-    pageRefs.current.forEach((pageRef) => {
-      if (pageRef && observerRef.current) {
-        observerRef.current.observe(pageRef);
-      }
-    });
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [pdf, MAX_LOADED_PAGES]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -185,16 +118,16 @@ export default function SmartPDFViewer({
     }
   }, [pdf]);
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose();
-    }
-  };
-
   useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    if (pdf && pageRefs.current[initialPage]) {
+      setTimeout(() => {
+        pageRefs.current[initialPage]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 300);
+    }
+  }, [pdf, initialPage]);
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-[#191919] z-50 flex flex-col">
@@ -287,29 +220,71 @@ export default function SmartPDFViewer({
               </p>
             </div>
           )}
+
           {pdf &&
-            Array.from({ length: pdf.numPages }, (_, i) => (
+            initialPage - 1 > 0 &&
+            initialPage - 1 < pdf._pdfInfo.numPages && (
               <div
-                key={i}
-                data-page-index={i}
                 ref={(el) => {
-                  pageRefs.current[i] = el;
+                  pageRefs.current[initialPage - 1] = el;
                 }}
               >
                 <PDFPage
                   pdf={pdf}
-                  pageNum={i + 1}
+                  pageNum={initialPage - 1 + 1}
                   scale={scale}
-                  highlights={highlights[i] || []}
+                  highlights={highlights[initialPage - 1] || []}
                   termColors={termColors}
-                  isCurrentPage={i === currentPage}
+                  isCurrentPage={false}
                   isKeywordResult={isKeywordResult}
-                  shouldLoad={loadedPages.has(i)}
+                  shouldLoad={true}
                   pageDimensions={pageDimensions}
                   setPageDimensions={setPageDimensions}
                 />
               </div>
-            ))}
+            )}
+          {pdf && (
+            <div
+              ref={(el) => {
+                pageRefs.current[initialPage] = el;
+              }}
+            >
+              <PDFPage
+                pdf={pdf}
+                pageNum={initialPage + 1}
+                scale={scale}
+                highlights={highlights[initialPage] || []}
+                termColors={termColors}
+                isCurrentPage={true}
+                isKeywordResult={isKeywordResult}
+                shouldLoad={true}
+                pageDimensions={pageDimensions}
+                setPageDimensions={setPageDimensions}
+              />
+            </div>
+          )}
+          {pdf &&
+            initialPage - 1 > 0 &&
+            initialPage - 1 < pdf._pdfInfo.numPages && (
+              <div
+                ref={(el) => {
+                  pageRefs.current[initialPage + 1] = el;
+                }}
+              >
+                <PDFPage
+                  pdf={pdf}
+                  pageNum={initialPage + 1 + 1}
+                  scale={scale}
+                  highlights={highlights[initialPage + 1] || []}
+                  termColors={termColors}
+                  isCurrentPage={false}
+                  isKeywordResult={isKeywordResult}
+                  shouldLoad={true}
+                  pageDimensions={pageDimensions}
+                  setPageDimensions={setPageDimensions}
+                />
+              </div>
+            )}
         </div>
       </div>
 
@@ -386,26 +361,24 @@ const PDFPage = ({
   const [isRendered, setIsRendered] = useState(false);
   const [viewport, setViewport] = useState<any>(null);
 
-  // CRITICAL FIX: Only load page dimensions when shouldLoad is true
-  // This prevents loading all 400+ pages into memory on mobile
   useEffect(() => {
     if (!shouldLoad) return;
-    
-    // Check if we already have dimensions cached
+
     const cached = pageDimensions.get(pageNum);
     if (cached) {
       setViewport(cached);
       return;
     }
-    
+
     const getPageDimensions = async () => {
       try {
         const page = await pdf.getPage(pageNum);
-        const dpr = window.devicePixelRatio || 1;
+        const isMobile =
+          typeof window !== "undefined" && window.innerWidth < 768;
+        const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
         const vp = page.getViewport({ scale: scale * dpr });
         setViewport(vp);
-        
-        // Cache dimensions for reuse
+
         setPageDimensions((prev) => {
           const newMap = new Map(prev);
           newMap.set(pageNum, vp);
@@ -430,7 +403,8 @@ const PDFPage = ({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const dpr = window.devicePixelRatio || 1;
+      const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+      const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
 
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -463,17 +437,19 @@ const PDFPage = ({
     };
   }, [pdf, pageNum, scale, shouldLoad, viewport]);
 
-  const dpr = window.devicePixelRatio || 1;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
   const displayWidth = viewport ? viewport.width / dpr : 0;
   const displayHeight = viewport ? viewport.height / dpr : 0;
 
-  // Show placeholder for unloaded pages to maintain scroll height
   if (!viewport) {
-    // Use standard A4 dimensions as estimate (8.5" x 11" at 72 DPI)
-    const estimatedWidth = typeof window !== 'undefined' && window.innerWidth < 768 ? 
-      window.innerWidth - 64 : 612 * scale;
-    const estimatedHeight = estimatedWidth * (11 / 8.5); // A4 aspect ratio
-    
+    const isMobileDevice =
+      typeof window !== "undefined" && window.innerWidth < 768;
+    const estimatedWidth = isMobileDevice
+      ? (window.innerWidth - 48) * 0.9
+      : 612 * scale;
+    const estimatedHeight = estimatedWidth * (11 / 8.5);
+
     return (
       <div
         className="relative border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center"

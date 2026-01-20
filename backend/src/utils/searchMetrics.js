@@ -7,7 +7,7 @@ if (process.env.AXIOM_API_TOKEN && process.env.AXIOM_DATASET) {
       token: process.env.AXIOM_API_TOKEN,
     });
   } catch (error) {
-    console.error("❌ Failed to initialize Axiom client:", error.message);
+    console.error("Failed to initialize Axiom client:", error.message);
   }
 }
 
@@ -25,7 +25,7 @@ function logMetric(metric) {
     try {
       axiom.ingest(AXIOM_DATASET, [logEntry]);
     } catch (error) {
-      console.error("❌ Failed to send metric to Axiom:", error.message);
+      console.error("Failed to send metric to Axiom:", error.message);
     }
   }
 }
@@ -190,7 +190,7 @@ export class SearchTimer {
 
   stopAndLog() {
     const duration = this.stop();
-    console.log(`⏱️  ${this.label}: ${duration}ms`);
+    console.log(`${this.label}: ${duration}ms`);
     return duration;
   }
 }
@@ -202,4 +202,24 @@ export default {
   trackResultQuality,
   trackComponentPerformance,
   SearchTimer,
+  calculatePrecisionAtK,
 };
+
+export function calculatePrecisionAtK(results, relevantIds, k = 5) {
+  if (
+    !results ||
+    results.length === 0 ||
+    !relevantIds ||
+    relevantIds.size === 0
+  ) {
+    return 0;
+  }
+
+  const topK = results.slice(0, k);
+  const relevantIdsSet = new Set(relevantIds);
+  const relevantCount = topK.filter((r) =>
+    relevantIdsSet.has(r.chunk_id)
+  ).length;
+
+  return relevantCount / k;
+}
