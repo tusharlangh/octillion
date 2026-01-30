@@ -2,6 +2,7 @@
 
 import Portal from "../portal";
 import { X } from "lucide-react";
+import { useEffect } from "react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -17,6 +18,16 @@ export default function FileOpener({
   fileName,
 }: ModalProps) {
   const font: string = "font-(family-name:--font-dm-sans)";
+
+  useEffect(() => {
+    if (isOpen && typeof window !== "undefined") {
+      const isMobile = window.innerWidth < 768;
+      if (isMobile) {
+        window.open(url, "_blank");
+        setIsOpen(false);
+      }
+    }
+  }, [isOpen, url, setIsOpen]);
 
   return (
     <div>
