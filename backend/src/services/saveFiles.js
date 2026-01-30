@@ -7,6 +7,8 @@ import { processFiles } from "./processFiles.js";
 dotenv.config();
 
 const lambda = new LambdaClient({ region: process.env.AWS_REGION });
+{
+}
 
 export async function saveFiles(id, keys, userId) {
   try {
@@ -42,7 +44,7 @@ export async function saveFiles(id, keys, userId) {
       throw new AppError(
         `Failed to save files: ${error.message}`,
         500,
-        "SUPABASE_ERROR"
+        "SUPABASE_ERROR",
       );
     }
 
@@ -57,7 +59,7 @@ export async function saveFiles(id, keys, userId) {
     throw new AppError(
       `Failed to save files: ${error.message}`,
       500,
-      "SAVE_FILES_ERROR"
+      "SAVE_FILES_ERROR",
     );
   }
 }
@@ -85,7 +87,7 @@ async function triggerAsyncProcessing(id, keys, userId) {
   await lambda.send(command);
 
   console.log(
-    `✅ Lambda worker invoked successfully for parse_id: ${id} - Processing ${keys.length} files`
+    `✅ Lambda worker invoked successfully for parse_id: ${id} - Processing ${keys.length} files`,
   );
 
   return { status: "queued" };

@@ -13,7 +13,7 @@ if (process.env.AXIOM_API_TOKEN && process.env.AXIOM_DATASET) {
 
 const AXIOM_DATASET = process.env.AXIOM_DATASET || "octillion-search-metrics";
 
-function logMetric(metric) {
+async function logMetric(metric) {
   const timestamp = new Date().toISOString();
   const logEntry = {
     _time: timestamp,
@@ -24,13 +24,14 @@ function logMetric(metric) {
   if (axiom) {
     try {
       axiom.ingest(AXIOM_DATASET, [logEntry]);
+      await axiom.flush();
     } catch (error) {
       console.error("Failed to send metric to Axiom:", error.message);
     }
   }
 }
 
-export function trackSearchMetrics({
+export async function trackSearchMetrics({
   query,
   queryType,
   userId,
@@ -51,7 +52,7 @@ export function trackSearchMetrics({
   hasResults,
   scoreDistribution,
 }) {
-  logMetric({
+  await logMetric({
     event: "search_executed",
     query: query.substring(0, 100),
     query_length: query.length,
@@ -79,7 +80,7 @@ export function trackSearchMetrics({
   });
 }
 
-export function trackZeroResults({
+export async function trackZeroResults({
   query,
   queryType,
   userId,
@@ -87,7 +88,7 @@ export function trackZeroResults({
   contentWords,
   totalLatency,
 }) {
-  logMetric({
+  await logMetric({
     event: "zero_results",
     query: query.substring(0, 100),
     query_type: queryType,
@@ -98,7 +99,7 @@ export function trackZeroResults({
   });
 }
 
-export function trackQueryAnalysis({
+export async function trackQueryAnalysis({
   query,
   queryType,
   contentWords,
@@ -106,7 +107,7 @@ export function trackQueryAnalysis({
   keywordWeight,
   userId,
 }) {
-  logMetric({
+  await logMetric({
     event: "query_analyzed",
     query: query.substring(0, 100),
     query_type: queryType,
@@ -118,7 +119,12 @@ export function trackQueryAnalysis({
   });
 }
 
-export function trackResultQuality({ query, queryType, results, userId }) {
+export async function trackResultQuality({
+  query,
+  queryType,
+  results,
+  userId,
+}) {
   if (!results || results.length === 0) {
     return;
   }
@@ -140,7 +146,7 @@ export function trackResultQuality({ query, queryType, results, userId }) {
     (r) => r.keyword_rank !== null && r.semantic_rank !== null
   ).length;
 
-  logMetric({
+  await logMetric({
     event: "result_quality",
     query: query.substring(0, 100),
     query_type: queryType,
@@ -154,7 +160,7 @@ export function trackResultQuality({ query, queryType, results, userId }) {
   });
 }
 
-export function trackComponentPerformance({
+export async function trackComponentPerformance({
   query,
   queryType,
   userId,
@@ -168,7 +174,7 @@ export function trackComponentPerformance({
     breakdown[`${component}_percentage`] = ((latency / total) * 100).toFixed(2);
   }
 
-  logMetric({
+  await logMetric({
     event: "performance_breakdown",
     query: query.substring(0, 100),
     query_type: queryType,

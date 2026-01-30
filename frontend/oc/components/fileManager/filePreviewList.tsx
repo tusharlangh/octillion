@@ -136,7 +136,7 @@ export default function FilePreviewList({
             id: id,
             files: files_metadata,
           }),
-        }
+        },
       );
 
       const data = await res.json();
@@ -167,8 +167,8 @@ export default function FilePreviewList({
 
       const uploadRes = await Promise.allSettled(
         urls.map((url: { uploadUrl: string; key: string }, index: number) =>
-          sendPdfToS3(url.uploadUrl, selectedFiles[index])
-        )
+          sendPdfToS3(url.uploadUrl, selectedFiles[index]),
+        ),
       );
 
       const n = uploadRes.length;
@@ -226,18 +226,19 @@ export default function FilePreviewList({
         },
         body: JSON.stringify({
           id: id,
-          keys: keys?.map?.(
-            (url: { uploadUrl: string; key: string }) => {
-              if (typeof url === 'string') {
-                return url; // Already a string
-              }
-              if (url && typeof url === 'object' && 'key' in url) {
-                return url.key; // Extract key from object
-              }
-              console.error('Invalid key format:', url);
-              return null; // Invalid format
-            }
-          ).filter((k: string | null) => k !== null) || [],
+          keys:
+            keys
+              ?.map?.((url: { uploadUrl: string; key: string }) => {
+                if (typeof url === "string") {
+                  return url; // Already a string
+                }
+                if (url && typeof url === "object" && "key" in url) {
+                  return url.key; // Extract key from object
+                }
+                console.error("Invalid key format:", url);
+                return null; // Invalid format
+              })
+              .filter((k: string | null) => k !== null) || [],
         }),
       });
 
@@ -316,7 +317,7 @@ export default function FilePreviewList({
             headers: {
               Authorization: `Bearer ${token}`,
             },
-          }
+          },
         );
 
         if (!res.ok) {

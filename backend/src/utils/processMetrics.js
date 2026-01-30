@@ -13,7 +13,7 @@ if (process.env.AXIOM_API_TOKEN && process.env.AXIOM_DATASET) {
 
 const AXIOM_DATASET = process.env.AXIOM_DATASET || "octillion-search-metrics";
 
-function logMetric(metric) {
+async function logMetric(metric) {
   const timestamp = new Date().toISOString();
   const logEntry = {
     _time: timestamp,
@@ -24,13 +24,14 @@ function logMetric(metric) {
   if (axiom) {
     try {
       axiom.ingest(AXIOM_DATASET, [logEntry]);
+      await axiom.flush();
     } catch (error) {
       console.error("❌ Failed to send metric to Axiom:", error.message);
     }
   }
 }
 
-export function trackFileProcessing({
+export async function trackFileProcessing({
   parseId,
   userId,
   fileName,
@@ -43,7 +44,7 @@ export function trackFileProcessing({
   const fileSizeMb = (fileSizeBytes / (1024 * 1024)).toFixed(2);
   const durationSeconds = (durationMs / 1000).toFixed(2);
 
-  logMetric({
+  await logMetric({
     metric_type: "file_processing",
     event: "file_processed",
     parse_id: parseId,
@@ -59,7 +60,7 @@ export function trackFileProcessing({
   });
 }
 
-export function trackBatchProcessing({
+export async function trackBatchProcessing({
   parseId,
   userId,
   fileCount,
@@ -77,7 +78,7 @@ export function trackBatchProcessing({
   const avgSizePerFile =
     fileCount > 0 ? (totalSizeBytes / fileCount / (1024 * 1024)).toFixed(2) : 0;
 
-  logMetric({
+  await logMetric({
     metric_type: "file_processing",
     event: "batch_processed",
     parse_id: parseId,
@@ -98,7 +99,7 @@ export function trackBatchProcessing({
   });
 }
 
-export function trackProcessingStage({
+export async function trackProcessingStage({
   parseId,
   userId,
   stageName,
@@ -106,7 +107,7 @@ export function trackProcessingStage({
   itemCount,
   metadata,
 }) {
-  logMetric({
+  await logMetric({
     metric_type: "file_processing",
     event: "processing_stage",
     parse_id: parseId,
@@ -135,7 +136,7 @@ export class SearchTimer {
   }
 }
 
-export function trackChatMetrics({
+export async function trackChatMetrics({
   userId,
   parseId,
   query,
@@ -151,7 +152,7 @@ export function trackChatMetrics({
   success,
   errorMessage,
 }) {
-  logMetric({
+  await logMetric({
     metric_type: "chat_rag",
     event: "chat_completed",
     user_id: userId,
@@ -171,7 +172,7 @@ export function trackChatMetrics({
   });
 }
 
-export function trackRAGRetrieval({
+export async function trackRAGRetrieval({
   userId,
   parseId,
   query,
@@ -181,7 +182,7 @@ export function trackRAGRetrieval({
   contextLength,
   retrievalLatency,
 }) {
-  logMetric({
+  await logMetric({
     metric_type: "chat_rag",
     event: "rag_retrieval",
     user_id: userId,
@@ -195,7 +196,7 @@ export function trackRAGRetrieval({
   });
 }
 
-export function trackLLMPerformance({
+export async function trackLLMPerformance({
   userId,
   modelUsed,
   promptTokens,
@@ -207,7 +208,7 @@ export function trackLLMPerformance({
   success,
   errorMessage,
 }) {
-  logMetric({
+  await logMetric({
     metric_type: "chat_rag",
     event: "llm_call",
     user_id: userId,
