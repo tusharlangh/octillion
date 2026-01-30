@@ -43,53 +43,51 @@ export async function processFiles(id, keys, userId) {
   let totalSizeBytes = 0;
 
   if (!Array.isArray(keys)) {
-    console.error('❌ processFiles: keys is not an array', {
+    console.error("❌ processFiles: keys is not an array", {
       type: typeof keys,
       value: keys,
       parseId: id,
-      userId
+      userId,
     });
     throw new AppError(
-      'Invalid keys parameter: expected array',
+      "Invalid keys parameter: expected array",
       400,
-      'INVALID_KEYS_TYPE'
+      "INVALID_KEYS_TYPE"
     );
   }
 
   // Filter out non-string keys and log them
-  const invalidKeys = keys.filter(key => typeof key !== 'string');
+  const invalidKeys = keys.filter((key) => typeof key !== "string");
   if (invalidKeys.length > 0) {
-    console.error('❌ processFiles: found non-string keys', {
+    console.error("❌ processFiles: found non-string keys", {
       invalidKeys,
       invalidCount: invalidKeys.length,
       totalCount: keys.length,
       parseId: id,
-      userId
+      userId,
     });
   }
 
   // Use only valid string keys
-  const validKeys = keys.filter(key => typeof key === 'string' && key.trim().length > 0);
-  
+  const validKeys = keys.filter(
+    (key) => typeof key === "string" && key.trim().length > 0
+  );
+
   if (validKeys.length === 0) {
-    console.error('❌ processFiles: no valid keys found', {
+    console.error("❌ processFiles: no valid keys found", {
       originalKeys: keys,
       parseId: id,
-      userId
+      userId,
     });
-    throw new AppError(
-      'No valid file keys provided',
-      400,
-      'NO_VALID_KEYS'
-    );
+    throw new AppError("No valid file keys provided", 400, "NO_VALID_KEYS");
   }
 
   if (validKeys.length !== keys.length) {
-    console.warn('⚠️ processFiles: filtered out invalid keys', {
+    console.warn("⚠️ processFiles: filtered out invalid keys", {
       originalCount: keys.length,
       validCount: validKeys.length,
       removedCount: keys.length - validKeys.length,
-      parseId: id
+      parseId: id,
     });
   }
 
@@ -115,7 +113,7 @@ export async function processFiles(id, keys, userId) {
   const urls = await createPresignedUrls(fileObjects);
   const presignedDuration = presignedLatency.stop();
 
-  trackProcessingStage({
+  await trackProcessingStage({
     parseId: id,
     userId,
     stageName: "presigned_urls",
@@ -150,7 +148,7 @@ export async function processFiles(id, keys, userId) {
   });
   const canonicalDuration = canonicalDataLatency.stop();
 
-  trackProcessingStage({
+  await trackProcessingStage({
     parseId: id,
     userId,
     stageName: "canonical_data_extraction",
@@ -178,12 +176,16 @@ export async function processFiles(id, keys, userId) {
           }
         : null,
     });
-    
+
     invertedIndex_v2 = createInvertedSearch_V2_1(canonicalData);
-    console.log("Inverted index created successfully with", Object.keys(invertedIndex_v2).length, "keys");
+    console.log(
+      "Inverted index created successfully with",
+      Object.keys(invertedIndex_v2).length,
+      "keys"
+    );
     const invertedDuration = invertedIndexLatency.stop();
 
-    trackProcessingStage({
+    await trackProcessingStage({
       parseId: id,
       userId,
       stageName: "inverted_index",
@@ -208,7 +210,7 @@ export async function processFiles(id, keys, userId) {
   const chunks = createContextualChunks_v2(canonicalData);
   const chunksLatency = chunksTimer.stop();
 
-  trackProcessingStage({
+  await trackProcessingStage({
     parseId: id,
     userId,
     stageName: "chunking",
@@ -229,7 +231,7 @@ export async function processFiles(id, keys, userId) {
   await generateAndUploadEmbeddings_v2(id, userId, chunks);
   const embeddingsLatency = embeddingsTimer.stop();
 
-  trackProcessingStage({
+  await trackProcessingStage({
     parseId: id,
     userId,
     stageName: "embeddings",
@@ -258,7 +260,7 @@ export async function processFiles(id, keys, userId) {
   const totalStorageMb =
     pagesContentSizeMb + invertedIndexSizeMb + chunksSizeMb;
 
-  trackProcessingStage({
+  await trackProcessingStage({
     parseId: id,
     userId,
     stageName: "upload_json",
@@ -283,7 +285,7 @@ export async function processFiles(id, keys, userId) {
 
   const totalDuration = Date.now() - batchStartTime;
 
-  trackBatchProcessing({
+  await trackBatchProcessing({
     parseId: id,
     userId,
     fileCount: keys.length,
@@ -314,7 +316,11 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
 
   try {
     const data = await pRetry(
-      () => invokeGeometry("/parse_to_json", { url: presignedUrl, file_name: fileName }),
+      () =>
+        invokeGeometry("/parse_to_json", {
+          url: presignedUrl,
+          file_name: fileName,
+        }),
       {
         retries: 3,
         minTimeout: 2000,
@@ -326,13 +332,15 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
       }
     );
 
-    invokeGeometry("/precompute_geometry", { url: presignedUrl }, true)
-      .catch(err => console.warn(`Geometry precompute failed for ${fileName}:`, err.message));
+    invokeGeometry("/precompute_geometry", { url: presignedUrl }, true).catch(
+      (err) =>
+        console.warn(`Geometry precompute failed for ${fileName}:`, err.message)
+    );
 
     const fileDuration = Date.now() - fileStartTime;
     const storageMb = parseFloat(calculateJsonSizeMb(data));
 
-    trackFileProcessing({
+    await trackFileProcessing({
       parseId,
       userId,
       fileName,
@@ -347,7 +355,7 @@ async function callMain(presignedUrl, fileName, fileObject, parseId, userId) {
   } catch (error) {
     const fileDuration = Date.now() - fileStartTime;
 
-    trackFileProcessing({
+    await trackFileProcessing({
       parseId,
       userId,
       fileName,

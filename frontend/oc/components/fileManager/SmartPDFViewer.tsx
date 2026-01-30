@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { DM_Sans } from "next/font/google";
-import { ChevronLeft, Highlighter, Minus, Plus, X } from "lucide-react";
+import { ChevronLeft, Minus, Plus, X } from "lucide-react";
 import SurfingLoading from "../animations/surfingLoading";
 import { motion } from "framer-motion";
 
@@ -41,7 +41,7 @@ export default function SmartPDFViewer({
 }: SmartPDFViewerProps) {
   const getResponsiveScale = () => {
     const width = window.innerWidth;
-    if (width < 640) return 0.8;
+    if (width < 640) return 1.2;
     if (width < 1024) return 1.4;
     if (width < 1440) return 1.6;
     return 1.8;
@@ -53,7 +53,7 @@ export default function SmartPDFViewer({
   const [isHighlightsPanelOpen, setIsHighlightsPanelOpen] =
     useState<boolean>(true);
   const [pageDimensions, setPageDimensions] = useState<Map<number, any>>(
-    new Map()
+    new Map(),
   );
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -75,7 +75,7 @@ export default function SmartPDFViewer({
     const handleResize = () => {
       const width = window.innerWidth;
       let newScale: number;
-      if (width < 640) newScale = 0.8;
+      if (width < 640) newScale = 1.2;
       else if (width < 1024) newScale = 1.4;
       else if (width < 1440) newScale = 1.6;
       else newScale = 1.8;
@@ -375,7 +375,7 @@ const PDFPage = ({
         const page = await pdf.getPage(pageNum);
         const isMobile =
           typeof window !== "undefined" && window.innerWidth < 768;
-        const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
+        const dpr = isMobile ? 2 : window.devicePixelRatio || 1;
         const vp = page.getViewport({ scale: scale * dpr });
         setViewport(vp);
 
@@ -404,7 +404,7 @@ const PDFPage = ({
       if (!canvas) return;
 
       const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-      const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
+      const dpr = isMobile ? 2 : window.devicePixelRatio || 1;
 
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -438,7 +438,7 @@ const PDFPage = ({
   }, [pdf, pageNum, scale, shouldLoad, viewport]);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const dpr = isMobile ? 1 : window.devicePixelRatio || 1;
+  const dpr = isMobile ? 2 : window.devicePixelRatio || 1;
   const displayWidth = viewport ? viewport.width / dpr : 0;
   const displayHeight = viewport ? viewport.height / dpr : 0;
 
@@ -488,22 +488,24 @@ const PDFPage = ({
             const matchedTerm =
               isKeywordResult && h.base
                 ? Object.keys(termColors).find((term) =>
-                    h.base!.toLowerCase().includes(term.toLowerCase())
+                    h.base!.toLowerCase().includes(term.toLowerCase()),
                   )
                 : undefined;
             const highlightColor = matchedTerm
               ? termColors[matchedTerm]
               : "rgba(0, 98, 255, 0.31)";
 
+            const highlightScale = scale * (viewport.scale / (scale * dpr));
+            
             return (
               <div
                 key={i}
                 style={{
                   position: "absolute",
-                  left: `${h.x * scale}px`,
-                  top: `${h.y * scale}px`,
-                  width: `${h.width * scale}px`,
-                  height: `${h.height * scale}px`,
+                  left: `${h.x * highlightScale}px`,
+                  top: `${h.y * highlightScale}px`,
+                  width: `${h.width * highlightScale}px`,
+                  height: `${h.height * highlightScale}px`,
                   backgroundColor: highlightColor,
                   borderRadius: "2px",
                 }}

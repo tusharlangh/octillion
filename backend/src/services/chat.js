@@ -58,7 +58,7 @@ export async function chat(id, search, userId) {
       );
     }
 
-    trackRAGRetrieval({
+    await trackRAGRetrieval({
       userId,
       parseId: id,
       query: search,
@@ -111,7 +111,7 @@ export async function chat(id, search, userId) {
 
     const totalLatency = Date.now() - chatStartTime;
 
-    trackChatMetrics({
+    await trackChatMetrics({
       userId,
       parseId: id,
       query: search,

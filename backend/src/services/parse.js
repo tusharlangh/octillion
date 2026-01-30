@@ -15,8 +15,6 @@ import {
   trackSearchMetrics,
   trackZeroResults,
   trackQueryAnalysis,
-  trackResultQuality,
-  trackComponentPerformance,
   SearchTimer,
 } from "../utils/searchMetrics.js";
 
@@ -350,7 +348,7 @@ async function hybridSearch(
   console.log(`  Content words: ${analysis.contentWords.join(", ")}`);
   console.log(`  Type: ${analysis.queryType.toUpperCase()}`);
 
-  trackQueryAnalysis({
+  await trackQueryAnalysis({
     query,
     queryType: analysis.queryType,
     intent: analysis.intent,
@@ -505,7 +503,7 @@ async function hybridSearch(
 
   const totalLatency = overallTimer.stop();
 
-  trackSearchMetrics({
+  await trackSearchMetrics({
     query,
     queryType: analysis.queryType,
     userId,
@@ -525,7 +523,7 @@ async function hybridSearch(
   });
 
   if (resultsFormatted.length === 0) {
-    trackZeroResults({
+    await trackZeroResults({
       query,
       queryType: analysis.queryType,
       userId,
