@@ -23,8 +23,8 @@ export default function FileOpener({
       {isOpen && (
         <Portal>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-[2px] flex items-center justify-center z-100">
-            <div className="bg-white dark:bg-[rgb(18,18,18)] px-6 py-4 rounded-[20px] w-[90vw] h-[80vh] md:w-[60vw] overflow-hidden relative">
-              <section className="flex justify-between items-center mb-4">
+            <div className="bg-white dark:bg-[rgb(18,18,18)] px-6 py-4 rounded-[20px] w-[90vw] h-[80vh] md:w-[60vw] flex flex-col relative max-h-[80vh]">
+              <section className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h2
                   className={`${font} text-[20px] md:text-[30px] font-bold truncate w-3/4 text-black dark:text-white`}
                 >
@@ -38,21 +38,18 @@ export default function FileOpener({
                 </button>
               </section>
               <section
-                className="bg-white dark:bg-white w-full overflow-auto"
+                className="bg-white dark:bg-white w-full overflow-y-auto overflow-x-hidden flex-1 relative"
                 style={{
-                  height: "calc(100% - 60px)",
                   WebkitOverflowScrolling: "touch",
-                  touchAction: "pan-y",
                 }}
               >
                 <iframe
                   src={url}
                   className="w-full border-0"
                   style={{
-                    height: "100%",
-                    minHeight: "100%",
+                    height: "100vh",
+                    minHeight: "100vh",
                   }}
-                  scrolling="yes"
                   title={fileName}
                 ></iframe>
               </section>
