@@ -43,7 +43,7 @@ export default function FileOpener({
                 </h2>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="rounded-full bg-transparent hover:bg-[rgba(0, 0, 0, 0.06)] dark:hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(0, 0, 0, 0.12)] dark:active:bg-[rgba(255,255,255,0.12)] transition-all cursor-pointer"
+                  className="p-2 rounded-full bg-transparent hover:bg-[rgba(0, 0, 0, 0.06)] dark:hover:bg-[rgba(255,255,255,0.06)] active:bg-[rgba(0, 0, 0, 0.12)] dark:active:bg-[rgba(255,255,255,0.12)] transition-all cursor-pointer"
                 >
                   <X className="text-black dark:text-white" size={24} />
                 </button>

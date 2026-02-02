@@ -80,7 +80,7 @@ export default function SmartPDFViewer({
       else if (width < 1440) newScale = 1.6;
       else newScale = 1.8;
 
-      setScale(newScale);
+      setScale(1.4);
     };
 
     window.addEventListener("resize", handleResize);
@@ -337,7 +337,6 @@ interface PDFPageProps {
   scale: number;
   highlights: Highlight[];
   termColors: Record<string, string>;
-  isCurrentPage: boolean;
   isKeywordResult: boolean;
   shouldLoad: boolean;
   pageDimensions: Map<number, any>;
@@ -350,7 +349,6 @@ const PDFPage = ({
   scale,
   highlights,
   termColors,
-  isCurrentPage,
   isKeywordResult,
   shouldLoad,
   pageDimensions,
@@ -495,17 +493,26 @@ const PDFPage = ({
               ? termColors[matchedTerm]
               : "rgba(0, 98, 255, 0.31)";
 
-            const highlightScale = scale * (viewport.scale / (scale * dpr));
-            
+            const [scaleX] = viewport.transform;
+            const [viewBoxX, viewBoxY] = viewport.viewBox;
+            const canvasX = (h.x - viewBoxX) * scaleX;
+            const canvasY = (h.y - viewBoxY) * scaleX;
+            const canvasWidth = h.width * scaleX;
+            const canvasHeight = h.height * scaleX;
+            const displayX = canvasX / dpr;
+            const displayY = canvasY / dpr;
+            const displayW = canvasWidth / dpr;
+            const displayH = canvasHeight / dpr;
+
             return (
               <div
                 key={i}
                 style={{
                   position: "absolute",
-                  left: `${h.x * highlightScale}px`,
-                  top: `${h.y * highlightScale}px`,
-                  width: `${h.width * highlightScale}px`,
-                  height: `${h.height * highlightScale}px`,
+                  left: `${displayX}px`,
+                  top: `${displayY}px`,
+                  width: `${displayW}px`,
+                  height: `${displayH}px`,
                   backgroundColor: highlightColor,
                   borderRadius: "2px",
                 }}

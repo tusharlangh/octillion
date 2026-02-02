@@ -50,7 +50,6 @@ provider:
 functions:
   api:
     image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:3e8ce14f24548c76d8beddae56b4f82ffd947e38ac0eb0165a0b6e8d651af249
-    timeout: 30
     memorySize: 2048
     events:
       - http:
@@ -66,8 +65,7 @@ functions:
     memorySize: 3008
 
   geometry:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-geometry-dev@sha256:a3224f2d807b0961070155ee1ebfe9d31ce8249cd13687366ce2c12bcaca3e4e
-    timeout: 300
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-geometry-dev@sha256:5edeebe99752b789d24eeaafbdee9f16a5d06392c164c8a15004778c24327bd4
     memorySize: 3008
     environment:
       TRANSFORMERS_CACHE: /tmp/transformers_cache
