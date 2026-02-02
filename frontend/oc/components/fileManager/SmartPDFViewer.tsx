@@ -235,7 +235,6 @@ export default function SmartPDFViewer({
                   scale={scale}
                   highlights={highlights[initialPage - 1] || []}
                   termColors={termColors}
-                  isCurrentPage={false}
                   isKeywordResult={isKeywordResult}
                   shouldLoad={true}
                   pageDimensions={pageDimensions}
@@ -255,7 +254,6 @@ export default function SmartPDFViewer({
                 scale={scale}
                 highlights={highlights[initialPage] || []}
                 termColors={termColors}
-                isCurrentPage={true}
                 isKeywordResult={isKeywordResult}
                 shouldLoad={true}
                 pageDimensions={pageDimensions}
@@ -277,7 +275,6 @@ export default function SmartPDFViewer({
                   scale={scale}
                   highlights={highlights[initialPage + 1] || []}
                   termColors={termColors}
-                  isCurrentPage={false}
                   isKeywordResult={isKeywordResult}
                   shouldLoad={true}
                   pageDimensions={pageDimensions}
