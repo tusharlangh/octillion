@@ -45,15 +45,46 @@ export default function FilePreviewList({
     setIsOpen(true);
   };
 
+  // Helper function to add timeout to fetch requests
+  const fetchWithTimeout = async (
+    url: string,
+    options: RequestInit,
+    timeoutMs: number = 60000
+  ) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Upload timeout - please try again with a smaller file or check your connection");
+      }
+      throw error;
+    }
+  };
+
   const sendPdfToS3 = async (uploadUrl: string, file: File) => {
     try {
-      const res = await fetch(uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type,
+      console.log(`Starting upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      
+      const res = await fetchWithTimeout(
+        uploadUrl,
+        {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type,
+          },
         },
-      });
+        60000 // 60 second timeout
+      );
 
       if (!res.ok) {
         const errorMessage = getErrorMessageByStatus(res.status);
@@ -61,10 +92,11 @@ export default function FilePreviewList({
         console.error("Upload failed:", {
           status: res.status,
           error: errorMessage,
-          details: null,
+          fileName: file.name,
+          fileSize: file.size,
         });
 
-        setNotis({ message: errorMessage, type: "error" });
+        setNotis({ message: `Upload failed for ${file.name}: ${errorMessage}`, type: "error" });
 
         if (res.status === 401 || res.status === 403) {
           setTimeout(() => router.replace("/login_signin/login"), 2000);
@@ -76,9 +108,22 @@ export default function FilePreviewList({
           fileName: file.name,
         };
       }
-      return { success: true, error: null, filename: fileName };
+      
+      console.log(`Successfully uploaded ${file.name}`);
+      return { success: true, error: null, filename: file.name };
     } catch (error) {
-      return { success: false, error: error, filename: fileName };
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("S3 upload error:", {
+        error: errorMessage,
+        fileName: file.name,
+        fileSize: file.size,
+      });
+      
+      return { 
+        success: false, 
+        error: errorMessage, 
+        filename: file.name 
+      };
     }
   };
 
@@ -124,7 +169,8 @@ export default function FilePreviewList({
         type: file.type,
       }));
 
-      const res = await fetch(
+      console.log("Requesting presigned URLs from API...");
+      const res = await fetchWithTimeout(
         `${process.env.NEXT_PUBLIC_API_URL}/get-upload-urls`,
         {
           method: "POST",
@@ -137,6 +183,7 @@ export default function FilePreviewList({
             files: files_metadata,
           }),
         },
+        30000 // 30 second timeout for API call
       );
 
       const data = await res.json();
@@ -147,7 +194,7 @@ export default function FilePreviewList({
           data.error ||
           getErrorMessageByStatus(res.status);
 
-        console.error("Upload failed:", {
+        console.error("Failed to get upload URLs:", {
           status: res.status,
           error: errorMessage,
           details: data.error?.details,
@@ -165,6 +212,8 @@ export default function FilePreviewList({
       const urls = data.data;
       keys = urls;
 
+      console.log(`Received ${urls.length} presigned URLs, starting uploads...`);
+
       const uploadRes = await Promise.allSettled(
         urls.map((url: { uploadUrl: string; key: string }, index: number) =>
           sendPdfToS3(url.uploadUrl, selectedFiles[index]),
@@ -172,23 +221,41 @@ export default function FilePreviewList({
       );
 
       const n = uploadRes.length;
-      const failure = uploadRes.filter((item) => item.status === "rejected");
+      const failures = uploadRes.filter((item) => item.status === "rejected" || 
+        (item.status === "fulfilled" && item.value?.success === false));
 
       const threshold = 0.5;
-
-      const diff = failure.length / n;
+      const diff = failures.length / n;
 
       if (diff > threshold) {
+        const failedFileNames = failures
+          .map((item, idx) => selectedFiles[idx]?.name)
+          .filter(Boolean)
+          .join(", ");
+        
         setNotis({
-          message: "More than half of the files failed to upload. Try again",
+          message: `More than half of the files failed to upload: ${failedFileNames}. Please try again.`,
           type: "error",
         });
         return;
       } else if (diff !== 0) {
+        const failedFileNames = failures
+          .map((item, idx) => {
+            if (item.status === "rejected") return selectedFiles[idx]?.name;
+            if (item.status === "fulfilled" && item.value?.success === false) {
+              return selectedFiles[idx]?.name;
+            }
+            return null;
+          })
+          .filter(Boolean)
+          .join(", ");
+        
         setNotis({
-          message: `Following files have failed: ${failure}`,
+          message: `Some files failed to upload: ${failedFileNames}`,
           type: "error",
         });
+      } else {
+        console.log("All files uploaded successfully!");
       }
     } catch (error) {
       console.error("Upload error:", error);

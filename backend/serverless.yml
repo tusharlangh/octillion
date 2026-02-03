@@ -49,18 +49,37 @@ provider:
 
 functions:
   api:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:3e8ce14f24548c76d8beddae56b4f82ffd947e38ac0eb0165a0b6e8d651af249
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:466a7d3cbcc37e678983480e5b319a82da0ed293839b0f5312e6f6b2bd2b801c
     memorySize: 2048
+    timeout: 29
     events:
       - http:
           path: /
           method: ANY
+          cors:
+            origin: 'https://octillion.vercel.app'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Requested-With
+              - Accept
+              - Origin
+            allowCredentials: true
       - http:
           path: /{proxy+}
           method: ANY
+          cors:
+            origin: 'https://octillion.vercel.app'
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Requested-With
+              - Accept
+              - Origin
+            allowCredentials: true
 
   processor:
-    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:3e8ce14f24548c76d8beddae56b4f82ffd947e38ac0eb0165a0b6e8d651af249
+    image: 589820791139.dkr.ecr.us-east-1.amazonaws.com/serverless-octillion-backend-dev@sha256:466a7d3cbcc37e678983480e5b319a82da0ed293839b0f5312e6f6b2bd2b801c
     timeout: 900
     memorySize: 3008
 
