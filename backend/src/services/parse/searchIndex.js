@@ -30,10 +30,10 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
           let pageEntry = fileEntry.pages.find((p) => p.page === pageNo);
 
           if (!pageEntry) {
-            pageEntry = { 
-              page: pageNo, 
+            pageEntry = {
+              page: pageNo,
               terms: [],
-              matchCount: 0 
+              matchCount: 0,
             };
             fileEntry.pages.push(pageEntry);
           }
@@ -42,7 +42,7 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
             term,
             matches: metadata.matches,
           });
-          pageEntry.matchCount += (metadata.matches?.length || 0);
+          pageEntry.matchCount += metadata.matches?.length || 0;
         }
       }
 
@@ -60,7 +60,7 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
     }));
 
     const geometryResults = await Promise.all(
-      geometryCalls.map((c) => limit(() => c.run()))
+      geometryCalls.map((c) => limit(() => c.run())),
     );
 
     geometryResults.forEach((batchResult, idx) => {
@@ -98,7 +98,7 @@ export async function searchBuildIndex_v2(scores, fileMapping) {
     throw new AppError(
       `Failed to search build index: ${error.message}`,
       500,
-      "SEARCH_BUILD_INDEX_ERROR"
+      "SEARCH_BUILD_INDEX_ERROR",
     );
   }
 }
@@ -258,7 +258,7 @@ export async function searchContent_v2(sitesContent, inverted, search) {
                 surface: h.surface,
                 base: term,
                 query: queryTerm,
-              }))
+              })),
             );
           }
 
@@ -266,7 +266,7 @@ export async function searchContent_v2(sitesContent, inverted, search) {
 
           if (
             !fileResults[fileName].terms[queryTerm].matchedVariants.includes(
-              term
+              term,
             )
           ) {
             fileResults[fileName].terms[queryTerm].matchedVariants.push(term);
@@ -297,7 +297,7 @@ export async function searchContent_v2(sitesContent, inverted, search) {
       const matchedTerms = Object.keys(result.terms).length;
       const totalOccurrences = Object.values(result.terms).reduce(
         (sum, term) => sum + term.occurrences,
-        0
+        0,
       );
 
       result.coverage.matchedTerms = matchedTerms;
@@ -326,7 +326,7 @@ export async function searchContent_v2(sitesContent, inverted, search) {
     throw new AppError(
       `Search failed: ${error.message}`,
       500,
-      "SEARCH_CONTENT_ERROR"
+      "SEARCH_CONTENT_ERROR",
     );
   }
 }

@@ -14,7 +14,7 @@ import { get_ai_overview_controller } from "../controllers/get_ai_overview_contr
 const router = express.Router();
 
 router.get("/", (req, res) => {
-  res.status(n200).json({
+  res.status(200).json({
     status: "ok",
     message: "Octillion Backend API",
     timestamp: new Date().toISOString(),
