@@ -45,7 +45,6 @@ export default function FilePreviewList({
     setIsOpen(true);
   };
 
-  // Helper function to add timeout to fetch requests
   const fetchWithTimeout = async (
     url: string,
     options: RequestInit,
@@ -74,6 +73,8 @@ export default function FilePreviewList({
     try {
       console.log(`Starting upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
       
+      const uploadTimeout = 300000; 
+      
       const res = await fetchWithTimeout(
         uploadUrl,
         {
@@ -83,7 +84,7 @@ export default function FilePreviewList({
             "Content-Type": file.type,
           },
         },
-        60000 // 60 second timeout
+        uploadTimeout
       );
 
       if (!res.ok) {
@@ -170,6 +171,7 @@ export default function FilePreviewList({
       }));
 
       console.log("Requesting presigned URLs from API...");
+      // Keep this under API Gateway's 29-second timeout limit
       const res = await fetchWithTimeout(
         `${process.env.NEXT_PUBLIC_API_URL}/get-upload-urls`,
         {
@@ -183,7 +185,7 @@ export default function FilePreviewList({
             files: files_metadata,
           }),
         },
-        30000 // 30 second timeout for API call
+        25000 
       );
 
       const data = await res.json();
@@ -297,13 +299,13 @@ export default function FilePreviewList({
             keys
               ?.map?.((url: { uploadUrl: string; key: string }) => {
                 if (typeof url === "string") {
-                  return url; // Already a string
+                  return url; 
                 }
                 if (url && typeof url === "object" && "key" in url) {
-                  return url.key; // Extract key from object
+                  return url.key; 
                 }
                 console.error("Invalid key format:", url);
-                return null; // Invalid format
+                return null; 
               })
               .filter((k: string | null) => k !== null) || [],
         }),
